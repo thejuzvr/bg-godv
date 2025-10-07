@@ -269,6 +269,39 @@ export const gameEnemies = pgTable('game_enemies', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
+// Combat Analytics - stores last 10 battles per character for analytics
+export const combatAnalytics = pgTable('combat_analytics', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  characterId: text('character_id').notNull().references(() => characters.id, { onDelete: 'cascade' }),
+  timestamp: bigint('timestamp', { mode: 'number' }).notNull(),
+  
+  // Battle info
+  enemyId: text('enemy_id').notNull(),
+  enemyName: text('enemy_name').notNull(),
+  enemyLevel: integer('enemy_level').notNull(),
+  
+  // Battle result
+  victory: boolean('victory').notNull(),
+  fled: boolean('fled').notNull().default(false),
+  
+  // Stats
+  characterLevel: integer('character_level').notNull(),
+  characterHealthStart: integer('character_health_start').notNull(),
+  characterHealthEnd: integer('character_health_end').notNull(),
+  enemyHealthStart: integer('enemy_health_start').notNull(),
+  
+  // Battle data
+  roundsCount: integer('rounds_count').notNull(),
+  damageDealt: integer('damage_dealt').notNull(),
+  damageTaken: integer('damage_taken').notNull(),
+  xpGained: integer('xp_gained').notNull().default(0),
+  
+  // Detailed combat log
+  combatLog: jsonb('combat_log').notNull().$type<string[]>(),
+  
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // === TYPE EXPORTS ===
 
 export type User = typeof users.$inferSelect;
@@ -297,3 +330,6 @@ export type NewGameNpc = typeof gameNpcs.$inferInsert;
 
 export type GameEnemy = typeof gameEnemies.$inferSelect;
 export type NewGameEnemy = typeof gameEnemies.$inferInsert;
+
+export type CombatAnalytics = typeof combatAnalytics.$inferSelect;
+export type NewCombatAnalytics = typeof combatAnalytics.$inferInsert;
