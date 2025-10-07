@@ -63,7 +63,7 @@ export async function deleteSession(token: string) {
 }
 
 export async function deleteExpiredSessions() {
-  await db.delete(schema.sessions).where(eq(schema.sessions.expiresAt, Date.now()));
+  await db.delete(schema.sessions).where(lt(schema.sessions.expiresAt, Date.now()));
 }
 
 // Character functions
@@ -85,7 +85,7 @@ export async function saveCharacter(characterData: any) {
     const [created] = await db.insert(schema.characters)
       .values({
         ...characterData,
-        userId: characterData.id, // User ID is same as character ID
+        userId: characterData.userId, // User ID is same as character ID
         createdAt: characterData.createdAt || Date.now(),
         lastUpdatedAt: Date.now(),
         lastProcessedAt: Date.now(),
@@ -136,6 +136,24 @@ export async function getChronicleEntries(characterId: string, limit = 100) {
 
 // Offline events functions
 export async function addOfflineEvent(characterId: string, event: Omit<schema.NewOfflineEvent, 'id' | 'characterId'>) {
+  // Check for duplicate event (same message, type, and timestamp within 1 second)
+  const oneSecondAgo = (event.timestamp || Date.now()) - 1000;
+  const existingEvent = await db.select()
+    .from(schema.offlineEvents)
+    .where(and(
+      eq(schema.offlineEvents.characterId, characterId),
+      eq(schema.offlineEvents.type, event.type),
+      eq(schema.offlineEvents.message, event.message),
+      // Check for events within the last second to prevent duplicates
+      sql`${schema.offlineEvents.timestamp} >= ${oneSecondAgo}`
+    ))
+    .limit(1);
+  
+  if (existingEvent.length > 0) {
+    console.log(`[Storage] Skipping duplicate event for character ${characterId}: ${event.message}`);
+    return existingEvent[0]; // Return existing event instead of creating duplicate
+  }
+  
   const [created] = await db.insert(schema.offlineEvents)
     .values({
       characterId,
@@ -188,7 +206,7 @@ export async function getUnreadOfflineEvents(characterId: string) {
       eq(schema.offlineEvents.characterId, characterId),
       eq(schema.offlineEvents.isRead, false)
     ))
-    .orderBy(schema.offlineEvents.timestamp);
+    .orderBy(desc(schema.offlineEvents.timestamp));
 }
 
 export async function markOfflineEventsAsRead(characterId: string) {
