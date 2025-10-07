@@ -73,6 +73,14 @@ export interface CombatState {
       target: number;
       success: boolean;
     } | null;
+    
+    // Combat analytics tracking
+    characterHealthStart?: number;
+    enemyHealthStart?: number;
+    rounds?: number;
+    totalDamageDealt?: number;
+    totalDamageTaken?: number;
+    combatLog?: string[];
 }
 
 export interface CharacterStats {

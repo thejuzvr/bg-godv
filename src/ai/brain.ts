@@ -19,6 +19,7 @@ import { getFallbackThought } from "@/data/thoughts";
 import { Priority, rollPriority } from "@/ai/simple-brain";
 import { interactWithNPC, tradeWithNPC } from "@/actions/npc-actions";
 import { getCharacterById } from "../../server/storage";
+import { saveCombatAnalytics } from "@/services/combatAnalyticsService";
 
 
 /**
@@ -156,6 +157,42 @@ const rollD20 = (character: Character): { roll: number, updatedCharacter: Charac
 
 
 /**
+ * Save combat analytics to database
+ */
+async function saveCombatToAnalytics(character: Character, victory: boolean, fled: boolean) {
+    if (!character.combat) return;
+    
+    const combat = character.combat;
+    const characterHealthEnd = character.stats.health.current;
+    const rounds = combat.rounds || 1;
+    const damageDealt = combat.totalDamageDealt || 0;
+    const damageTaken = combat.totalDamageTaken || 0;
+    const xpGained = victory && !fled ? combat.enemy.xp : 0;
+    
+    try {
+        await saveCombatAnalytics({
+            characterId: character.id,
+            enemyId: combat.enemyId,
+            enemyName: combat.enemy.name,
+            enemyLevel: combat.enemy.damage, // Using damage as level approximation
+            victory,
+            fled,
+            characterLevel: character.level,
+            characterHealthStart: combat.characterHealthStart || character.stats.health.max,
+            characterHealthEnd,
+            enemyHealthStart: combat.enemyHealthStart || combat.enemy.health.max,
+            roundsCount: rounds,
+            damageDealt,
+            damageTaken,
+            xpGained,
+            combatLog: combat.combatLog || [],
+        });
+    } catch (error) {
+        console.error('[Combat Analytics] Failed to save combat data:', error);
+    }
+}
+
+/**
  * Represents a single round of combat against the current enemy.
  */
 const performCombatRound = async (character: Character, gameData: GameData, logMessages: string[]): Promise<Character> => {
@@ -169,6 +206,23 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
 
     let enemy = updatedChar.combat.enemy;
     const baseEnemyDef = gameData.enemies.find(e => e.id === updatedChar.combat!.enemyId);
+    
+    // Initialize combat tracking on first round
+    if (!updatedChar.combat.characterHealthStart) {
+        updatedChar.combat.characterHealthStart = updatedChar.stats.health.current;
+        updatedChar.combat.enemyHealthStart = enemy.health.current;
+        updatedChar.combat.rounds = 0;
+        updatedChar.combat.totalDamageDealt = 0;
+        updatedChar.combat.totalDamageTaken = 0;
+        updatedChar.combat.combatLog = [];
+    }
+    
+    // Increment round counter
+    updatedChar.combat.rounds = (updatedChar.combat.rounds || 0) + 1;
+    
+    // Add round header to combat log
+    if (!updatedChar.combat.combatLog) updatedChar.combat.combatLog = [];
+    updatedChar.combat.combatLog.push(`=== Раунд ${updatedChar.combat.rounds} ===`);
     
     const getAttributeBonus = (value: number) => Math.max(0, Math.floor((value - 10) / 2));
     
@@ -228,6 +282,7 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
         
         if (fleeSuccess) {
             logMessages.push(`🏃 Герой пытается сбежать... и успешно отступает! (бросок: ${roll})`);
+            await saveCombatToAnalytics(updatedChar, false, true);
             updatedChar.status = 'idle';
             updatedChar.combat = null;
             updatedChar.mood = Math.max(0, updatedChar.mood - 10);
@@ -255,7 +310,10 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             const baseDamage = 1 + getAttributeBonus(updatedChar.attributes.strength);
             let heroDamage = Math.max(1, Math.floor(((weapon ? weapon.damage || 1 : 1) + baseDamage) * 2)); // Double damage
             enemy.health.current -= heroDamage;
-            logMessages.push(`🎲 Критический успех! Герой наносит сокрушительный удар на ${heroDamage} урона!`);
+            updatedChar.combat!.totalDamageDealt = (updatedChar.combat!.totalDamageDealt || 0) + heroDamage;
+            const msg = `🎲 Критический успех! Герой наносит сокрушительный удар на ${heroDamage} урона!`;
+            logMessages.push(msg);
+            updatedChar.combat!.combatLog!.push(msg);
         } else if (roll === 1) {
             const fumblePhrases = [
                 "Герой спотыкается о собственный ботинок и роняет оружие. Какой позор!",
@@ -339,6 +397,7 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
         }
         
         logMessages.push(winMsg);
+        await saveCombatToAnalytics(updatedChar, true, false);
         updatedChar.status = 'idle';
         updatedChar.combat = null;
         return updatedChar;
