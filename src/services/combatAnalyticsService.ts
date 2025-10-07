@@ -5,7 +5,7 @@ import { combatAnalytics } from '../../shared/schema';
 import type { NewCombatAnalytics } from '../../shared/schema';
 import { desc, eq } from 'drizzle-orm';
 
-export async function saveCombatAnalytics(data: Omit<NewCombatAnalytics, 'id' | 'createdAt'>) {
+export async function saveCombatAnalytics(data: Omit<NewCombatAnalytics, 'id' | 'createdAt' | 'timestamp'>) {
   const [result] = await db.insert(combatAnalytics).values({
     ...data,
     timestamp: Date.now(),

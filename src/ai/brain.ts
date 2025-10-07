@@ -381,8 +381,10 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
         updatedChar.xp.current += enemy.xp;
 
         // Analytics tracking
-        const enemyId = updatedChar.combat.enemyId;
-        updatedChar.analytics.killedEnemies[enemyId] = (updatedChar.analytics.killedEnemies[enemyId] || 0) + 1;
+        if (updatedChar.combat) {
+            const enemyId = updatedChar.combat.enemyId;
+            updatedChar.analytics.killedEnemies[enemyId] = (updatedChar.analytics.killedEnemies[enemyId] || 0) + 1;
+        }
 
 
         if (baseEnemyDef?.guaranteedDrop) {
