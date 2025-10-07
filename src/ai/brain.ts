@@ -1,0 +1,1764 @@
+
+'use server';
+/**
+ * @fileoverview This file contains the core AI logic for the character.
+ * SIMPLIFIED (Godville-style): Uses simple priority system instead of complex weighted decisions.
+ */
+
+import type { Character, WorldState, ActiveEffect, ActiveAction, EquipmentSlot, CharacterInventoryItem, ActiveCryptQuest, Weather, CharacterSkills, CharacterAttributes } from "@/types/character";
+import type { GameData } from "@/services/gameDataService";
+import { allSpells } from "@/data/spells";
+import { allPerks } from "@/data/perks";
+import { sovngardeThoughts } from "@/data/sovngarde";
+import { jailHumor } from "@/data/jail";
+import { allFactions } from "@/data/factions";
+import { donateToFaction as performFactionDonation } from "@/app/dashboard/actions";
+import type { Spell } from "@/types/spell";
+import { addChronicleEntry } from "@/services/chronicleService";
+import { getFallbackThought } from "@/data/thoughts";
+import { Priority, rollPriority } from "@/ai/simple-brain";
+import { interactWithNPC, tradeWithNPC } from "@/actions/npc-actions";
+import { getCharacterById } from "../../server/storage";
+
+
+/**
+ * A helper function to add an item to the character's inventory. It handles stacking.
+ */
+function addItemToInventory(character: Character, itemToAdd: Omit<CharacterInventoryItem, 'quantity'>, quantity: number): { updatedCharacter: Character; logMessage: string } {
+    const updatedChar = structuredClone(character);
+    let itemLog = `Получен предмет: ${itemToAdd.name}${quantity > 1 ? ` (x${quantity})` : ''}.`;
+    
+    const existingItem = updatedChar.inventory.find((i: CharacterInventoryItem) => i.id === itemToAdd.id);
+    if (existingItem) {
+        existingItem.quantity += quantity;
+    } else {
+        updatedChar.inventory.push({ ...itemToAdd, quantity });
+    }
+    
+    return { updatedCharacter: updatedChar, logMessage: itemLog };
+}
+
+// ==================================
+// Action History Helpers
+// ==================================
+
+/**
+ * Add action to history and keep only last 40 entries (circular buffer)
+ */
+function addToActionHistory(character: Character, actionType: 'combat' | 'quest' | 'explore' | 'travel' | 'rest' | 'learn' | 'social' | 'misc' | 'system'): Character {
+    const updatedChar = structuredClone(character);
+    if (!updatedChar.actionHistory) {
+        updatedChar.actionHistory = [];
+    }
+    
+    updatedChar.actionHistory.push({
+        type: actionType,
+        timestamp: Date.now()
+    });
+    
+    // Keep only last 40 actions (circular buffer)
+    if (updatedChar.actionHistory.length > 40) {
+        updatedChar.actionHistory = updatedChar.actionHistory.slice(-40);
+    }
+    
+    return updatedChar;
+}
+
+/**
+ * Count recent actions of a specific type (within last N actions)
+ */
+function countRecentActions(character: Character, actionType: string, lookBack: number = 10): number {
+    if (!character.actionHistory) return 0;
+    const recentActions = character.actionHistory.slice(-lookBack);
+    return recentActions.filter(a => a.type === actionType).length;
+}
+
+/**
+ * Get time since last action of specific type (in milliseconds)
+ */
+function getTimeSinceLastAction(character: Character, actionType: string): number | null {
+    if (!character.actionHistory) return null;
+    
+    const lastAction = [...character.actionHistory].reverse().find(a => a.type === actionType);
+    if (!lastAction) return null;
+    
+    return Date.now() - lastAction.timestamp;
+}
+
+/**
+ * Calculate repetition penalty for an action based on recent history
+ */
+function getRepetitionPenalty(character: Character, actionType: string): number {
+    const recentCount = countRecentActions(character, actionType, 10);
+    
+    // No penalty for first 2 times
+    if (recentCount <= 2) return 1.0;
+    
+    // Progressive penalty: 3rd time = 0.7, 4th = 0.5, 5th+ = 0.3
+    if (recentCount === 3) return 0.7;
+    if (recentCount === 4) return 0.5;
+    return 0.3;
+}
+
+/**
+ * SIMPLIFIED (Godville-style): Convert Priority to weight with randomness
+ * This replaces complex weight calculations with simple priority + dice roll
+ * 
+ * SCALE UP to compete with legacy weights (which range 70-150+)
+ * We multiply by 2 to get competitive ranges:
+ * - URGENT: 100 * 2 = 200 (always wins)
+ * - HIGH: 50 * 2 = 100 (competitive)
+ * - MEDIUM: 20 * 2 = 40 (reasonable)
+ * - LOW: 5 * 2 = 10 (low but present)
+ */
+function priorityToWeight(basePriority: Priority): number {
+    if (basePriority === Priority.DISABLED) return 0;
+    
+    const SCALE_FACTOR = 2; // Scale up to compete with legacy weights
+    const baseWeight = basePriority * SCALE_FACTOR;
+    
+    // Add randomness (0 to baseWeight) - Godville-style
+    return baseWeight + (Math.random() * baseWeight);
+}
+
+
+// ==================================
+// Action Definitions
+// ==================================
+
+interface Action {
+    name: string;
+    type: 'combat' | 'quest' | 'explore' | 'travel' | 'rest' | 'learn' | 'social' | 'misc' | 'system';
+    canPerform: (character: Character, worldState: WorldState, gameData: GameData) => boolean;
+    getWeight?: (character: Character, worldState: WorldState, gameData: GameData) => number;
+    perform: (character: Character, gameData: GameData) => Promise<{ character: Character, logMessage: string | string[] }>;
+}
+
+const cryptStages = [
+    { name: "Открытие Врат", description: "Герой использует коготь, чтобы активировать древний механизм.", duration: 1 * 60 * 1000 },
+    { name: "Преодоление Ловушек", description: "Герой осторожно продвигается по коридору, уворачиваясь от дротиков и огненных струй.", duration: 2 * 60 * 1000 },
+    { name: "Битва со Стражем", description: "В центре зала пробуждается древний страж. Бой неизбежен!", duration: 0, isCombatStage: true, enemyId: 'draugr_wight' },
+    { name: "Осмотр Сокровищницы", description: "Герой осматривает главную усыпальницу, собирая награды.", duration: 1.5 * 60 * 1000 }
+];
+
+/**
+ * Rolls a D20 dice and records the roll.
+ */
+const rollD20 = (character: Character): { roll: number, updatedCharacter: Character } => {
+    const updatedChar = structuredClone(character);
+    const roll = Math.floor(Math.random() * 20) + 1;
+    if (!updatedChar.analytics) {
+        updatedChar.analytics = { killedEnemies: {}, diceRolls: { d20: Array(21).fill(0) }, encounteredEnemies: [], epicPhrases: [] };
+    }
+    updatedChar.analytics.diceRolls.d20[roll]++;
+    return { roll, updatedCharacter: updatedChar };
+};
+
+
+/**
+ * Represents a single round of combat against the current enemy.
+ */
+const performCombatRound = async (character: Character, gameData: GameData, logMessages: string[]): Promise<Character> => {
+    let updatedChar = structuredClone(character);
+    const { enemies, items } = gameData;
+
+    if (!updatedChar.combat) {
+        updatedChar.status = 'idle';
+        return updatedChar;
+    }
+
+    let enemy = updatedChar.combat.enemy;
+    const baseEnemyDef = gameData.enemies.find(e => e.id === updatedChar.combat!.enemyId);
+    
+    const getAttributeBonus = (value: number) => Math.max(0, Math.floor((value - 10) / 2));
+    
+    // --- Hero's Turn ---
+    logMessages.push('--- Ход героя ---');
+
+    // Check if should use healing potion first (critical health)
+    const healthRatio = updatedChar.stats.health.current / updatedChar.stats.health.max;
+    if (healthRatio < 0.35) {
+        const healingPotion = updatedChar.inventory.find(i => i.type === 'potion' && i.effect?.type === 'heal');
+        if (healingPotion && healingPotion.quantity > 0) {
+            healingPotion.quantity -= 1;
+            if (healingPotion.quantity <= 0) {
+                updatedChar.inventory = updatedChar.inventory.filter(i => i.id !== healingPotion.id);
+            }
+            const healAmount = healingPotion.effect?.amount || 30;
+            updatedChar.stats.health.current = Math.min(updatedChar.stats.health.max, updatedChar.stats.health.current + healAmount);
+            logMessages.push(`⚗️ Критическое состояние! Герой быстро выпивает ${healingPotion.name}, восстанавливая ${healAmount} здоровья.`);
+            
+            // Update combat enemy state before returning.
+            updatedChar.combat.enemy = enemy;
+            // Don't perform attack this turn, just use potion
+            // Continue to enemy turn
+        }
+    }
+    // Decide action: attack, defend, cast spell, or flee.
+    let heroAction: 'attack' | 'defend' | 'cast' | 'flee' = 'attack';
+    const canCast = (updatedChar.knownSpells || []).some(id => (allSpells.find(s => s.id === id)?.manaCost || Infinity) <= updatedChar.stats.magicka.current);
+    
+    // Consider fleeing if very low health and no potions.
+    // Fleeing is a "reflex" action, so this logic is now in `fleeFromCombatReflex`.
+    // This block can be simplified or removed if the reflex handles it.
+    // For now, we'll keep it as a fallback decision point.
+    if (healthRatio < 0.25 && !updatedChar.combat!.fleeAttempted) {
+        const hasHealingPotion = updatedChar.inventory.some(i => i.type === 'potion' && i.effect?.type === 'heal');
+        if (!hasHealingPotion && !canCast) {
+            heroAction = 'flee'; // Try to flee if critically injured
+        }
+    }
+    
+    if (heroAction !== 'flee') {
+        if (canCast && updatedChar.stats.health.current < updatedChar.stats.health.max * 0.6) {
+            heroAction = 'cast'; // Prioritize healing
+        } else if (canCast && Math.random() < 0.3) {
+            heroAction = 'cast';
+        } else if (updatedChar.stats.stamina.current > 20 && Math.random() < 0.25) {
+            heroAction = 'defend';
+        }
+    }
+
+    // Perform action
+    if (heroAction === 'flee') {
+        updatedChar.combat!.fleeAttempted = true;
+        const { roll, updatedCharacter: charWithRoll } = rollD20(updatedChar);
+        updatedChar = charWithRoll;
+        const fleeSuccess = roll >= 10; // DC 10 to flee
+        
+        if (fleeSuccess) {
+            logMessages.push(`🏃 Герой пытается сбежать... и успешно отступает! (бросок: ${roll})`);
+            updatedChar.status = 'idle';
+            updatedChar.combat = null;
+            updatedChar.mood = Math.max(0, updatedChar.mood - 10);
+            return updatedChar;
+        } else {
+            logMessages.push(`🏃 Герой пытается сбежать, но ${enemy.name} преграждает путь! (бросок: ${roll})`);
+            // Fleeing failed, enemy gets a free attack
+        }
+    } else if (heroAction === 'attack') {
+        const strengthBonus = getAttributeBonus(updatedChar.attributes.strength);
+        const skillBonus = Math.floor(updatedChar.skills.oneHanded / 5);
+        const totalBonus = strengthBonus + skillBonus;
+
+        const { roll, updatedCharacter: charWithRoll } = rollD20(updatedChar);
+        updatedChar = charWithRoll;
+        const totalRoll = roll + totalBonus;
+
+        const success = totalRoll >= enemy.armor;
+        updatedChar.combat!.lastRoll = { actor: 'hero', action: 'Атака', roll, bonus: totalBonus, total: totalRoll, target: enemy.armor, success };
+        logMessages.push(`Бросок атаки: ${roll} + ${strengthBonus} (сила) + ${skillBonus} (навык) = ${totalRoll} (цель: ${enemy.armor})`);
+
+        if (roll === 20) {
+            const weaponId = updatedChar.equippedItems.weapon;
+            const weapon = weaponId ? updatedChar.inventory.find((i: CharacterInventoryItem) => i.id === weaponId) : null;
+            const baseDamage = 1 + getAttributeBonus(updatedChar.attributes.strength);
+            let heroDamage = Math.max(1, Math.floor(((weapon ? weapon.damage || 1 : 1) + baseDamage) * 2)); // Double damage
+            enemy.health.current -= heroDamage;
+            logMessages.push(`🎲 Критический успех! Герой наносит сокрушительный удар на ${heroDamage} урона!`);
+        } else if (roll === 1) {
+            const fumblePhrases = [
+                "Герой спотыкается о собственный ботинок и роняет оружие. Какой позор!",
+                "Замахнувшись, герой случайно бьет себя по колену. -2 здоровья.",
+                "Оружие выскальзывает из потных рук и улетает в кусты. Придется искать."
+            ];
+            logMessages.push(`🎲 Критический провал! ${fumblePhrases[Math.floor(Math.random() * fumblePhrases.length)]}`);
+            if (Math.random() > 0.5) updatedChar.stats.health.current -= 2;
+        } else if (success) {
+            const weaponId = updatedChar.equippedItems.weapon;
+            const weapon = weaponId ? updatedChar.inventory.find((i: CharacterInventoryItem) => i.id === weaponId) : null;
+            const baseDamage = 1 + getAttributeBonus(updatedChar.attributes.strength);
+            let heroDamage = Math.max(1, (weapon ? weapon.damage || 1 : 1) + baseDamage);
+            enemy.health.current -= heroDamage;
+            logMessages.push(`Попадание! Герой наносит ${heroDamage} урона.`);
+        } else {
+            logMessages.push("Промах! Враг увернулся от удара.");
+        }
+
+    } else if (heroAction === 'defend') {
+        updatedChar.stats.stamina.current -= 10;
+        logMessages.push(`Герой готовится к защите, тратя 10 выносливости.`);
+        // The effect of defending will be applied on the enemy's turn.
+    } else if (heroAction === 'cast') {
+        const knownSpells = (updatedChar.knownSpells || []).map(id => allSpells.find(s => s.id === id)).filter(Boolean) as Spell[];
+        const spellToCast = knownSpells.find(s => s.manaCost <= updatedChar.stats.magicka.current);
+
+        if (spellToCast) {
+            updatedChar.stats.magicka.current -= spellToCast.manaCost;
+            const castBonus = getAttributeBonus(updatedChar.attributes.intelligence);
+            const { roll, updatedCharacter: charWithRoll } = rollD20(updatedChar);
+            updatedChar = charWithRoll;
+            const totalRoll = roll + castBonus;
+            const success = totalRoll >= 10; // Simple magic success check.
+            updatedChar.combat!.lastRoll = { actor: 'hero', action: `Колдует: ${spellToCast.name}`, roll, bonus: castBonus, total: totalRoll, target: 10, success };
+            logMessages.push(`Бросок магии: ${roll} + ${castBonus} (бонус) = ${totalRoll} (цель: 10)`);
+            
+            if (success) {
+                switch(spellToCast.type) {
+                    case 'damage':
+                        enemy.health.current -= spellToCast.value;
+                        logMessages.push(`"${spellToCast.name}" попадает во врага, нанося ${spellToCast.value} урона.`);
+                        break;
+                    case 'heal':
+                        updatedChar.stats.health.current = Math.min(updatedChar.stats.health.max, updatedChar.stats.health.current + spellToCast.value);
+                        logMessages.push(`Герой исцеляет себя на ${spellToCast.value} здоровья.`);
+                        break;
+                    // Other spell types can be added here
+                }
+            } else {
+                logMessages.push("Заклинание рассеялось в воздухе, не достигнув цели.");
+            }
+        } else {
+             logMessages.push("Герой пытается колдовать, но не хватает магии.");
+        }
+    }
+
+    updatedChar.combat!.enemy = enemy; // Persist enemy state changes
+
+    if (enemy.health.current <= 0) {
+        let winMsg = `Герой победил ${enemy.name}.`;
+        const moodBoost = 15;
+        updatedChar.mood = Math.min(100, updatedChar.mood + moodBoost);
+        winMsg += ` Получено ${enemy.xp} опыта. Настроение улучшилось (+${moodBoost}).`;
+        updatedChar.xp.current += enemy.xp;
+
+        // Analytics tracking
+        const enemyId = updatedChar.combat.enemyId;
+        updatedChar.analytics.killedEnemies[enemyId] = (updatedChar.analytics.killedEnemies[enemyId] || 0) + 1;
+
+
+        if (baseEnemyDef?.guaranteedDrop) {
+            for (const drop of baseEnemyDef.guaranteedDrop) {
+                const baseItem = items.find(i => i.id === drop.id);
+                if (baseItem) {
+                    const { updatedCharacter: charWithItem, logMessage } = addItemToInventory(updatedChar, baseItem, drop.quantity);
+                    updatedChar = charWithItem;
+                    winMsg += ` ${logMessage}`;
+                }
+            }
+        }
+        
+        logMessages.push(winMsg);
+        updatedChar.status = 'idle';
+        updatedChar.combat = null;
+        return updatedChar;
+    }
+    
+    // --- Enemy's Turn ---
+    logMessages.push(`--- Ход ${enemy.name} ---`);
+    const enemyAttackBonus = getAttributeBonus(baseEnemyDef?.level || 1);
+    const { roll: enemyRoll, updatedCharacter: charAfterEnemyRoll } = rollD20(updatedChar);
+    updatedChar = charAfterEnemyRoll;
+    let enemyTotalRoll = enemyRoll + enemyAttackBonus;
+    
+    // Calculate total armor from equipped items
+    const totalArmor = 5 + Object.entries(updatedChar.equippedItems)
+        .filter(([slot]) => ['head', 'torso', 'legs', 'hands', 'feet'].includes(slot as EquipmentSlot))
+        .reduce((sum, [, itemId]) => {
+            const item = updatedChar.inventory.find(i => i.id === itemId);
+            return sum + (item?.armor || 0);
+        }, 0);
+    
+    let heroDefenseTarget = 10 + getAttributeBonus(updatedChar.attributes.agility) + totalArmor; // Base dodge + armor
+    if (heroAction === 'defend') {
+        heroDefenseTarget += 5 + getAttributeBonus(updatedChar.attributes.strength); // Bonus for active block
+    }
+
+    const enemySuccess = enemyTotalRoll >= heroDefenseTarget;
+    updatedChar.combat!.lastRoll = { actor: 'enemy', action: 'Атака', roll: enemyRoll, bonus: enemyAttackBonus, total: enemyTotalRoll, target: heroDefenseTarget, success: enemySuccess };
+    logMessages.push(`Бросок атаки врага: ${enemyRoll} + ${enemyAttackBonus} (бонус) = ${enemyTotalRoll} (цель: ${heroDefenseTarget})`);
+
+    if (enemyRoll === 20) {
+        let damageTaken = Math.max(1, Math.floor(baseEnemyDef!.damage * 1.5));
+        updatedChar.stats.health.current -= damageTaken;
+        logMessages.push(`🎲 Критический удар! ${enemy.name} наносит ${damageTaken} урона.`);
+    } else if (enemyRoll === 1) {
+        logMessages.push(`🎲 Критический провал! ${enemy.name} спотыкается и падает, не нанося урона.`);
+    } else if (enemySuccess) {
+        let damageTaken = Math.max(1, baseEnemyDef!.damage);
+        if (heroAction === 'defend') {
+            damageTaken = Math.floor(damageTaken / 2);
+            logMessages.push("Герой успешно блокирует, получив лишь половину урона!");
+        }
+        updatedChar.stats.health.current -= damageTaken;
+        logMessages.push(`${enemy.name} попадает, нанося ${damageTaken} урона.`);
+    } else {
+        logMessages.push("Герой ловко уворачивается от атаки!");
+    }
+
+    if (updatedChar.stats.health.current > 0) logMessages.push(`У героя осталось ${Math.max(0, updatedChar.stats.health.current)} здоровья.`);
+
+    // Death check is handled in the main loop for clarity
+    return updatedChar;
+};
+
+
+// --- IDLE ACTIONS ---
+
+const equipBestGearAction: Action = {
+    name: "Оценить снаряжение",
+    type: "system",
+    getWeight: (char) => char.preferences?.autoEquip ? 100 : 0,
+    canPerform: (char, worldState) => worldState.isIdle && (char.preferences?.autoEquip ?? true),
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        const logMessages: string[] = [];
+        let gearChanged = false;
+
+        const slots: EquipmentSlot[] = ['weapon', 'head', 'torso', 'legs', 'hands', 'feet', 'amulet', 'ring'];
+
+        for (const slot of slots) {
+            const availableItems = updatedChar.inventory.filter((i: CharacterInventoryItem) => i.equipmentSlot === slot);
+            
+            if (availableItems.length === 0) {
+                continue;
+            }
+
+            // Find the best available item by its primary stat (damage or armor)
+            const bestAvailableItem = availableItems.reduce((best, current) => {
+                const currentStat = (slot === 'weapon') ? (current.damage || 0) : (current.armor || 0);
+                const bestStat = (slot === 'weapon') ? (best.damage || 0) : (best.armor || 0);
+                return currentStat > bestStat ? current : best;
+            });
+            
+            const bestAvailableStat = (slot === 'weapon' ? bestAvailableItem.damage : bestAvailableItem.armor) || 0;
+
+            // Get the currently equipped item in this slot
+            const currentItemId = updatedChar.equippedItems[slot];
+            const currentItem = currentItemId ? updatedChar.inventory.find((i: CharacterInventoryItem) => i.id === currentItemId) : null;
+            
+            const currentStat = currentItem ? ((slot === 'weapon' ? currentItem.damage : currentItem.armor) || 0) : -1;
+
+            // If the best available item is better than the currently equipped one
+            if (bestAvailableItem && bestAvailableStat > currentStat) {
+                updatedChar.equippedItems[slot] = bestAvailableItem.id;
+                
+                let logMessage = `Герой надевает ${bestAvailableItem.name}.`;
+                if (currentItem) {
+                    logMessage = `Герой снимает "${currentItem.name}" и надевает "${bestAvailableItem.name}".`;
+                }
+                logMessages.push(logMessage);
+                gearChanged = true;
+            }
+        }
+
+        if (!gearChanged) {
+            return { character, logMessage: "" };
+        }
+
+        return { character: updatedChar, logMessage: logMessages };
+    }
+};
+
+
+const takeQuestAction: Action = {
+    name: "Взять задание",
+    type: "quest",
+    getWeight: (char, worldState) => {
+        // IMPROVED: Quests should be the main activity for healthy characters
+        const healthRatio = char.stats.health.current / char.stats.health.max;
+        const staminaRatio = char.stats.stamina.current / char.stats.stamina.max;
+        
+        // Low health or stamina - questing is risky
+        if (healthRatio < 0.4 || staminaRatio < 0.3) {
+            return priorityToWeight(Priority.LOW);
+        }
+        
+        // Good health and stamina - questing is HIGH priority!
+        if (healthRatio > 0.7 && staminaRatio > 0.5) {
+            return priorityToWeight(Priority.HIGH);
+        }
+        
+        // Medium health/stamina - still good option
+        return priorityToWeight(Priority.MEDIUM);
+    },
+    canPerform: (char, worldState, gameData) => {
+        if (!worldState.canTakeQuest) {
+            return false;
+        }
+        // Check if the character is on a cooldown from fleeing a quest combat
+        const questCooldown = char.actionCooldowns?.['takeQuest'] || 0;
+        return Date.now() >= questCooldown;
+    },
+    async perform(character: Character, gameData: GameData) {
+        let updatedChar = structuredClone(character);
+        const { enemies, quests } = gameData;
+        
+        const suitableQuests = quests.filter(q => {
+            if (q.location !== updatedChar.location || 
+                q.status !== 'available' || 
+                character.level < q.requiredLevel ||
+                (updatedChar.completedQuests || []).includes(q.id)) {
+                return false;
+            }
+            if (q.requiredFaction) {
+                const currentRep = updatedChar.factions[q.requiredFaction.id]?.reputation || 0;
+                return currentRep >= q.requiredFaction.reputation;
+            }
+            return true;
+        });
+
+        const quest = suitableQuests[Math.floor(Math.random() * suitableQuests.length)];
+        let initialLog = `Задание "${quest.title}"? Звучит как неплохой способ разбогатеть. Герой берется за дело.`;
+
+        if (quest.type === 'bounty' || (quest.type === 'side' && Math.random() < (quest.combatChance || 0))) {
+            const baseEnemy = enemies.find(e => e.id === quest.targetEnemyId) || enemies[Math.floor(Math.random() * enemies.length)];
+            const levelMultiplier = 1 + (character.level - 1) * 0.15;
+            const enemy = { 
+                name: baseEnemy.name, 
+                health: { current: Math.floor(baseEnemy.health * levelMultiplier), max: Math.floor(baseEnemy.health * levelMultiplier) }, 
+                damage: Math.floor(baseEnemy.damage * levelMultiplier), 
+                xp: Math.floor(baseEnemy.xp * levelMultiplier),
+                armor: baseEnemy.armor || (10 + (baseEnemy.level || 1)),
+                appliesEffect: baseEnemy.appliesEffect || null,
+            };
+
+            // Analytics Tracking for encounter
+            if (!updatedChar.analytics.encounteredEnemies.includes(baseEnemy.id)) {
+                updatedChar.analytics.encounteredEnemies.push(baseEnemy.id);
+            }
+
+
+            updatedChar.status = 'in-combat';
+            updatedChar.combat = { enemyId: baseEnemy.id, enemy, onWinQuestId: quest.id, fleeAttempted: false };
+            updatedChar = addToActionHistory(updatedChar, 'quest');
+            const questLog = `Герой выследил цель по заданию и вступает в бой с ${enemy.name}!`;
+            return { character: updatedChar, logMessage: initialLog + " " + questLog };
+        } else {
+            updatedChar.status = 'busy';
+            updatedChar.currentAction = {
+                type: "quest", name: `Выполнение: ${quest.title}`, description: quest.narrative,
+                startedAt: Date.now(), duration: quest.duration * 60 * 1000, questId: quest.id,
+            };
+            updatedChar = addToActionHistory(updatedChar, 'quest');
+            return { character: updatedChar, logMessage: initialLog + ` Герой приступил к выполнению.` };
+        }
+    }
+};
+
+const exploreCityAction: Action = {
+    name: "Провести время в городе",
+    type: "social",
+    getWeight: (char, worldState) => {
+        if (!worldState.isLocationSafe || !worldState.canExploreCity) return 0;
+        
+        // SIMPLIFIED (Godville-style): Basic priority
+        // City exploration is generally a LOW priority background activity
+        return priorityToWeight(Priority.LOW);
+    },
+    canPerform: (char, worldState) => worldState.isLocationSafe! && worldState.canExploreCity!,
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        updatedChar.status = 'busy';
+
+        const roll = Math.random();
+
+        if (character.mood < 40 && roll < 0.4) { // Feeling down, seeks company
+            updatedChar.mood = Math.min(100, updatedChar.mood + 10);
+            updatedChar.currentAction = { type: 'explore', name: 'Общение в таверне', description: 'Герой решил пропустить стаканчик в таверне и поболтать с местными, чтобы поднять себе настроение.', startedAt: Date.now(), duration: 2.5 * 60 * 1000 };
+            updatedChar = addToActionHistory(updatedChar, 'social');
+            return { character: updatedChar, logMessage: 'Чувствуя себя не в своей тарелке, герой отправляется в таверну, чтобы развеяться.' };
+        }
+        if (roll < 0.15) { // Stupid action
+            const rustyDagger = updatedChar.inventory.find(i => i.id === 'weapon_dagger_rusty');
+            if (rustyDagger) {
+                rustyDagger.quantity -= 1;
+                if (rustyDagger.quantity <= 0) updatedChar.inventory = updatedChar.inventory.filter(i => i.id !== rustyDagger.id);
+                const fine = 50;
+                let logMessage = "Герой решил, что старому ржавому кинжалу не место в его сумке и отдал его стражнику. Стражник этого не оценил. ";
+                const goldItem = updatedChar.inventory.find(i => i.id === 'gold')!;
+                if (goldItem.quantity >= fine) {
+                    goldItem.quantity -= fine;
+                    logMessage += `Пришлось заплатить штраф в ${fine} золота.`;
+                } else {
+                    logMessage += `Денег на штраф не хватило, так что арест будет дольше.`;
+                }
+                updatedChar.mood = Math.max(0, updatedChar.mood - 20);
+                updatedChar.currentAction = { type: 'jail', name: 'В тюрьме', description: 'Отбывает наказание за... странное поведение.', startedAt: Date.now(), duration: 5 * 60 * 1000 };
+                const debuff: ActiveEffect = { id: 'public_shame', name: 'Публичное унижение', description: 'От позора и голода в камере силы восстанавливаются медленнее.', icon: 'EyeOff', type: 'debuff', expiresAt: Date.now() + 15 * 60 * 1000 };
+                updatedChar.effects = updatedChar.effects.filter(e => e.id !== debuff.id);
+                updatedChar.effects.push(debuff);
+                return { character: updatedChar, logMessage: logMessage + ` Герой брошен в камеру на 5 минут.` };
+            }
+        }
+        if (roll < 0.60 && gameData.npcs.some(npc => npc.location === updatedChar.location && npc.inventory && npc.inventory.length > 0)) { // Trading
+            updatedChar.currentAction = { type: 'trading', name: `Торговля`, description: 'Герой решил прицениться к товарам в местной лавке.', startedAt: Date.now(), duration: 1.5 * 60 * 1000 };
+            return { character: updatedChar, logMessage: 'Герой решил осмотреться в городе. Возможно, найдется что-то интересное в лавках... или в чужих карманах.' };
+        }
+        // Default: walk around
+        updatedChar.currentAction = { type: 'explore', name: 'Прогулка по городу', description: 'Герой бесцельно бродит по улицам, впитывая атмосферу.', startedAt: Date.now(), duration: 2 * 60 * 1000 };
+        updatedChar = addToActionHistory(updatedChar, 'explore');
+        return { character: updatedChar, logMessage: 'Герой решил просто прогуляться по городу и осмотреться.' };
+    }
+};
+
+const findEnemyAction: Action = {
+    name: "Найти врага",
+    type: "combat",
+    getWeight: (char, worldState) => {
+        if (worldState.isLocationSafe) return 0;
+        
+        // SIMPLIFIED (Godville-style): Simple health-based priority
+        const healthRatio = char.stats.health.current / char.stats.health.max;
+        
+        // Critical health - avoid combat!
+        if (healthRatio < 0.3) {
+            return priorityToWeight(Priority.DISABLED);
+        }
+        
+        // Low health - risky
+        if (healthRatio < 0.6) {
+            return priorityToWeight(Priority.LOW);
+        }
+        
+        // Good health - combat is a reasonable option
+        return priorityToWeight(Priority.MEDIUM);
+    },
+    canPerform: (char, worldState) => !worldState.isLocationSafe!,
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        const possibleEnemies = gameData.enemies.filter(e => !e.isUnique && (e.minLevel || 1) <= character.level);
+        if (possibleEnemies.length === 0) {
+            return { character, logMessage: "Герой искал приключений, но в округе было тихо."};
+        }
+        const baseEnemy = possibleEnemies[Math.floor(Math.random() * possibleEnemies.length)];
+        const levelMultiplier = 1 + (character.level - 1) * 0.15;
+        const finalEnemy = {
+            name: baseEnemy.name,
+            health: { current: Math.floor(baseEnemy.health * levelMultiplier), max: Math.floor(baseEnemy.health * levelMultiplier) },
+            damage: Math.floor(baseEnemy.damage * levelMultiplier),
+            xp: Math.floor(baseEnemy.xp * levelMultiplier),
+            armor: Math.floor((baseEnemy.armor || (10 + (baseEnemy.level || 1))) * (1 + (character.level -1) * 0.05)),
+            appliesEffect: baseEnemy.appliesEffect || null,
+        };
+        if (Math.random() < 0.1) { // Stealth kill
+             updatedChar.xp.current += finalEnemy.xp;
+             updatedChar.analytics.killedEnemies[baseEnemy.id] = (updatedChar.analytics.killedEnemies[baseEnemy.id] || 0) + 1;
+             if (!updatedChar.analytics.encounteredEnemies.includes(baseEnemy.id)) {
+                updatedChar.analytics.encounteredEnemies.push(baseEnemy.id);
+             }
+             return { character: updatedChar, logMessage: `Герой подкрался к ${finalEnemy.name} незамеченным и нанес смертельный удар! Получено ${finalEnemy.xp} опыта.` };
+        }
+
+        // Analytics Tracking for encounter
+        if (!updatedChar.analytics.encounteredEnemies.includes(baseEnemy.id)) {
+            updatedChar.analytics.encounteredEnemies.push(baseEnemy.id);
+        }
+
+        updatedChar.status = 'in-combat';
+        updatedChar.combat = { enemyId: baseEnemy.id, enemy: finalEnemy, fleeAttempted: false };
+        updatedChar = addToActionHistory(updatedChar, 'combat');
+        return { character: updatedChar, logMessage: `Впереди опасность! Герой вступает в бой с ${finalEnemy.name}!` };
+    }
+};
+
+const travelAction: Action = {
+    name: "Путешествовать",
+    type: "travel",
+    getWeight: (char) => {
+        // IMPROVED: Prevent aimless wandering with repetition penalty
+        if (char.divineDestinationId) {
+            return priorityToWeight(Priority.HIGH); // Divine command is always high
+        }
+        
+        // Check recent travel history - discourage constant travel
+        const recentTravelCount = countRecentActions(char, 'travel', 10);
+        
+        // If traveled recently multiple times, drastically reduce weight
+        if (recentTravelCount >= 3) {
+            return priorityToWeight(Priority.DISABLED); // Stop wandering!
+        }
+        if (recentTravelCount >= 2) {
+            return priorityToWeight(Priority.LOW) * 0.3; // Strong penalty
+        }
+        
+        // Normal travel is occasional background activity
+        return priorityToWeight(Priority.LOW);
+    },
+    canPerform: (char, worldState, gameData) =>
+        !worldState.isOverencumbered &&
+        gameData.locations.length > 1 &&
+        char.stats.stamina.current > char.stats.stamina.max * 0.25,
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        const { locations } = gameData;
+        const currentLocationName = locations.find(l => l.id === character.location)?.name || 'неизвестного места';
+        
+        let destination = null;
+        if (character.divineDestinationId) {
+            destination = locations.find(l => l.id === character.divineDestinationId);
+        } else {
+            const possibleDestinations = locations.filter(l => l.id !== updatedChar.location);
+            if (possibleDestinations.length > 0) {
+                destination = possibleDestinations[Math.floor(Math.random() * possibleDestinations.length)];
+            }
+        }
+
+        if (!destination) {
+            return { character, logMessage: "Герою некуда идти. Он остался на месте."};
+        }
+
+        updatedChar.status = 'busy';
+        updatedChar.currentAction = { 
+            type: 'travel', 
+            name: `Путешествие в ${destination.name}`, 
+            description: `Герой идет пешком в ${destination.name}.`, 
+            startedAt: Date.now(), 
+            duration: 3 * 60 * 1000, 
+            destinationId: destination.id 
+        };
+        updatedChar.currentAction.originalDuration = updatedChar.currentAction.duration;
+        updatedChar = addToActionHistory(updatedChar, 'travel');
+        return { character: updatedChar, logMessage: `Дорога зовет! Герой покинул ${currentLocationName} и держит путь в ${destination.name}.` };
+    }
+};
+
+const restAtTavernAction: Action = {
+    name: "Отдохнуть в таверне",
+    type: "rest",
+    getWeight: (char, worldState) => {
+        if (!worldState.isLocationSafe || !worldState.isInjured) return 0;
+        
+        // SIMPLIFIED (Godville-style): Priority based on health
+        const healthRatio = char.stats.health.current / char.stats.health.max;
+        
+        // Critical health - rest is URGENT!
+        if (healthRatio < 0.3) {
+            return priorityToWeight(Priority.URGENT);
+        }
+        
+        // Low health - rest is important
+        if (healthRatio < 0.6) {
+            return priorityToWeight(Priority.HIGH);
+        }
+        
+        // Minor injuries - rest is an option
+        return priorityToWeight(Priority.MEDIUM);
+    },
+    canPerform: (char, worldState) => worldState.isLocationSafe! && worldState.isInjured! && worldState.hasEnoughGoldForRest!,
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        const cost = 10;
+        const goldItem = updatedChar.inventory.find(i => i.id === 'gold')!;
+        goldItem.quantity -= cost;
+        updatedChar.status = 'busy';
+        updatedChar.currentAction = { type: 'rest', name: 'Отдых в таверне', description: 'Герой отдыхает за кружкой эля, восстанавливая силы.', startedAt: Date.now(), duration: 30 * 1000 };
+        
+        const restedEffect: ActiveEffect = {
+            id: 'rested', name: 'Отдохнувший', description: 'Короткий отдых придал сил. Запас сил восстанавливается немного быстрее.',
+            icon: 'Coffee', type: 'buff', expiresAt: Date.now() + 10 * 60 * 1000,
+        };
+        if (!updatedChar.effects.some(e => e.id === 'well_rested' || e.id === 'rested')) {
+            updatedChar.effects.push(restedEffect);
+        }
+
+        updatedChar = addToActionHistory(updatedChar, 'rest');
+        return { character: updatedChar, logMessage: `Герой заплатил ${cost} золотых и присел отдохнуть в таверне на полминуты.` };
+    }
+};
+
+const makeCampAction: Action = {
+    name: "Сделать привал",
+    type: "rest",
+    getWeight: (char, worldState) => {
+        if (!worldState.isTired) return 0;
+        
+        const healthRatio = char.stats.health.current / char.stats.health.max;
+        const fatigueRatio = char.stats.fatigue.current / char.stats.fatigue.max;
+        
+        // Strong weight increase with fatigue
+        let weight = fatigueRatio * 90; // Up to 90 when exhausted
+        
+        // Additional boost if injured
+        weight += (1 - healthRatio) * 40;
+        
+        // Boost after traveling or combat
+        if (countRecentActions(char, 'travel', 3) > 1) {
+            weight += 30;
+        }
+        
+        return Math.max(1, weight);
+    },
+    canPerform: (char, worldState) => worldState.isTired!,
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        updatedChar.status = 'busy';
+        
+        const food = updatedChar.inventory.find(i => i.type === 'food');
+        let foodLog = "Герой делает привал, чтобы перевести дух. Усталость валит с ног.";
+        
+        if (food) {
+            food.quantity -= 1;
+            if (food.quantity <= 0) {
+                updatedChar.inventory = updatedChar.inventory.filter(i => i.id !== food.id);
+            }
+            foodLog += ` Он съедает ${food.name}, восстанавливая немного здоровья.`;
+            updatedChar.stats.health.current = Math.min(updatedChar.stats.health.max, updatedChar.stats.health.current + (food.effect?.amount || 10));
+            
+            if (food.effect?.type === 'buff' && food.effect.id && food.effect.duration) {
+                const newEffect: ActiveEffect = {
+                    id: food.effect.id,
+                    name: food.name,
+                    description: food.effect.description || "Временное усиление от еды.",
+                    icon: food.effect.icon || 'Sparkles',
+                    type: 'buff',
+                    expiresAt: Date.now() + food.effect.duration,
+                };
+                updatedChar.effects = updatedChar.effects.filter(e => e.id !== newEffect.id);
+                updatedChar.effects.push(newEffect);
+                foodLog += ` Еда придает ему сил: "${newEffect.name}".`;
+            }
+        } else {
+            foodLog += " Еды в сумке не оказалось, так что отдых будет коротким.";
+        }
+        
+        updatedChar.currentAction = { type: 'travel_rest', name: 'Привал', description: 'Герой отдыхает у импровизированного костра, чтобы восстановить силы для дальнейшего пути.', startedAt: Date.now(), duration: 45 * 1000 };
+        updatedChar = addToActionHistory(updatedChar, 'rest');
+        return { character: updatedChar, logMessage: foodLog };
+    }
+};
+
+
+const sleepAtTavernAction: Action = {
+    name: "Переночевать в таверне",
+    type: "rest",
+    getWeight: (char, worldState) => {
+        if (!worldState.isLocationSafe || worldState.isWellRested) return 0;
+        
+        const healthRatio = char.stats.health.current / char.stats.health.max;
+        const staminaRatio = char.stats.stamina.current / char.stats.stamina.max;
+        const fatigueRatio = char.stats.fatigue.current / char.stats.fatigue.max;
+        
+        let weight = 30;
+        
+        // Strong desire to sleep when low resources
+        if (healthRatio < 0.7) weight += (0.7 - healthRatio) * 100; // Up to +70
+        if (staminaRatio < 0.5) weight += (0.5 - staminaRatio) * 60; // Up to +30
+        weight += fatigueRatio * 40; // Up to +40
+        
+        return Math.max(1, weight);
+    },
+    canPerform: (char, worldState) => worldState.isLocationSafe! && worldState.isInjured! && worldState.hasEnoughGoldForSleep! && !worldState.isWellRested!,
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        const cost = 250;
+        const goldItem = updatedChar.inventory.find(i => i.id === 'gold')!;
+        goldItem.quantity -= cost;
+        updatedChar.status = 'sleeping';
+        updatedChar.sleepUntil = Date.now() + 5 * 60 * 1000;
+        updatedChar = addToActionHistory(updatedChar, 'rest');
+        return { character: updatedChar, logMessage: `Герой заплатил ${cost} золотых за комнату в таверне и лег спать. Он проснется через 5 минут.` };
+    }
+};
+
+const learnSpellAction: Action = {
+    name: "Изучить заклинание",
+    type: "learn",
+    getWeight: () => 70, // High weight, it's always good to learn spells
+    canPerform: (char, worldState) => worldState.hasUnreadTome!,
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        const tome = updatedChar.inventory.find(
+            i => i.type === 'spell_tome' && i.spellId != null && !(character.knownSpells || []).includes(i.spellId)
+        )!;
+        const spellToLearn = allSpells.find(s => s.id === tome.spellId)!;
+
+        if (!updatedChar.knownSpells) updatedChar.knownSpells = [];
+        let logMessage: string;
+
+        if (updatedChar.knownSpells.includes(spellToLearn.id)) {
+            logMessage = `Герой перечитал ${tome.name}, но уже знает это заклинание. Том рассыпался в пыль.`;
+        } else {
+            updatedChar.knownSpells.push(spellToLearn.id);
+            logMessage = `Герой изучает ${tome.name} и осваивает заклинание: "${spellToLearn.name}"!`;
+        }
+
+        tome.quantity -= 1;
+        if (tome.quantity <= 0) updatedChar.inventory = updatedChar.inventory.filter(i => i.id !== tome.id);
+        updatedChar = addToActionHistory(updatedChar, 'learn');
+        return { character: updatedChar, logMessage };
+    },
+};
+
+const readLearningBookAction: Action = {
+    name: "Изучить обучающую книгу",
+    type: "learn",
+    getWeight: () => 80, // Very high weight, these buffs are great
+    canPerform: (char, worldState) => worldState.hasUnreadLearningBook!,
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        const book = updatedChar.inventory.find(i => i.type === 'learning_book' && i.learningEffect)!;
+        
+        if (!book || !book.learningEffect) {
+            return { character, logMessage: "" };
+        }
+
+        const effect = book.learningEffect;
+        
+        const newEffect: ActiveEffect = {
+            id: effect.id,
+            name: effect.name,
+            description: effect.description,
+            icon: effect.icon,
+            type: 'buff',
+            expiresAt: Date.now() + effect.duration,
+        };
+        
+        updatedChar.effects = updatedChar.effects.filter(e => e.id !== newEffect.id);
+        updatedChar.effects.push(newEffect);
+
+        const logMessage = `Герой прочел "${book.name}" и получил вдохновение: "${effect.name}"!`;
+
+        book.quantity -= 1;
+        if (book.quantity <= 0) {
+            updatedChar.inventory = updatedChar.inventory.filter(i => i.id !== book.id);
+        }
+        
+        updatedChar = addToActionHistory(updatedChar, 'learn');
+        return { character: updatedChar, logMessage };
+    },
+};
+
+const donateToFactionAction: Action = {
+    name: "Пожертвовать фракции",
+    type: "social",
+    getWeight: (char) => {
+        const gold = char.inventory.find(i => i.id === 'gold')?.quantity || 0;
+        if (gold > 1000) return 40;
+        if (gold > 500) return 25;
+        return 0;
+    },
+    canPerform: (char, worldState) => worldState.isLocationSafe! && worldState.hasEnoughGoldForDonation!,
+    async perform(character, gameData) {
+        let entitiesToDonate = allFactions.filter(f => 
+            !f.joinRestrictions || !f.joinRestrictions.includes(character.backstory)
+        ).map(f => ({ id: f.id, name: f.name }));
+        
+        entitiesToDonate.push({ id: `deity_${character.patronDeity}`, name: `Храм Покровителя` });
+        
+        if (entitiesToDonate.length === 0) {
+            return { character, logMessage: "" };
+        }
+
+        const entityToDonate = entitiesToDonate[Math.floor(Math.random() * entitiesToDonate.length)];
+        const donationAmount = 100;
+        
+        // Directly update character data to avoid async server action dependency in brain
+        let updatedChar = structuredClone(character);
+        const gold = updatedChar.inventory.find(i => i.id === 'gold');
+        if (!gold || gold.quantity < donationAmount) {
+             return { character, logMessage: `Герой хотел сделать пожертвование, но в карманах ветер свищет.` };
+        }
+        
+        gold.quantity -= donationAmount;
+        let logMessage = '';
+
+        if (entityToDonate.id.startsWith('deity_')) {
+            updatedChar.templeProgress = (updatedChar.templeProgress || 0) + donationAmount;
+            logMessage = `Движимый верой, герой пожертвовал ${donationAmount} золота на постройку храма для своего покровителя.`;
+        } else {
+             if (!updatedChar.factions) {
+                updatedChar.factions = {};
+            }
+            if (!updatedChar.factions[entityToDonate.id]) {
+                updatedChar.factions[entityToDonate.id] = { reputation: 0 };
+            }
+            updatedChar.factions[entityToDonate.id]!.reputation += Math.floor(donationAmount / 10);
+            logMessage = `Герой пожертвовал ${donationAmount} золота фракции "${entityToDonate.name}", укрепляя свою репутацию.`;
+        }
+        
+        updatedChar = addToActionHistory(updatedChar, 'social');
+        return { character: updatedChar, logMessage: logMessage };
+    }
+};
+
+const prayAction: Action = {
+    name: "Помолиться",
+    type: "social",
+    getWeight: (char) => (char.divineFavor || 0) < 90 ? 30 : 0, // Pray if favor is not nearly full
+    canPerform: (char, worldState) => worldState.isLocationSafe! && !char.effects.some(e => e.id.startsWith('grace_')),
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        updatedChar.divineFavor = Math.min(100, (updatedChar.divineFavor || 0) + 10);
+        updatedChar = addToActionHistory(updatedChar, 'social');
+        return { character: updatedChar, logMessage: "Герой возносит молитву своему богу-покровителю, чувствуя, как его связь с высшими силами крепнет." };
+    }
+};
+
+
+const travelToCryptAction: Action = {
+    name: "Отправиться к склепу",
+    type: "quest",
+    getWeight: () => 95, // Very high weight if available
+    canPerform: (char, worldState) => worldState.hasKeyItem && char.location !== 'forgotten_crypt',
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        const { locations } = gameData;
+        const currentLocationName = locations.find(l => l.id === character.location)?.name || 'неизвестного места';
+        const destination = locations.find(l => l.id === 'forgotten_crypt')!;
+
+        updatedChar.status = 'busy';
+        updatedChar.currentAction = { 
+            type: 'travel', 
+            name: `Путешествие в ${destination.name}`, 
+            description: `Древний коготь зовет героя. Он отправляется к ${destination.name}.`, 
+            startedAt: Date.now(), 
+            duration: 3 * 60 * 1000, 
+            destinationId: destination.id 
+        };
+        updatedChar.currentAction.originalDuration = updatedChar.currentAction.duration;
+        return { character: updatedChar, logMessage: `Забыв о других делах, герой покинул ${currentLocationName} и держит путь к таинственному склепу.` };
+    }
+};
+
+const startCryptExplorationAction: Action = {
+    name: "Войти в склеп",
+    type: "quest",
+    getWeight: () => 100, // Highest weight action
+    canPerform: (char, worldState) => 
+        char.location === 'forgotten_crypt' && 
+        worldState.hasKeyItem && 
+        !char.activeCryptQuest &&
+        !worldState.isBadlyInjured && // Don't enter if badly hurt
+        worldState.hasHealingPotion, // Make sure to have at least one potion
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        const claw = updatedChar.inventory.find(i => i.type === 'key_item')!;
+        const firstStage = cryptStages[0];
+
+        updatedChar.status = 'exploring';
+        updatedChar.activeCryptQuest = {
+            cryptId: 'forgotten_crypt',
+            clawId: claw.id,
+            stage: 0,
+            stageName: firstStage.name,
+            stageDescription: firstStage.description,
+            startedAt: Date.now(),
+            duration: firstStage.duration,
+        };
+        
+        return { character: updatedChar, logMessage: `Герой вставляет ${claw.name} в замочную скважину. Массивные каменные двери со скрежетом отворяются, открывая путь во тьму.` };
+    }
+};
+
+const wanderAction: Action = {
+    name: "Слоняться без дела",
+    type: "misc",
+    getWeight: () => 1, // Lowest possible weight, a true fallback
+    canPerform: () => true,
+    async perform(character, gameData) {
+        // Only produce a thought 15% of the time this action is chosen to avoid spam.
+        if (Math.random() > 0.15) {
+            return { character, logMessage: "" };
+        }
+        
+        return { character, logMessage: getFallbackThought(character) };
+    }
+};
+
+
+// --- REFLEX ACTIONS (Highest Priority) ---
+// These are not chosen by weight, but are checked first.
+interface ReflexAction extends Omit<Action, 'getWeight'> {
+    isTriggered: (character: Character, worldState: WorldState, gameData: GameData) => boolean;
+}
+
+const usePotionReflex: ReflexAction = {
+    name: "Использовать зелье здоровья",
+    type: "misc",
+    isTriggered: (char, worldState) => worldState.isBadlyInjured || worldState.hasPoisonDebuff,
+    canPerform: (char, worldState) => (worldState.isInjured! || worldState.hasPoisonDebuff!) && worldState.hasHealingPotion!,
+    async perform(character, gameData) {
+        const updatedChar = structuredClone(character);
+        const potion = updatedChar.inventory.find(i => i.type === 'potion' && i.effect?.type === 'heal' && i.effect.stat === 'health')!;
+        
+        const healthToRestore = potion.effect!.amount;
+        updatedChar.stats.health.current = Math.min(updatedChar.stats.health.max, updatedChar.stats.health.current + healthToRestore);
+        
+        let logMessage = `Герой выпил ${potion.name} и восстановил ${healthToRestore} здоровья.`;
+        
+        // If poisoned, a health potion can also feel like an antidote
+        if (character.effects.some(e => e.id === 'weak_poison')) {
+            logMessage += ' Это должно помочь против яда.';
+        }
+
+        potion.quantity -= 1;
+        if (potion.quantity <= 0) updatedChar.inventory = updatedChar.inventory.filter(i => i.id !== potion.id);
+        
+        return { character: updatedChar, logMessage };
+    },
+};
+
+const useBuffPotionReflex: ReflexAction = {
+    name: "Использовать зелье усиления",
+    type: "misc",
+    isTriggered: (char, worldState) => worldState.isInCombat && worldState.hasBuffPotion,
+    canPerform: (char, worldState) => worldState.isInCombat && worldState.hasBuffPotion,
+    async perform(character, gameData) {
+        const updatedChar = structuredClone(character);
+        const potion = updatedChar.inventory.find(i => i.type === 'potion' && i.effect?.type === 'buff' && i.effect.id != null)!;
+        
+        const newEffect: ActiveEffect = {
+            id: potion.effect!.id!,
+            name: potion.name,
+            description: potion.effect!.description || "Герой чувствует прилив сил.",
+            icon: potion.effect!.icon || 'Sparkles',
+            type: 'buff',
+            expiresAt: Date.now() + (potion.effect!.duration || 60000),
+            value: potion.effect!.amount,
+        };
+
+        updatedChar.effects.push(newEffect);
+
+        const logMessage = `Герой выпивает ${potion.name}, чувствуя, как его мускулы наливаются мощью!`;
+        potion.quantity -= 1;
+        if (potion.quantity <= 0) updatedChar.inventory = updatedChar.inventory.filter(i => i.id !== potion.id);
+
+        return { character: updatedChar, logMessage };
+    }
+};
+
+
+const fleeFromCombatReflex: ReflexAction = {
+    name: "Сбежать из боя",
+    type: "combat",
+    isTriggered: (char, worldState) => worldState.isInCombat && worldState.isBadlyInjured,
+    canPerform: (char, worldState) => worldState.isInCombat && worldState.isBadlyInjured && !char.combat!.fleeAttempted!,
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        updatedChar.combat!.fleeAttempted = true;
+        const staminaCost = 15;
+        let logMessage: string;
+        if (updatedChar.stats.stamina.current < staminaCost) {
+            logMessage = "Герой слишком измотан, чтобы бежать! Попытка провалилась.";
+        } else {
+            updatedChar.stats.stamina.current -= staminaCost;
+            const successChance = 0.5 + (updatedChar.stats.stamina.current / updatedChar.stats.stamina.max) * 0.25;
+            if (Math.random() < successChance) {
+                updatedChar.status = 'idle';
+                updatedChar.mood = Math.max(0, updatedChar.mood - 15);
+                
+                // Add a cooldown to prevent immediately re-taking a quest
+                if (updatedChar.combat?.onWinQuestId) {
+                    if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {};
+                    // 5 minute cooldown for taking quests
+                    updatedChar.actionCooldowns['takeQuest'] = Date.now() + 5 * 60 * 1000; 
+                    logMessage = `Понимая, что бой проигран, герой успешно скрывается. После такого он вряд ли скоро захочет снова браться за задания. Потрачено ${staminaCost} выносливости.`;
+                } else {
+                    logMessage = `Понимая, что бой проигран, герой тратит последние силы на рывок и успешно скрывается. Потрачено ${staminaCost} выносливости.`;
+                }
+
+                updatedChar.combat = null;
+
+            } else {
+                logMessage = `Попытка к бегству провалилась! Враг преградил путь, и, похоже, герою пустили стрелу в колено. Бой продолжается! Потрачено ${staminaCost} выносливости.`;
+            }
+        }
+        return { character: updatedChar, logMessage };
+    }
+};
+
+/**
+ * Determines the character's build type based on their backstory.
+ * @param backstory The character's backstory ID.
+ * @returns 'warrior' or 'mage' build type.
+ */
+function getArchetype(backstory: string): 'warrior' | 'mage' {
+    switch (backstory) {
+        case 'scholar':
+            return 'mage';
+        case 'noble':
+        case 'thief':
+        case 'warrior':
+        case 'shipwrecked':
+        case 'left_for_dead':
+        case 'companion':
+        default:
+            return 'warrior';
+    }
+}
+
+const autoAssignPointsAction: Action = {
+    name: "Распределить очки",
+    type: "system",
+    getWeight: (char) => (char.preferences?.autoAssignPoints && (char.points.attribute > 0 || char.points.skill > 0)) ? 100 : 0,
+    canPerform: (char) => !!char.preferences?.autoAssignPoints && (char.points.attribute > 0 || char.points.skill > 0),
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        const logMessages: string[] = [];
+        let pointsAssigned = false;
+
+        const buildType = getArchetype(updatedChar.backstory);
+
+        // Attribute point assignment
+        if (updatedChar.points.attribute > 0) {
+            let primaryAttr: keyof CharacterAttributes, secondaryAttr: keyof CharacterAttributes;
+            let primaryLog: string, secondaryLog: string;
+
+            if (buildType === 'mage') {
+                primaryAttr = 'intelligence';
+                secondaryAttr = 'endurance';
+                primaryLog = "Герой вкладывает очко в Интеллект, оттачивая магические способности.";
+                secondaryLog = "Герой вкладывает очко в Выносливость, укрепляя свое тело.";
+            } else { // Warrior (default)
+                primaryAttr = 'strength';
+                secondaryAttr = 'endurance';
+                primaryLog = "Герой вкладывает очко в Силу, чувствуя, как его удары становятся мощнее.";
+                secondaryLog = "Герой вкладывает очко в Выносливость, чувствуя себя более стойким.";
+            }
+            
+            if (updatedChar.attributes[primaryAttr] <= updatedChar.attributes[secondaryAttr]) {
+                updatedChar.attributes[primaryAttr] += 1;
+                logMessages.push(primaryLog);
+            } else {
+                updatedChar.attributes[secondaryAttr] += 1;
+                logMessages.push(secondaryLog);
+            }
+            updatedChar.points.attribute -= 1;
+            pointsAssigned = true;
+        } 
+        // Skill point assignment
+        else if (updatedChar.points.skill > 0) {
+            const skillChoices: { skill: keyof CharacterSkills, name: string }[] = buildType === 'mage'
+                ? [
+                    { skill: 'alchemy', name: 'искусстве алхимии' },
+                    { skill: 'lightArmor', name: 'ношении легкой брони' },
+                ]
+                : [ // Warrior (default)
+                    { skill: 'oneHanded', name: 'владении одноручным оружием' },
+                    { skill: 'block', name: 'искусстве блока' },
+                    { skill: 'heavyArmor', name: 'ношении тяжелой брони' },
+                ];
+            
+            // Find the lowest skill among the chosen build's skills
+            let lowestSkillChoice = skillChoices[0];
+            let lowestValue = updatedChar.skills[lowestSkillChoice.skill];
+            for (let i = 1; i < skillChoices.length; i++) {
+                const choice = skillChoices[i];
+                if (updatedChar.skills[choice.skill] < lowestValue) {
+                    lowestValue = updatedChar.skills[choice.skill];
+                    lowestSkillChoice = choice;
+                }
+            }
+            updatedChar.skills[lowestSkillChoice.skill] += 1;
+            
+            logMessages.push(`Герой упражняется, оттачивая свое мастерство в ${lowestSkillChoice.name}.`);
+            
+            updatedChar.points.skill -= 1;
+            pointsAssigned = true;
+        }
+        
+        if (pointsAssigned) {
+             // Recalculate max stats
+            updatedChar.stats.health.max = 80 + updatedChar.attributes.endurance * 10;
+            updatedChar.stats.magicka.max = 80 + updatedChar.attributes.intelligence * 10;
+            updatedChar.stats.stamina.max = 80 + (updatedChar.attributes.strength + updatedChar.attributes.endurance) * 5;
+            
+            // Check for new perks
+            const currentPerks = updatedChar.unlockedPerks || [];
+            const newlyUnlockedPerks = allPerks.filter(perk =>
+                !currentPerks.includes(perk.id) &&
+                updatedChar.skills[perk.skill] >= perk.requiredSkillLevel
+            ).map(p => p.id);
+
+            if (newlyUnlockedPerks.length > 0) {
+                if (!updatedChar.unlockedPerks) {
+                    updatedChar.unlockedPerks = [];
+                }
+                const newPerkNames = allPerks
+                    .filter(p => newlyUnlockedPerks.includes(p.id))
+                    .map(p => p.name)
+                    .join(', ');
+                    
+                updatedChar.unlockedPerks.push(...newlyUnlockedPerks);
+                logMessages.push(`Герой открыл новые перки: ${newPerkNames}!`);
+            }
+        }
+
+        return { character: updatedChar, logMessage: logMessages };
+    },
+};
+
+// --- COMBAT ACTIONS ---
+
+const fightEnemyAction: Action = {
+    name: "Сражаться",
+    type: "combat",
+    getWeight: () => 100, // Only action available in combat
+    canPerform: (char, worldState) => worldState.isInCombat,
+    async perform(character, gameData) {
+        const logMessages: string[] = [];
+        const updatedChar = await performCombatRound(character, gameData, logMessages);
+        return { character: updatedChar, logMessage: logMessages };
+    }
+};
+
+// --- DEAD (SOVNGARDE) ACTIONS ---
+
+const takeSovngardeQuestAction: Action = {
+    name: "Взять задание в Совнгарде",
+    type: "quest",
+    getWeight: () => 80,
+    canPerform: (char) => !char.currentAction && !char.activeSovngardeQuest,
+    async perform(character, gameData) {
+        const updatedChar = structuredClone(character);
+        const quest = gameData.sovngardeQuests[Math.floor(Math.random() * gameData.sovngardeQuests.length)];
+        updatedChar.activeSovngardeQuest = { questId: quest.id, startedAt: Date.now() };
+        updatedChar.currentAction = {
+            type: 'sovngarde_quest', name: `В Совнгарде: ${quest.title}`, description: quest.description,
+            startedAt: Date.now(), duration: quest.duration, sovngardeQuestId: quest.id,
+        };
+        return { character: updatedChar, logMessage: `В Совнгарде герой решил взяться за дело: "${quest.title}".` };
+    }
+};
+
+const wanderSovngardeAction: Action = {
+    name: "Размышлять в Совнгарде",
+    type: "misc",
+    getWeight: () => 20,
+    canPerform: (char) => !char.currentAction,
+    async perform(character, gameData) {
+        // Only produce a thought 25% of the time this action is chosen to avoid spam.
+        if (Math.random() > 0.25) {
+            return { character, logMessage: "" };
+        }
+        return { character, logMessage: sovngardeThoughts[Math.floor(Math.random() * sovngardeThoughts.length)] };
+    }
+};
+
+// --- EXPLORING ACTIONS ---
+
+const processCryptStageAction: Action = {
+    name: "Продолжить исследование склепа",
+    type: "quest",
+    getWeight: () => 100, // Only action available when exploring
+    canPerform: (char) => char.status === 'exploring',
+    async perform(character, gameData) {
+        let updatedChar: Character = structuredClone(character) as Character;
+        const activeQuest = updatedChar.activeCryptQuest!;
+        const now = Date.now();
+        
+        const currentStageDef = cryptStages[activeQuest.stage];
+
+        // If the current stage is a completed combat stage, move on immediately.
+        if (currentStageDef.isCombatStage) {
+             // This stage is done by virtue of winning the combat.
+        }
+        // Check if the current timed stage is completed
+        else if (now < activeQuest.startedAt + activeQuest.duration) {
+            // Stage not yet complete, do nothing.
+            return { character, logMessage: "" };
+        }
+        
+        let logMessage = `Этап "${activeQuest.stageName}" завершен. `;
+        const nextStageIndex = activeQuest.stage + 1;
+
+        if (nextStageIndex < cryptStages.length) {
+            const nextStage = cryptStages[nextStageIndex];
+            
+            // Check for combat stage
+            if (nextStage.isCombatStage && nextStage.enemyId) {
+                const baseEnemy = gameData.enemies.find(e => e.id === nextStage.enemyId)!;
+                const levelMultiplier = 1 + (updatedChar.level - 1) * 0.15;
+                const enemy = { 
+                    name: baseEnemy.name, 
+                    health: { current: Math.floor(baseEnemy.health * levelMultiplier), max: Math.floor(baseEnemy.health * levelMultiplier) }, 
+                    damage: Math.floor(baseEnemy.damage * levelMultiplier), 
+                    xp: Math.floor(baseEnemy.xp * levelMultiplier), 
+                    armor: baseEnemy.armor || (10 + (baseEnemy.level || 1)),
+                    appliesEffect: baseEnemy.appliesEffect || null 
+                };
+
+                // Analytics Tracking for encounter
+                if (!updatedChar.analytics.encounteredEnemies.includes(baseEnemy.id)) {
+                    updatedChar.analytics.encounteredEnemies.push(baseEnemy.id);
+                }
+                
+                updatedChar.status = 'in-combat';
+                updatedChar.combat = { enemyId: baseEnemy.id, enemy, fleeAttempted: false };
+                // We keep activeCryptQuest to know to resume exploration after combat.
+                logMessage += `Впереди опасность! ${nextStage.description}`;
+                return { character: updatedChar, logMessage };
+            }
+
+            updatedChar.activeCryptQuest = {
+                ...activeQuest,
+                stage: nextStageIndex,
+                stageName: nextStage.name,
+                stageDescription: nextStage.description,
+                startedAt: now,
+                duration: nextStage.duration,
+            };
+            logMessage += `Герой приступает к следующему этапу: "${nextStage.name}".`;
+        } else {
+            // Crypt exploration finished
+            const claw = updatedChar.inventory.find(i => i.id === activeQuest.clawId)!;
+            claw.quantity -= 1;
+            if (claw.quantity <= 0) {
+                updatedChar.inventory = updatedChar.inventory.filter(i => i.id !== claw.id);
+            }
+
+            const rewardGold = 1000;
+            const rewardXp = 500;
+            const goldItem = updatedChar.inventory.find(i => i.id === 'gold')!;
+            goldItem.quantity += rewardGold;
+            updatedChar.xp.current += rewardXp;
+            updatedChar.mood = Math.min(100, updatedChar.mood + 30);
+            
+            logMessage += `Герой успешно исследовал склеп! Древний коготь рассыпался в пыль. Получено ${rewardGold} золота и ${rewardXp} опыта.`;
+            
+            // Guaranteed 1 rare item
+            const rareItems = gameData.items.filter(i => i.rarity === 'rare' && (i.type === 'weapon' || i.type === 'armor'));
+            if (rareItems.length > 0) {
+                const chosenItem = rareItems[Math.floor(Math.random() * rareItems.length)];
+                const { updatedCharacter: charWithItem, logMessage: itemLog } = addItemToInventory(updatedChar, chosenItem, 1);
+                updatedChar = charWithItem;
+                logMessage += ` В главной сокровищнице он находит ценный предмет: ${chosenItem.name}!`;
+            }
+            
+            // 50% chance for an uncommon item
+            if (Math.random() < 0.5) {
+                const uncommonItems = gameData.items.filter(i => i.rarity === 'uncommon');
+                if (uncommonItems.length > 0) {
+                    const chosenItem = uncommonItems[Math.floor(Math.random() * uncommonItems.length)];
+                    const { updatedCharacter: charWithItem, logMessage: itemLog } = addItemToInventory(updatedChar, chosenItem, 1);
+                    updatedChar = charWithItem;
+                    logMessage += ` Также ему попадается ${chosenItem.name}.`;
+                }
+            }
+
+            updatedChar.status = 'idle';
+            updatedChar.activeCryptQuest = null;
+        }
+
+        return { character: updatedChar, logMessage };
+    }
+};
+
+// ==================================
+// NPC Social Actions
+// ==================================
+
+const interactWithNPCAction: Action = {
+    name: "Пообщаться с NPC",
+    type: "social",
+    getWeight: (char) => {
+        // SIMPLIFIED: Social interaction is MEDIUM priority in safe locations
+        return priorityToWeight(Priority.MEDIUM);
+    },
+    canPerform: (char, worldState, gameData) => {
+        if (!worldState.isLocationSafe) return false;
+        
+        // Check if there are NPCs at current location
+        const locationNPCs = gameData.npcs.filter(
+            npc => npc.location === char.location || npc.location === 'on_road'
+        );
+        return locationNPCs.length > 0;
+    },
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        
+        // Get NPCs at location
+        const locationNPCs = gameData.npcs.filter(
+            npc => npc.location === updatedChar.location || npc.location === 'on_road'
+        );
+        
+        if (locationNPCs.length === 0) {
+            return { character, logMessage: "Нет NPC для общения." };
+        }
+        
+        // Pick random NPC
+        const npc = locationNPCs[Math.floor(Math.random() * locationNPCs.length)];
+        
+        // Call server action (Character.id is the userId)
+        const result = await interactWithNPC(updatedChar.id, npc.id);
+        
+        if (result.success) {
+            // Refetch character from DB to get updated relationships
+            const refreshedChar = await getCharacterById(updatedChar.id);
+            if (!refreshedChar) {
+                return { character, logMessage: "Ошибка: персонаж не найден после общения." };
+            }
+            
+            updatedChar = addToActionHistory(refreshedChar as Character, 'social');
+            
+            return { 
+                character: updatedChar, 
+                logMessage: `${result.message} (отношения +${result.relationshipChange})` 
+            };
+        }
+        
+        return { character, logMessage: "Не удалось пообщаться с NPC." };
+    }
+};
+
+const tradeWithNPCAction: Action = {
+    name: "Торговать с торговцем",
+    type: "social",
+    getWeight: (char, worldState) => {
+        if (!worldState.isLocationSafe) return 0;
+        
+        // Check if we need healing potions
+        const potions = char.inventory.filter(i => i.type === 'potion');
+        const hasLowPotions = potions.reduce((sum, p) => sum + p.quantity, 0) < 3;
+        
+        // Check if we have gold
+        const gold = char.inventory.find(i => i.id === 'gold');
+        const hasGold = gold && gold.quantity > 50;
+        
+        if (hasLowPotions && hasGold) {
+            return priorityToWeight(Priority.HIGH);
+        }
+        
+        return priorityToWeight(Priority.LOW);
+    },
+    canPerform: (char, worldState, gameData) => {
+        if (!worldState.isLocationSafe) return false;
+        
+        // Check if there are merchant NPCs at current location
+        const merchantNPCs = gameData.npcs.filter(
+            npc => (npc.location === char.location || npc.location === 'on_road') && 
+                   npc.inventory && npc.inventory.length > 0
+        );
+        
+        const gold = char.inventory.find(i => i.id === 'gold');
+        return merchantNPCs.length > 0 && !!gold && gold.quantity > 10;
+    },
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        
+        // Get merchant NPCs at location
+        const merchantNPCs = gameData.npcs.filter(
+            npc => (npc.location === updatedChar.location || npc.location === 'on_road') && 
+                   npc.inventory && npc.inventory.length > 0
+        );
+        
+        if (merchantNPCs.length === 0) {
+            return { character, logMessage: "Нет торговцев поблизости." };
+        }
+        
+        // Pick random merchant
+        const merchant = merchantNPCs[Math.floor(Math.random() * merchantNPCs.length)];
+        
+        // Decide what to buy - prefer potions if low
+        const potions = updatedChar.inventory.filter(i => i.type === 'potion');
+        const hasLowPotions = potions.reduce((sum, p) => sum + p.quantity, 0) < 3;
+        
+        let itemToBuy = null;
+        if (hasLowPotions) {
+            // Try to buy a potion
+            itemToBuy = merchant.inventory!.find(i => {
+                const fullItem = gameData.items.find(item => item.id === i.itemId);
+                return fullItem?.type === 'potion';
+            });
+        }
+        
+        // If no potion found or not needed, buy random item
+        if (!itemToBuy && merchant.inventory!.length > 0) {
+            itemToBuy = merchant.inventory![Math.floor(Math.random() * merchant.inventory!.length)];
+        }
+        
+        if (!itemToBuy) {
+            return { character, logMessage: "У торговца нет нужных предметов." };
+        }
+        
+        // Call server action to buy (Character.id is the userId)
+        const result = await tradeWithNPC(updatedChar.id, merchant.id, 'buy', itemToBuy.itemId, 1);
+        
+        if (result.success) {
+            // Refetch character from DB to get updated inventory
+            const refreshedChar = await getCharacterById(updatedChar.id);
+            if (!refreshedChar) {
+                return { character, logMessage: "Ошибка: персонаж не найден после торговли." };
+            }
+            
+            updatedChar = addToActionHistory(refreshedChar as Character, 'social');
+            
+            const itemName = gameData.items.find(i => i.id === itemToBuy.itemId)?.name || 'предмет';
+            return { 
+                character: updatedChar, 
+                logMessage: `Герой купил ${itemName} у ${merchant.name}. ${result.message}` 
+            };
+        }
+        
+        return { character, logMessage: `Не удалось купить предмет: ${result.error}` };
+    }
+};
+
+// ==================================
+// AI Brain Logic
+// ==================================
+
+const reflexActions: ReflexAction[] = [fleeFromCombatReflex, useBuffPotionReflex, usePotionReflex];
+const idleActions: Action[] = [makeCampAction, autoAssignPointsAction, startCryptExplorationAction, travelToCryptAction, equipBestGearAction, takeQuestAction, exploreCityAction, findEnemyAction, travelAction, restAtTavernAction, sleepAtTavernAction, learnSpellAction, readLearningBookAction, donateToFactionAction, prayAction, wanderAction, interactWithNPCAction, tradeWithNPCAction];
+const combatActions: Action[] = [fightEnemyAction];
+const deadActions: Action[] = [takeSovngardeQuestAction, wanderSovngardeAction];
+const exploringActions: Action[] = [processCryptStageAction];
+
+
+/**
+ * The main AI decision-making function. This is now an internal helper.
+ * @param character The current character state.
+ * @param gameData All static game data.
+ * @returns The action the character should perform.
+ */
+async function determineNextAction(character: Character, gameData: GameData): Promise<Action> {
+    
+    // 1. Handle actions that are not driven by choice (e.g. current busy action)
+    if (character.status !== 'idle' && character.status !== 'in-combat' && character.status !== 'dead' && character.status !== 'exploring') {
+        // Character is sleeping or busy with a timed action
+        return { name: "Busy", type: 'misc', getWeight: () => 0, canPerform: () => false, perform: async () => ({character, logMessage: ""}) };
+    }
+
+
+    // 2. Build the current world state for decision making
+    const currentLocation = gameData.locations.find(l => l.id === character.location);
+    const now = Date.now();
+    const lastCityExploration = character.actionCooldowns?.['exploreCity'] || 0;
+    const inventoryCapacity = 150 + (character.attributes.strength * 5);
+    const inventoryWeight = character.inventory.reduce((acc, item) => acc + (item.weight * item.quantity), 0);
+
+    const worldState: WorldState = {
+        isIdle: character.status === 'idle',
+        isInCombat: character.status === 'in-combat',
+        isDead: character.status === 'dead',
+        isLocationSafe: currentLocation?.isSafe || false,
+        isTired: (character.stats.fatigue.current / character.stats.fatigue.max) > 0.5,
+        canTakeQuest: gameData.quests.some(q => {
+            if (q.location !== character.location || q.status !== 'available' || q.requiredLevel > character.level || (character.completedQuests||[]).includes(q.id)) {
+                return false;
+            }
+            if (q.requiredFaction) {
+                const currentRep = character.factions[q.requiredFaction.id]?.reputation || 0;
+                return currentRep >= q.requiredFaction.reputation;
+            }
+            return true;
+        }),
+        isInjured: character.stats.health.current < character.stats.health.max,
+        isBadlyInjured: character.stats.health.current < character.stats.health.max * 0.3,
+        hasEnoughGoldForRest: (character.inventory.find(i => i.id === 'gold')?.quantity || 0) >= 10,
+        hasEnoughGoldForSleep: (character.inventory.find(i => i.id === 'gold')?.quantity || 0) >= 250,
+        hasEnoughGoldForDonation: (character.inventory.find(i => i.id === 'gold')?.quantity || 0) >= 100,
+        hasHealingPotion: character.inventory.some(i => i.type === 'potion' && i.effect?.type === 'heal' && i.effect.stat === 'health'),
+        hasUnreadTome: character.inventory.some(
+            i => i.type === 'spell_tome' && i.spellId != null && !(character.knownSpells || []).includes(i.spellId)
+        ),
+        hasUnreadLearningBook: character.inventory.some(i => i.type === 'learning_book'),
+        hasKeyItem: character.inventory.some(i => i.type === 'key_item'),
+        isWellRested: character.effects.some(e => e.id === 'well_rested'),
+        canExploreCity: now > (lastCityExploration + 20 * 60 * 1000), // 20 min cooldown
+        isOverencumbered: inventoryWeight > inventoryCapacity,
+        hasPoisonDebuff: character.effects.some(e => e.id === 'weak_poison'),
+        hasBuffPotion: character.inventory.some(i => i.type === 'potion' && i.effect?.type === 'buff' && i.effect.id != null && !character.effects.some(e => e.id === i.effect!.id)),
+    };
+
+    // 3. Check for high-priority reflex actions first
+    for (const reflex of reflexActions) {
+        if (reflex.isTriggered(character, worldState, gameData) && reflex.canPerform(character, worldState, gameData)) {
+            return reflex;
+        }
+    }
+
+    // 4. Determine the correct set of actions based on character status
+    let actionSet: Action[];
+    switch(character.status) {
+        case 'in-combat':
+            actionSet = combatActions;
+            break;
+        case 'dead':
+            actionSet = deadActions;
+            break;
+        case 'exploring':
+            actionSet = exploringActions;
+            break;
+        case 'idle':
+        default:
+            actionSet = idleActions;
+            break;
+    }
+
+    // 5. Filter for actions that can be performed and calculate their total weight
+    const possibleActions = actionSet.filter(action => action.canPerform(character, worldState, gameData));
+
+    if (possibleActions.length === 0) {
+        return wanderAction;
+    }
+    
+    // 6. Handle Divine Suggestion (override)
+    if (character.divineSuggestion) {
+        const suggestedAction = possibleActions.find(a => a.name === character.divineSuggestion);
+        if (suggestedAction) {
+            return suggestedAction;
+        }
+    }
+
+    // 7. Weighted Random Selection
+    const weightedActions = possibleActions.map(action => {
+        const weight = action.getWeight?.(character, worldState, gameData) ?? 0;
+        return { action, weight };
+    }).filter(wa => wa.weight > 0);
+
+    const totalWeight = weightedActions.reduce((sum, wa) => sum + wa.weight, 0);
+
+    if (totalWeight === 0) {
+        return wanderAction;
+    }
+
+    let random = Math.random() * totalWeight;
+    for (const wa of weightedActions) {
+        if (random < wa.weight) {
+            return wa.action;
+        }
+        random -= wa.weight;
+    }
+
+    return wanderAction; // Fallback to wander
+}
+
+/**
+ * Processes a single "turn" for the character AI.
+ * It determines the character's next action, performs it, and returns the updated state.
+ * This is a single entry point for the client to call.
+ * @param character The current character state.
+ * @param gameData All static game data.
+ * @returns The updated character and any log messages, or null if no action was taken.
+ */
+export async function processCharacterTurn(
+    character: Character, 
+    gameData: GameData
+): Promise<{ character: Character; logMessage: string | string[] } | null> {
+    
+    const nextAction = await determineNextAction(character, gameData);
+
+    // If the character is busy or the action is a no-op, we don't perform it.
+    if (nextAction.name === "Busy") {
+        return null;
+    }
+    
+    // Perform the action and get the results.
+    const result = await nextAction.perform(character, gameData);
+    
+    let finalChar = result.character;
+    // Clear divine suggestion after it has been performed
+    if (finalChar.divineSuggestion && finalChar.divineSuggestion === nextAction.name) {
+        finalChar = structuredClone(finalChar);
+        finalChar.divineSuggestion = null;
+        finalChar.divineDestinationId = null;
+    }
+
+    // Add action to history for fatigue system (circular buffer)
+    if (!finalChar.actionHistory) {
+        finalChar.actionHistory = [];
+    }
+    const now = Date.now();
+    finalChar.actionHistory.push({ type: nextAction.type, timestamp: now });
+    // Keep only last 40 actions (circular buffer)
+    if (finalChar.actionHistory.length > 40) {
+        finalChar.actionHistory = finalChar.actionHistory.slice(-40);
+    }
+
+
+    return { ...result, character: finalChar };
+}
+
+    

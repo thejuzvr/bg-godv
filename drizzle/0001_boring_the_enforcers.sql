@@ -1,0 +1,1 @@
+ALTER TABLE "characters" DROP COLUMN "next_tick_at";
