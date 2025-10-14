@@ -18,6 +18,7 @@ import { addChronicleEntry } from "@/services/chronicleService";
 import { getFallbackThought } from "@/data/thoughts";
 import { Priority, rollPriority } from "@/ai/simple-brain";
 import { interactWithNPC, tradeWithNPC } from "@/actions/npc-actions";
+import { computeBaseValue } from "@/services/pricing";
 import { getCharacterById } from "../../server/storage";
 import { saveCombatAnalytics } from "@/services/combatAnalyticsService";
 
@@ -689,6 +690,186 @@ const exploreCityAction: Action = {
     }
 };
 
+// NEW: Sell low-value items to free space or get cash
+const sellJunkAction: Action = {
+    name: "Продать хлам",
+    type: "trading",
+    getWeight: (char, worldState, gameData) => {
+        // High priority if overencumbered
+        if (worldState.isOverencumbered) return priorityToWeight(Priority.URGENT);
+        // Medium if gold is low (< 100) and in safe location with merchant
+        const gold = char.inventory.find(i => i.id === 'gold')?.quantity || 0;
+        const hasMerchant = gameData.npcs.some(n => (n.location === char.location || n.location === 'on_road') && n.inventory && n.inventory.length > 0);
+        if (gold < 100 && hasMerchant) return priorityToWeight(Priority.MEDIUM);
+        return priorityToWeight(Priority.DISABLED);
+    },
+    canPerform: (char, worldState, gameData) => {
+        if (!worldState.isLocationSafe) return false;
+        const hasMerchant = gameData.npcs.some(n => (n.location === char.location || n.location === 'on_road') && n.inventory && n.inventory.length > 0);
+        if (!hasMerchant) return false;
+        // Any sellable item available?
+        return char.inventory.some(i => i.id !== 'gold' && i.type !== 'key_item' && i.quantity > 0 && !Object.values(char.equippedItems || {}).includes(i.id));
+    },
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        // Find merchants nearby
+        const merchants = gameData.npcs.filter(n => (n.location === updatedChar.location || n.location === 'on_road') && n.inventory && n.inventory.length > 0);
+        if (merchants.length === 0) {
+            return { character, logMessage: 'Рядом нет торговцев.' };
+        }
+        // Select sellable items and rank by base value (ascending)
+        const equippedSet = new Set(Object.values(updatedChar.equippedItems || {}));
+        const sellable = updatedChar.inventory
+            .filter(i => i.id !== 'gold' && i.type !== 'key_item' && i.quantity > 0 && !equippedSet.has(i.id) && i.type !== 'spell_tome')
+            .map(i => ({ item: i, value: computeBaseValue(i as any) }))
+            .sort((a, b) => a.value - b.value);
+        if (sellable.length === 0) {
+            return { character, logMessage: 'Нечего продавать.' };
+        }
+        const target = sellable[0].item;
+        const merchant = merchants[Math.floor(Math.random() * merchants.length)];
+        const qty = 1;
+        const result = await tradeWithNPC(updatedChar.id, merchant.id, 'sell', target.id, qty);
+        if (result.success) {
+            const refreshedChar = await getCharacterById(updatedChar.id);
+            if (!refreshedChar) {
+                return { character, logMessage: 'Ошибка: персонаж не найден после продажи.' };
+            }
+            updatedChar = addToActionHistory(refreshedChar as Character, 'social');
+            return { character: updatedChar, logMessage: `Герой продал ${target.name} торговцу ${merchant.name}. ${result.message}` };
+        }
+        return { character, logMessage: `Не удалось продать предмет: ${result.error}` };
+    }
+};
+
+// NEW: Attempt to steal in city — risk of fine or jail
+const stealAction: Action = {
+    name: "Украсть",
+    type: "social",
+    getWeight: (char, worldState, gameData) => {
+        if (!worldState.isLocationSafe) return priorityToWeight(Priority.DISABLED);
+        // Only try in towns with NPCs/shops
+        const hasTargets = gameData.npcs.some(n => n.location === char.location && (n.inventory && n.inventory.length > 0));
+        if (!hasTargets) return priorityToWeight(Priority.DISABLED);
+        // If broke, more motivation
+        const gold = char.inventory.find(i => i.id === 'gold')?.quantity || 0;
+        if (gold < 50) return priorityToWeight(Priority.MEDIUM);
+        return priorityToWeight(Priority.LOW);
+    },
+    canPerform: (char, worldState, gameData) => {
+        if (!worldState.isLocationSafe) return false;
+        return gameData.npcs.some(n => n.location === char.location && (n.inventory && n.inventory.length > 0));
+    },
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        updatedChar.status = 'busy';
+        updatedChar.currentAction = { type: 'explore', name: 'Попытка кражи', description: 'Герой осторожно присматривается к добыче.', startedAt: Date.now(), duration: 30 * 1000 };
+
+        // Simple success chance influenced by agility and mood
+        const agility = updatedChar.attributes.agility || 10;
+        const baseChance = 0.25 + Math.min(0.25, agility * 0.01) + (updatedChar.mood - 50) * 0.002; // 10 agility => +10%
+        const chance = Math.max(0.05, Math.min(0.7, baseChance));
+        const roll = Math.random();
+
+        // Pick a random NPC with inventory
+        const candidates = gameData.npcs.filter(n => n.location === updatedChar.location && n.inventory && n.inventory.length > 0);
+        if (candidates.length === 0) {
+            return { character, logMessage: 'Здесь некого обокрасть.' };
+        }
+        const target = candidates[Math.floor(Math.random() * candidates.length)];
+
+        if (roll < chance) {
+            // Success: add a small item from target inventory
+            const itemRef = target.inventory![Math.floor(Math.random() * target.inventory!.length)];
+            const baseItem = gameData.items.find(i => i.id === itemRef.itemId);
+            if (baseItem) {
+                const { updatedCharacter, logMessage } = addItemToInventory(updatedChar, baseItem, 1);
+                updatedChar = updatedCharacter;
+                updatedChar.mood = Math.min(100, updatedChar.mood + 5);
+                updatedChar = addToActionHistory(updatedChar, 'social');
+                return { character: updatedChar, logMessage: `Герой украл: ${baseItem.name}. ${logMessage}` };
+            }
+            return { character: updatedChar, logMessage: 'Попытка кражи удалась, но стоящего предмета не оказалось.' };
+        }
+
+        // Failure: pay fine if possible, else jail
+        const goldItem = updatedChar.inventory.find(i => i.id === 'gold');
+        const fine = 100;
+        let log = `Попытка кражи провалилась! `;
+        if (goldItem && goldItem.quantity >= fine) {
+            goldItem.quantity -= fine;
+            updatedChar.mood = Math.max(0, updatedChar.mood - 10);
+            updatedChar = addToActionHistory(updatedChar, 'social');
+            log += `Пришлось заплатить штраф в ${fine} золота.`;
+            return { character: updatedChar, logMessage: log };
+        }
+
+        updatedChar.mood = Math.max(0, updatedChar.mood - 20);
+        updatedChar.currentAction = { type: 'jail', name: 'Арестован', description: 'Стража поймала героя на месте преступления.', startedAt: Date.now(), duration: 4 * 60 * 1000 };
+        const debuff: ActiveEffect = { id: 'public_shame', name: 'Публичное унижение', description: 'От позора и голода в камере силы восстанавливаются медленнее.', icon: 'EyeOff', type: 'debuff', expiresAt: Date.now() + 10 * 60 * 1000 };
+        updatedChar.effects = updatedChar.effects.filter(e => e.id !== debuff.id);
+        updatedChar.effects.push(debuff);
+        return { character: updatedChar, logMessage: log + ' Герой брошен в камеру.' };
+    }
+};
+
+// NEW: Eat food when hungry or injured
+const eatFoodAction: Action = {
+    name: "Перекусить",
+    type: "rest",
+    getWeight: (char, worldState) => {
+        const hasFood = char.inventory.some(i => i.type === 'food' && i.quantity > 0);
+        if (!hasFood) return priorityToWeight(Priority.DISABLED);
+        const healthRatio = char.stats.health.current / char.stats.health.max;
+        const staminaRatio = char.stats.stamina.current / char.stats.stamina.max;
+        if (healthRatio < 0.4 || staminaRatio < 0.4) return priorityToWeight(Priority.HIGH);
+        if (healthRatio < 0.8 || staminaRatio < 0.7) return priorityToWeight(Priority.MEDIUM);
+        return priorityToWeight(Priority.LOW);
+    },
+    canPerform: (char) => char.inventory.some(i => i.type === 'food' && i.quantity > 0),
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        const foodIndex = updatedChar.inventory.findIndex(i => i.type === 'food' && i.quantity > 0);
+        if (foodIndex === -1) {
+            return { character, logMessage: 'В сумке пусто. Нечего съесть.' };
+        }
+        const foodItem = updatedChar.inventory[foodIndex];
+        foodItem.quantity -= 1;
+        if (foodItem.quantity <= 0) {
+            updatedChar.inventory.splice(foodIndex, 1);
+        }
+        // Apply effect
+        const effect = foodItem.effect;
+        let log = `Герой съел: ${foodItem.name}.`;
+        if (effect) {
+            if (effect.type === 'heal') {
+                const statKey = effect.stat as keyof typeof updatedChar.stats;
+                // Only apply to valid stats
+                if (statKey in updatedChar.stats) {
+                    // @ts-ignore
+                    const pool = updatedChar.stats[statKey];
+                    pool.current = Math.min(pool.max, pool.current + (effect.amount || 0));
+                    log += ` Восстановлено ${effect.amount} ${effect.stat}.`;
+                }
+            } else if (effect.type === 'buff' && effect.id) {
+                // Remove existing same buff, then add
+                updatedChar.effects = updatedChar.effects.filter(e => e.id !== effect.id);
+                updatedChar.effects.push({
+                    id: effect.id,
+                    name: effect.description || 'Эффект еды',
+                    description: effect.description || 'Временный положительный эффект после еды.',
+                    icon: effect.icon || 'Drumstick',
+                    type: 'buff',
+                    expiresAt: Date.now() + (effect.duration || 5 * 60 * 1000),
+                });
+                log += ` Получен бафф: ${effect.description || effect.id}.`;
+            }
+        }
+        updatedChar = addToActionHistory(updatedChar, 'rest');
+        return { character: updatedChar, logMessage: log };
+    }
+};
+
 const findEnemyAction: Action = {
     name: "Найти врага",
     type: "combat",
@@ -950,16 +1131,26 @@ const sleepAtTavernAction: Action = {
         const staminaRatio = char.stats.stamina.current / char.stats.stamina.max;
         const fatigueRatio = char.stats.fatigue.current / char.stats.fatigue.max;
         
+        // Prefer strong sleep when fatigue is high
+        if (fatigueRatio >= 0.7) {
+            return priorityToWeight(Priority.URGENT);
+        }
+
+        // Otherwise scale with resources and moderate fatigue
         let weight = 30;
-        
-        // Strong desire to sleep when low resources
-        if (healthRatio < 0.7) weight += (0.7 - healthRatio) * 100; // Up to +70
-        if (staminaRatio < 0.5) weight += (0.5 - staminaRatio) * 60; // Up to +30
-        weight += fatigueRatio * 40; // Up to +40
-        
+        if (healthRatio < 0.7) weight += (0.7 - healthRatio) * 100;
+        if (staminaRatio < 0.5) weight += (0.5 - staminaRatio) * 60;
+        weight += fatigueRatio * 60;
+
         return Math.max(1, weight);
     },
-    canPerform: (char, worldState) => worldState.isLocationSafe! && worldState.isInjured! && worldState.hasEnoughGoldForSleep! && !worldState.isWellRested!,
+    canPerform: (char, worldState) => {
+        if (!worldState.isLocationSafe || worldState.isWellRested || !worldState.hasEnoughGoldForSleep) return false;
+        const fatigueRatio = char.stats.fatigue.current / char.stats.fatigue.max;
+        const healthRatio = char.stats.health.current / char.stats.health.max;
+        // Allow sleep either due to high fatigue or noticeable injury
+        return fatigueRatio >= 0.5 || healthRatio < 0.85;
+    },
     async perform(character, gameData) {
         let updatedChar = structuredClone(character);
         const cost = 250;
@@ -1710,7 +1901,29 @@ const tradeWithNPCAction: Action = {
 // ==================================
 
 const reflexActions: ReflexAction[] = [fleeFromCombatReflex, useBuffPotionReflex, usePotionReflex];
-const idleActions: Action[] = [makeCampAction, autoAssignPointsAction, startCryptExplorationAction, travelToCryptAction, equipBestGearAction, takeQuestAction, exploreCityAction, findEnemyAction, travelAction, restAtTavernAction, sleepAtTavernAction, learnSpellAction, readLearningBookAction, donateToFactionAction, prayAction, wanderAction, interactWithNPCAction, tradeWithNPCAction];
+const idleActions: Action[] = [
+    makeCampAction,
+    autoAssignPointsAction,
+    startCryptExplorationAction,
+    travelToCryptAction,
+    equipBestGearAction,
+    takeQuestAction,
+    exploreCityAction,
+    findEnemyAction,
+    travelAction,
+    restAtTavernAction,
+    sleepAtTavernAction,
+    sellJunkAction,
+    eatFoodAction,
+    stealAction,
+    learnSpellAction,
+    readLearningBookAction,
+    donateToFactionAction,
+    prayAction,
+    wanderAction,
+    interactWithNPCAction,
+    tradeWithNPCAction
+];
 const combatActions: Action[] = [fightEnemyAction];
 const deadActions: Action[] = [takeSovngardeQuestAction, wanderSovngardeAction];
 const exploringActions: Action[] = [processCryptStageAction];
@@ -1814,7 +2027,10 @@ async function determineNextAction(character: Character, gameData: GameData): Pr
 
     // 7. Weighted Random Selection
     const weightedActions = possibleActions.map(action => {
-        const weight = action.getWeight?.(character, worldState, gameData) ?? 0;
+        const base = action.getWeight?.(character, worldState, gameData) ?? 0;
+        // Apply diversity multiplier to penalize repeated recent action types
+        const diversity = getRepetitionPenalty(character, action.type);
+        const weight = base * diversity;
         return { action, weight };
     }).filter(wa => wa.weight > 0);
 

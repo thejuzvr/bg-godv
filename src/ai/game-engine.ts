@@ -912,6 +912,22 @@ export async function processGameTick(
         updatedChar.divineSuggestion = null;
     }
 
+    // --- 16. ACHIEVEMENTS EVALUATION ---
+    try {
+        // Hydrate unlockedAchievements from preferences if missing (worker loads raw DB rows)
+        if (!updatedChar.unlockedAchievements && (updatedChar as any).preferences?.unlockedAchievements) {
+            updatedChar.unlockedAchievements = (updatedChar as any).preferences.unlockedAchievements;
+        }
+        const { evaluateAchievements, persistAchievementUnlocks } = await import("@/services/achievementsService");
+        const unlocks = evaluateAchievements(updatedChar, gameData);
+        if (unlocks.length > 0) {
+            await persistAchievementUnlocks(userId, updatedChar, unlocks);
+            unlocks.forEach(u => adventureLog.push(`Получено достижение: ${u.name}`));
+        }
+    } catch (err) {
+        console.error('Achievements evaluation failed:', err);
+    }
+
     return { 
         updatedCharacter: updatedChar, 
         adventureLog: adventureLog.filter(Boolean), // Filter out empty messages

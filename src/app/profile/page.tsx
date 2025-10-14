@@ -91,11 +91,11 @@ export default function ProfilePage() {
         return null;
     }
 
-    const achievements: Achievement[] = allAchievements.map(a => ({...a, isUnlocked: false}));
-    // In a real app, you would check the character's stats against achievement conditions
-    // For now, let's just unlock a few for demonstration
-    if (character.level > 1) achievements[0].isUnlocked = true;
-    if (character.deaths > 0) achievements[2].isUnlocked = true;
+    const unlocked = new Set(character.unlockedAchievements || []);
+    const achievements: Achievement[] = allAchievements.map(a => ({
+        ...a,
+        isUnlocked: unlocked.has(a.id)
+    }));
 
 
     return (
@@ -140,12 +140,12 @@ export default function ProfilePage() {
                             <Separator />
                             <div className="flex justify-between items-center">
                                 <span className="text-muted-foreground flex items-center gap-2"><Sword />Убито врагов:</span>
-                                <span className="font-semibold">0</span>
+                                <span className="font-semibold">{Object.values(character.analytics?.killedEnemies || {}).reduce((a: number, b: number) => a + (b || 0), 0)}</span>
                             </div>
                              <Separator />
                             <div className="flex justify-between items-center">
-                                <span className="text-muted-foreground flex items-center gap-2"><Coins />Заработано золота:</span>
-                                <span className="font-semibold">0</span>
+                                <span className="text-muted-foreground flex items-center gap-2"><Coins />Золото:</span>
+                                <span className="font-semibold">{character.inventory.find(i => i.id === 'gold')?.quantity ?? 0}</span>
                             </div>
                         </CardContent>
                     </Card>

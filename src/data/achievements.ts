@@ -47,4 +47,7 @@ export const allAchievements: Omit<Achievement, 'isUnlocked'>[] = [
     { id: 'temple_stendarr', name: 'Храм Справедливости', description: 'Построить великий храм в честь Стендарра.', icon: 'ShieldCheck' },
     { id: 'temple_talos', name: 'Храм Героев', description: 'Построить великий храм в честь Талоса.', icon: 'Crown' },
     { id: 'temple_zenithar', name: 'Храм Труда', description: 'Построить великий храм в честь Зенитара.', icon: 'Coins' },
+  // Theft/Jail themed
+  { id: 'petty_thief', name: 'Мелкий воришка', description: 'Попасться на мелкой краже и испытать позор.', icon: 'HandCoins' },
+  { id: 'jailbird', name: 'Постоялец тюремной камеры', description: 'Оказаться в тюрьме.', icon: 'Lock' },
 ];

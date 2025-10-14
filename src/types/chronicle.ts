@@ -1,7 +1,14 @@
 
 'use server';
 
-export type ChronicleEntryType = 'level_up' | 'quest_complete' | 'unique_kill' | 'death' | 'discovery_city';
+export type ChronicleEntryType =
+  | 'level_up'
+  | 'quest_complete'
+  | 'unique_kill'
+  | 'death'
+  | 'discovery_city'
+  | 'achievement'
+  | 'system';
 
 export interface ChronicleEntry {
     id: string; // Firestore doc ID

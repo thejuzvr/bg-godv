@@ -59,6 +59,8 @@ export class PostgresCharacterRepository implements CharacterRepository {
       analytics: charData.analytics || { killedEnemies: {}, diceRolls: { d20: Array(21).fill(0) }, encounteredEnemies: [], epicPhrases: [] },
       actionHistory: charData.actionHistory || [],
       effects: charData.effects || [],
+      // Hydrate unlocked achievements from DB field or from preferences fallback
+      unlockedAchievements: charData.unlockedAchievements || ((charData as any).preferences?.unlockedAchievements) || [],
     };
 
     // Ensure gold exists in inventory for backward compatibility

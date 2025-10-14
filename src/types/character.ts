@@ -218,6 +218,7 @@ export interface Character {
   templeCompletedFor?: DivinityId | null; // Tracks if a temple has been completed
   relationships: Record<string, { level: number; lastInteraction: number }>; // NPC relationships: level from -100 to +100
   actionHistory: ActionHistoryEntry[]; // History of recent actions for AI decision making
+  unlockedAchievements?: string[]; // IDs from data/achievements, persisted
 }
 
 export type WorldState = {

@@ -11,6 +11,7 @@ import type { Location } from '../src/types/location';
 import type { CharacterInventoryItem } from '../src/types/character';
 import type { NPC } from '../src/types/npc';
 import type { Enemy } from '../src/types/enemy';
+import { initialItems } from '../src/data/items';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -19,6 +20,7 @@ const pool = new Pool({
 const db = drizzle(pool, { schema });
 
 export class GameDataService {
+  // ===== LOCATIONS =====
   async getAllLocations(): Promise<Location[]> {
     const locations = await db.select().from(gameLocations);
     
@@ -34,6 +36,53 @@ export class GameDataService {
     }));
   }
 
+  async getLocationById(id: string): Promise<Location | null> {
+    const rows = await db.select().from(gameLocations).where(eq(gameLocations.id, id));
+    const loc = rows[0];
+    if (!loc) return null;
+    return {
+      id: loc.id,
+      name: loc.name,
+      type: loc.type as any,
+      coords: { x: loc.coordX, y: loc.coordY },
+      isSafe: loc.isSafe,
+    };
+  }
+
+  async createLocation(payload: { id: string; name: string; type: 'city' | 'town' | 'ruin' | 'dungeon' | 'camp'; coords: { x: number; y: number }; isSafe: boolean }): Promise<Location> {
+    await db.insert(gameLocations).values({
+      id: payload.id,
+      name: payload.name,
+      type: payload.type,
+      coordX: payload.coords.x,
+      coordY: payload.coords.y,
+      isSafe: payload.isSafe,
+    });
+    const created = await this.getLocationById(payload.id);
+    if (!created) throw new Error('Failed to create location');
+    return created;
+  }
+
+  async updateLocation(id: string, updates: Partial<{ name: string; type: 'city' | 'town' | 'ruin' | 'dungeon' | 'camp'; coords: { x: number; y: number }; isSafe: boolean }>): Promise<Location | null> {
+    const set: any = {};
+    if (updates.name !== undefined) set.name = updates.name;
+    if (updates.type !== undefined) set.type = updates.type;
+    if (updates.coords !== undefined) {
+      set.coordX = updates.coords.x;
+      set.coordY = updates.coords.y;
+    }
+    if (updates.isSafe !== undefined) set.isSafe = updates.isSafe;
+    if (Object.keys(set).length === 0) return await this.getLocationById(id);
+    set.updatedAt = new Date();
+    await db.update(gameLocations).set(set).where(eq(gameLocations.id, id));
+    return await this.getLocationById(id);
+  }
+
+  async deleteLocation(id: string): Promise<void> {
+    await db.delete(gameLocations).where(eq(gameLocations.id, id));
+  }
+
+  // ===== ITEMS =====
   async getAllItems(): Promise<CharacterInventoryItem[]> {
     const items = await db.select().from(gameItems);
     
@@ -57,7 +106,25 @@ export class GameDataService {
     const items = await db.select().from(gameItems).where(eq(gameItems.id, id));
     const item = items[0];
     
-    if (!item) return null;
+    if (!item) {
+      // Fallback to static items if not present in DB
+      const fallback = initialItems.find(i => i.id === id);
+      if (!fallback) return null;
+      return {
+        id: fallback.id,
+        name: fallback.name,
+        weight: fallback.weight,
+        quantity: 1,
+        type: fallback.type as any,
+        rarity: fallback.rarity as any,
+        equipmentSlot: (fallback as any).equipmentSlot,
+        damage: (fallback as any).damage,
+        armor: (fallback as any).armor,
+        effect: (fallback as any).effect,
+        spellId: (fallback as any).spellId,
+        learningEffect: (fallback as any).learningEffect,
+      };
+    }
     
     return {
       id: item.id,
@@ -75,6 +142,49 @@ export class GameDataService {
     };
   }
 
+  async createItem(payload: { id: string; name: string; weight: number; type: string; rarity?: string | null; equipmentSlot?: string | null; damage?: number | null; armor?: number | null; effect?: any | null; spellId?: string | null; learningEffect?: any | null }): Promise<CharacterInventoryItem> {
+    await db.insert(gameItems).values({
+      id: payload.id,
+      name: payload.name,
+      weight: payload.weight,
+      type: payload.type,
+      rarity: payload.rarity ?? null,
+      equipmentSlot: payload.equipmentSlot ?? null,
+      damage: payload.damage ?? null,
+      armor: payload.armor ?? null,
+      effect: payload.effect ?? null,
+      spellId: payload.spellId ?? null,
+      learningEffect: payload.learningEffect ?? null,
+    });
+    const created = await this.getItemById(payload.id);
+    if (!created) throw new Error('Failed to create item');
+    return created;
+  }
+
+  async updateItem(id: string, updates: Partial<{ name: string; weight: number; type: string; rarity?: string | null; equipmentSlot?: string | null; damage?: number | null; armor?: number | null; effect?: any | null; spellId?: string | null; learningEffect?: any | null }>): Promise<CharacterInventoryItem | null> {
+    const set: any = {};
+    if (updates.name !== undefined) set.name = updates.name;
+    if (updates.weight !== undefined) set.weight = updates.weight;
+    if (updates.type !== undefined) set.type = updates.type;
+    if (updates.rarity !== undefined) set.rarity = updates.rarity;
+    if (updates.equipmentSlot !== undefined) set.equipmentSlot = updates.equipmentSlot;
+    if (updates.damage !== undefined) set.damage = updates.damage;
+    if (updates.armor !== undefined) set.armor = updates.armor;
+    if (updates.effect !== undefined) set.effect = updates.effect;
+    if (updates.spellId !== undefined) set.spellId = updates.spellId;
+    if (updates.learningEffect !== undefined) set.learningEffect = updates.learningEffect;
+    if (Object.keys(set).length > 0) {
+      set.updatedAt = new Date();
+      await db.update(gameItems).set(set).where(eq(gameItems.id, id));
+    }
+    return await this.getItemById(id);
+  }
+
+  async deleteItem(id: string): Promise<void> {
+    await db.delete(gameItems).where(eq(gameItems.id, id));
+  }
+
+  // ===== NPCs =====
   async getAllNpcs(): Promise<NPC[]> {
     const npcs = await db.select().from(gameNpcs);
     
@@ -93,6 +203,36 @@ export class GameDataService {
         primarySkill: npc.companionDetails.primarySkill,
       } : undefined,
     }));
+  }
+
+  async decrementNpcStock(npcId: string, itemId: string, quantity: number = 1): Promise<void> {
+    const npcs = await db.select().from(gameNpcs).where(eq(gameNpcs.id, npcId));
+    const npc = npcs[0];
+    if (!npc || !npc.inventory) return;
+    const newInv = (npc.inventory as any[]).map(entry => {
+      if (entry.itemId === itemId) {
+        return { ...entry, stock: Math.max(0, (entry.stock || 0) - quantity) };
+      }
+      return entry;
+    });
+    await db.update(gameNpcs).set({ inventory: newInv, updatedAt: new Date() }).where(eq(gameNpcs.id, npcId));
+  }
+
+  async nightlyRestockAllMerchants(): Promise<number> {
+    const npcs = await db.select().from(gameNpcs);
+    let updated = 0;
+    for (const npc of npcs) {
+      if (!npc.inventory || npc.inventory.length === 0) continue;
+      const restocked = (npc.inventory as any[]).map(entry => {
+        const baseStock = entry.stock ?? 0;
+        const target = Math.max(5, baseStock);
+        const newStock = Math.min(99, target); // cap
+        return { ...entry, stock: newStock };
+      });
+      await db.update(gameNpcs).set({ inventory: restocked, updatedAt: new Date() }).where(eq(gameNpcs.id, npc.id));
+      updated += 1;
+    }
+    return updated;
   }
 
   async getNpcsByLocation(location: string): Promise<NPC[]> {
@@ -123,6 +263,47 @@ export class GameDataService {
     };
   }
 
+  async createNpc(payload: { id: string; name: string; description: string; location: string; dialogue: string[]; inventory?: Array<{ itemId: string; stock: number; priceModifier?: number }>; isCompanion?: boolean; hireCost?: number | null; factionId?: string | null; companionDetails?: { combatStyle: string; primarySkill: string } | null }): Promise<NPC> {
+    await db.insert(gameNpcs).values({
+      id: payload.id,
+      name: payload.name,
+      description: payload.description,
+      location: payload.location,
+      dialogue: payload.dialogue,
+      inventory: payload.inventory,
+      isCompanion: payload.isCompanion ?? false,
+      hireCost: payload.hireCost ?? null,
+      factionId: payload.factionId ?? null,
+      companionDetails: payload.companionDetails ?? null,
+    });
+    const created = await this.getNpcById(payload.id);
+    if (!created) throw new Error('Failed to create NPC');
+    return created;
+  }
+
+  async updateNpc(id: string, updates: Partial<{ name: string; description: string; location: string; dialogue: string[]; inventory?: Array<{ itemId: string; stock: number; priceModifier?: number }>; isCompanion?: boolean; hireCost?: number | null; factionId?: string | null; companionDetails?: { combatStyle: string; primarySkill: string } | null }>): Promise<NPC | null> {
+    const set: any = {};
+    if (updates.name !== undefined) set.name = updates.name;
+    if (updates.description !== undefined) set.description = updates.description;
+    if (updates.location !== undefined) set.location = updates.location;
+    if (updates.dialogue !== undefined) set.dialogue = updates.dialogue as any;
+    if (updates.inventory !== undefined) set.inventory = updates.inventory as any;
+    if (updates.isCompanion !== undefined) set.isCompanion = updates.isCompanion;
+    if (updates.hireCost !== undefined) set.hireCost = updates.hireCost as any;
+    if (updates.factionId !== undefined) set.factionId = updates.factionId as any;
+    if (updates.companionDetails !== undefined) set.companionDetails = updates.companionDetails as any;
+    if (Object.keys(set).length > 0) {
+      set.updatedAt = new Date();
+      await db.update(gameNpcs).set(set).where(eq(gameNpcs.id, id));
+    }
+    return await this.getNpcById(id);
+  }
+
+  async deleteNpc(id: string): Promise<void> {
+    await db.delete(gameNpcs).where(eq(gameNpcs.id, id));
+  }
+
+  // ===== ENEMIES =====
   async getAllEnemies(): Promise<Enemy[]> {
     const enemies = await db.select().from(gameEnemies);
     
@@ -158,6 +339,48 @@ export class GameDataService {
       guaranteedDrop: enemy.guaranteedDrop || undefined,
       appliesEffect: enemy.appliesEffect || undefined,
     };
+  }
+
+  async createEnemy(payload: { id: string; name: string; health: number; damage: number; xp: number; level?: number; minLevel?: number | null; isUnique?: boolean; guaranteedDrop?: Array<{ id: string; quantity: number }> | null; appliesEffect?: { id: string; name: string; description: string; icon: string; type: 'debuff'; chance: number; duration: number; value?: number } | null; armor?: number | null }): Promise<Enemy> {
+    await db.insert(gameEnemies).values({
+      id: payload.id,
+      name: payload.name,
+      health: payload.health,
+      damage: payload.damage,
+      xp: payload.xp,
+      level: payload.level ?? 1,
+      minLevel: payload.minLevel ?? null,
+      isUnique: payload.isUnique ?? false,
+      guaranteedDrop: payload.guaranteedDrop ?? null,
+      appliesEffect: payload.appliesEffect ?? null,
+      armor: payload.armor ?? 10,
+    });
+    const created = await this.getEnemyById(payload.id);
+    if (!created) throw new Error('Failed to create enemy');
+    return created;
+  }
+
+  async updateEnemy(id: string, updates: Partial<{ name: string; health: number; damage: number; xp: number; level?: number; minLevel?: number | null; isUnique?: boolean; guaranteedDrop?: Array<{ id: string; quantity: number }> | null; appliesEffect?: { id: string; name: string; description: string; icon: string; type: 'debuff'; chance: number; duration: number; value?: number } | null; armor?: number | null }>): Promise<Enemy | null> {
+    const set: any = {};
+    if (updates.name !== undefined) set.name = updates.name;
+    if (updates.health !== undefined) set.health = updates.health;
+    if (updates.damage !== undefined) set.damage = updates.damage;
+    if (updates.xp !== undefined) set.xp = updates.xp;
+    if (updates.level !== undefined) set.level = updates.level;
+    if (updates.minLevel !== undefined) set.minLevel = updates.minLevel as any;
+    if (updates.isUnique !== undefined) set.isUnique = updates.isUnique;
+    if (updates.guaranteedDrop !== undefined) set.guaranteedDrop = updates.guaranteedDrop as any;
+    if (updates.appliesEffect !== undefined) set.appliesEffect = updates.appliesEffect as any;
+    if (updates.armor !== undefined) set.armor = updates.armor as any;
+    if (Object.keys(set).length > 0) {
+      set.updatedAt = new Date();
+      await db.update(gameEnemies).set(set).where(eq(gameEnemies.id, id));
+    }
+    return await this.getEnemyById(id);
+  }
+
+  async deleteEnemy(id: string): Promise<void> {
+    await db.delete(gameEnemies).where(eq(gameEnemies.id, id));
   }
 }
 

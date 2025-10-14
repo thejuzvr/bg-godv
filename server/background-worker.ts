@@ -50,10 +50,10 @@ interface CharacterTickTracker {
 const characterTrackers = new Map<string, CharacterTickTracker>();
 
 /**
- * Get random interval for adventure tick (15-180 seconds)
+ * Get random interval for adventure tick (15-40 seconds)
  */
 function getAdventureTickInterval(): number {
-  return (Math.floor(Math.random() * (180 - 15 + 1)) + 15) * 1000; // 15-180 seconds in ms
+  return (Math.floor(Math.random() * (40 - 15 + 1)) + 15) * 1000; // 15-40 seconds in ms
 }
 
 /**
@@ -114,7 +114,7 @@ async function processCharacter(character: Character, gameData: GameData): Promi
 export async function runBackgroundWorker() {
   console.log('[Background Worker] Starting background worker with dynamic tick intervals...');
   console.log('[Background Worker] Combat tick: 3-5 seconds (random)');
-  console.log('[Background Worker] Adventure tick: 15-180 seconds (random)');
+  console.log('[Background Worker] Adventure tick: 15-40 seconds (random)');
   
   // Load game data once from PostgreSQL
   const data = await loadGameData();
@@ -123,7 +123,9 @@ export async function runBackgroundWorker() {
   let cleanupCounter = 0;
   const CHECK_INTERVAL = 1000; // Check every second
   const CLEANUP_EVERY_MS = 10 * 60 * 1000; // 10 minutes
+  const RESTOCK_AT_HOUR = 2; // 2:00 local time
   let lastCleanup = Date.now();
+  let lastRestockDay: number | null = null;
   
   // Main loop
   while (true) {
@@ -187,6 +189,20 @@ export async function runBackgroundWorker() {
           }
         }
         lastCleanup = now;
+      }
+
+      // Nightly merchant restock at ~02:00 once per day
+      const current = new Date();
+      const isRestockHour = current.getHours() === RESTOCK_AT_HOUR;
+      const dayKey = current.getFullYear() * 1000 + current.getMonth() * 50 + current.getDate();
+      if (isRestockHour && lastRestockDay !== dayKey) {
+        try {
+          const count = await gameDataService.nightlyRestockAllMerchants();
+          console.log(`[Background Worker] Nightly restock complete: ${count} merchants updated.`);
+          lastRestockDay = dayKey;
+        } catch (e) {
+          console.error('[Background Worker] Nightly restock failed:', e);
+        }
       }
       
       // Wait a short interval before next check

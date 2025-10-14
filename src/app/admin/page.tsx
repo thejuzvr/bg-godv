@@ -215,6 +215,18 @@ export default function AdminPage() {
             <div className="grid gap-6">
                 <Card>
                     <CardHeader>
+                        <CardTitle>Менеджер данных</CardTitle>
+                        <CardDescription>CRUD по локациям, предметам, NPC и врагам.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Button asChild>
+                            <Link href="/admin/data">Открыть менеджер данных</Link>
+                        </Button>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
                         <CardTitle>Исправить состояние героя</CardTitle>
                         <CardDescription>Сбросить статус героя, переместить в Вайтран с полным здоровьем.</CardDescription>
                     </CardHeader>

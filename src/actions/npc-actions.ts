@@ -3,6 +3,7 @@
 import { getCharacterById, saveCharacter } from '../../server/storage';
 import { gameDataService } from '../../server/game-data-service';
 import type { Character, CharacterInventoryItem } from '@/types/character';
+import { computeBuyPrice, computeSellPrice } from '@/services/pricing';
 
 export async function interactWithNPC(userId: string, npcId: string) {
   try {
@@ -75,8 +76,11 @@ export async function tradeWithNPC(
         return { success: false, error: 'NPC does not have this item' };
       }
 
-      const pricePerItem = 10;
-      const totalPrice = Math.floor(pricePerItem * (npcItem.priceModifier || 1) * quantity);
+      const baseItem = await gameDataService.getItemById(itemId);
+      if (!baseItem) {
+        return { success: false, error: 'Item data not found' };
+      }
+      const totalPrice = computeBuyPrice(character as any, npc as any, baseItem as any, quantity);
 
       if (gold.quantity < totalPrice) {
         return { success: false, error: 'Not enough gold' };
@@ -106,6 +110,15 @@ export async function tradeWithNPC(
         lastInteraction: Date.now(),
       };
 
+      // Decrement merchant stock when applicable
+      try {
+        if (npcItem.stock !== undefined && npcItem.stock !== null) {
+          await gameDataService.decrementNpcStock(npcId, itemId, quantity);
+        }
+      } catch (e) {
+        console.warn('Failed to decrement NPC stock:', e);
+      }
+
       await saveCharacter(character);
 
       return {
@@ -119,7 +132,11 @@ export async function tradeWithNPC(
         return { success: false, error: 'Not enough items to sell' };
       }
 
-      const sellPrice = Math.floor(5 * quantity);
+      const baseItem = await gameDataService.getItemById(itemId);
+      if (!baseItem) {
+        return { success: false, error: 'Item data not found' };
+      }
+      const sellPrice = computeSellPrice(character as any, npc as any, baseItem as any, quantity);
       
       charItem.quantity -= quantity;
       if (charItem.quantity === 0) {

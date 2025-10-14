@@ -17,11 +17,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 import type { NPC } from "@/types/npc";
 import type { Location } from "@/types/location";
 import type { CharacterInventoryItem } from "@/types/character";
 import { interactWithNPC, tradeWithNPC, giftToNPC } from "@/actions/npc-actions";
+import { computeBuyPrice, computeSellPrice, computeBaseValue } from "@/services/pricing";
 import { fetchNPCs, fetchLocations, fetchItems } from "@/actions/game-data-actions";
 
 const Icon = ({ name, ...props }: { name: keyof typeof LucideIcons } & LucideIcons.LucideProps) => {
@@ -574,25 +576,44 @@ function NPCDialogContent({ npc, character, relationshipLevel, onInteract, onTra
                                         У торговца нет товаров
                                     </p>
                                 ) : (
-                                    merchantItems.map((item: any) => (
-                                        <Card key={item.id} className="p-3">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex-1">
-                                                    <p className="font-medium">{item.name}</p>
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {Math.floor(10 * item.priceModifier)} золота
-                                                    </p>
+                                    merchantItems.map((item: any) => {
+                                        const unitPrice = computeBuyPrice(character as any, npc as any, item as any, 1);
+                                        const base = computeBaseValue(item as any);
+                                        const modNote = item.priceModifier && item.priceModifier !== 1 ? ` • модификатор торговца x${item.priceModifier}` : '';
+                                        return (
+                                            <Card key={item.id} className="p-3">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex-1">
+                                                        <p className="font-medium">{item.name}</p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            <TooltipProvider>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <span>{unitPrice} золота</span>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent>
+                                                                        <div className="text-xs space-y-1">
+                                                                            <div>База: {base}</div>
+                                                                            <div>Редкость: {item.rarity || 'common'}</div>
+                                                                            <div>Отношения/красноречие: скидка применяется</div>
+                                                                            {modNote && <div>{modNote}</div>}
+                                                                        </div>
+                                                                    </TooltipContent>
+                                                                </Tooltip>
+                                                            </TooltipProvider>
+                                                        </p>
+                                                    </div>
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={() => onTrade(npc, 'buy', item.id, 1)}
+                                                        disabled={isInteracting || playerGold < unitPrice}
+                                                    >
+                                                        Купить
+                                                    </Button>
                                                 </div>
-                                                <Button
-                                                    size="sm"
-                                                    onClick={() => onTrade(npc, 'buy', item.id, 1)}
-                                                    disabled={isInteracting || playerGold < Math.floor(10 * item.priceModifier)}
-                                                >
-                                                    Купить
-                                                </Button>
-                                            </div>
-                                        </Card>
-                                    ))
+                                            </Card>
+                                        );
+                                    })
                                 )}
                             </div>
                         </ScrollArea>
@@ -605,15 +626,28 @@ function NPCDialogContent({ npc, character, relationshipLevel, onInteract, onTra
                                     </p>
                                 ) : (
                                     playerItems.map(item => {
-                                        const sellPrice = 5;
-                                        
+                                        const sellPrice = computeSellPrice(character as any, npc as any, item as any, 1);
+                                        const base = computeBaseValue(item as any);
                                         return (
                                             <Card key={item.id} className="p-3">
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex-1">
                                                         <p className="font-medium">{item.name}</p>
                                                         <p className="text-xs text-muted-foreground">
-                                                            {sellPrice} золота • x{item.quantity}
+                                                            <TooltipProvider>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <span>{sellPrice} золота • x{item.quantity}</span>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent>
+                                                                        <div className="text-xs space-y-1">
+                                                                            <div>База: {base}</div>
+                                                                            <div>Редкость: {item.rarity || 'common'}</div>
+                                                                            <div>Скупочная цена ~40% от покупки</div>
+                                                                        </div>
+                                                                    </TooltipContent>
+                                                                </Tooltip>
+                                                            </TooltipProvider>
                                                         </p>
                                                     </div>
                                                     <Button
