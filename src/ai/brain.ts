@@ -219,6 +219,23 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
     
     // Increment round counter
     updatedChar.combat.rounds = (updatedChar.combat.rounds || 0) + 1;
+
+    // Long fight warning at 20 rounds
+    if (updatedChar.combat.rounds === 20) {
+        if (!updatedChar.combat.combatLog) updatedChar.combat.combatLog = [];
+        updatedChar.combat.combatLog.push('[Предупреждение] Бой длится 20 раундов — возможна патовая ситуация.');
+    }
+
+    // Cap total rounds to avoid endless fights (auto-escape)
+    const MAX_COMBAT_ROUNDS = 30;
+    if (updatedChar.combat.rounds >= MAX_COMBAT_ROUNDS) {
+        if (!updatedChar.combat.combatLog) updatedChar.combat.combatLog = [];
+        updatedChar.combat.combatLog.push(`Бой автоматически завершен после ${MAX_COMBAT_ROUNDS} раундов. Герой отступает.`);
+        await saveCombatToAnalytics(updatedChar, false, true);
+        updatedChar.status = 'idle';
+        updatedChar.combat = null;
+        return updatedChar;
+    }
     
     // Add round header to combat log
     if (!updatedChar.combat.combatLog) updatedChar.combat.combatLog = [];
@@ -282,6 +299,10 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
         
         if (fleeSuccess) {
             logMessages.push(`🏃 Герой пытается сбежать... и успешно отступает! (бросок: ${roll})`);
+            // Append round messages to combat log before saving analytics
+            if (updatedChar.combat?.combatLog) {
+                updatedChar.combat.combatLog.push(...logMessages);
+            }
             await saveCombatToAnalytics(updatedChar, false, true);
             updatedChar.status = 'idle';
             updatedChar.combat = null;
@@ -313,7 +334,6 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             updatedChar.combat!.totalDamageDealt = (updatedChar.combat!.totalDamageDealt || 0) + heroDamage;
             const msg = `🎲 Критический успех! Герой наносит сокрушительный удар на ${heroDamage} урона!`;
             logMessages.push(msg);
-            updatedChar.combat!.combatLog!.push(msg);
         } else if (roll === 1) {
             const fumblePhrases = [
                 "Герой спотыкается о собственный ботинок и роняет оружие. Какой позор!",
@@ -321,7 +341,10 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
                 "Оружие выскальзывает из потных рук и улетает в кусты. Придется искать."
             ];
             logMessages.push(`🎲 Критический провал! ${fumblePhrases[Math.floor(Math.random() * fumblePhrases.length)]}`);
-            if (Math.random() > 0.5) updatedChar.stats.health.current -= 2;
+            if (Math.random() > 0.5) {
+                updatedChar.stats.health.current -= 2;
+                updatedChar.combat!.totalDamageTaken = (updatedChar.combat!.totalDamageTaken || 0) + 2;
+            }
         } else if (success) {
             const weaponId = updatedChar.equippedItems.weapon;
             const weapon = weaponId ? updatedChar.inventory.find((i: CharacterInventoryItem) => i.id === weaponId) : null;
@@ -329,6 +352,7 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             let heroDamage = Math.max(1, (weapon ? weapon.damage || 1 : 1) + baseDamage);
             enemy.health.current -= heroDamage;
             logMessages.push(`Попадание! Герой наносит ${heroDamage} урона.`);
+            updatedChar.combat!.totalDamageDealt = (updatedChar.combat!.totalDamageDealt || 0) + heroDamage;
         } else {
             logMessages.push("Промах! Враг увернулся от удара.");
         }
@@ -356,6 +380,7 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
                     case 'damage':
                         enemy.health.current -= spellToCast.value;
                         logMessages.push(`"${spellToCast.name}" попадает во врага, нанося ${spellToCast.value} урона.`);
+                        updatedChar.combat!.totalDamageDealt = (updatedChar.combat!.totalDamageDealt || 0) + spellToCast.value;
                         break;
                     case 'heal':
                         updatedChar.stats.health.current = Math.min(updatedChar.stats.health.max, updatedChar.stats.health.current + spellToCast.value);
@@ -399,6 +424,10 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
         }
         
         logMessages.push(winMsg);
+        // Append round messages to combat log before saving analytics
+        if (updatedChar.combat?.combatLog) {
+            updatedChar.combat.combatLog.push(...logMessages);
+        }
         await saveCombatToAnalytics(updatedChar, true, false);
         updatedChar.status = 'idle';
         updatedChar.combat = null;
@@ -432,6 +461,7 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
     if (enemyRoll === 20) {
         let damageTaken = Math.max(1, Math.floor(baseEnemyDef!.damage * 1.5));
         updatedChar.stats.health.current -= damageTaken;
+        updatedChar.combat!.totalDamageTaken = (updatedChar.combat!.totalDamageTaken || 0) + damageTaken;
         logMessages.push(`🎲 Критический удар! ${enemy.name} наносит ${damageTaken} урона.`);
     } else if (enemyRoll === 1) {
         logMessages.push(`🎲 Критический провал! ${enemy.name} спотыкается и падает, не нанося урона.`);
@@ -442,12 +472,18 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             logMessages.push("Герой успешно блокирует, получив лишь половину урона!");
         }
         updatedChar.stats.health.current -= damageTaken;
+        updatedChar.combat!.totalDamageTaken = (updatedChar.combat!.totalDamageTaken || 0) + damageTaken;
         logMessages.push(`${enemy.name} попадает, нанося ${damageTaken} урона.`);
     } else {
         logMessages.push("Герой ловко уворачивается от атаки!");
     }
 
     if (updatedChar.stats.health.current > 0) logMessages.push(`У героя осталось ${Math.max(0, updatedChar.stats.health.current)} здоровья.`);
+
+    // Append this round's messages to persistent combat log
+    if (updatedChar.combat?.combatLog) {
+        updatedChar.combat.combatLog.push(...logMessages);
+    }
 
     // Death check is handled in the main loop for clarity
     return updatedChar;
@@ -656,24 +692,42 @@ const exploreCityAction: Action = {
 const findEnemyAction: Action = {
     name: "Найти врага",
     type: "combat",
-    getWeight: (char, worldState) => {
+    getWeight: (char, worldState, gameData) => {
         if (worldState.isLocationSafe) return 0;
-        
-        // SIMPLIFIED (Godville-style): Simple health-based priority
+
+        // Readiness scoring: gear, potions, spells, HP
         const healthRatio = char.stats.health.current / char.stats.health.max;
-        
-        // Critical health - avoid combat!
-        if (healthRatio < 0.3) {
-            return priorityToWeight(Priority.DISABLED);
-        }
-        
-        // Low health - risky
-        if (healthRatio < 0.6) {
-            return priorityToWeight(Priority.LOW);
-        }
-        
-        // Good health - combat is a reasonable option
-        return priorityToWeight(Priority.MEDIUM);
+        const hasHealingPotions = char.inventory.filter(i => i.type === 'potion' && i.effect?.type === 'heal').reduce((s, p) => s + p.quantity, 0);
+        const hasOffensiveSpell = (char.knownSpells || []).some(id => {
+            const s = allSpells.find(sp => sp.id === id);
+            return s && s.type === 'damage';
+        });
+
+        // Gear score: best weapon damage + sum armor pieces
+        const weapon = char.equippedItems.weapon ? char.inventory.find(i => i.id === char.equippedItems.weapon) : null;
+        const bestWeaponDamage = weapon?.damage || 0;
+        const armorSum = ['head','torso','legs','hands','feet']
+            .map(slot => char.equippedItems[slot as any])
+            .map(id => char.inventory.find(i => i.id === id)?.armor || 0)
+            .reduce((a,b)=>a+b,0);
+
+        const gearScore = bestWeaponDamage + armorSum * 0.3;
+        const potionScore = Math.min(3, hasHealingPotions) * 5;
+        const spellScore = hasOffensiveSpell ? 8 : 0;
+        const hpScore = Math.floor(healthRatio * 20);
+        const readiness = gearScore + potionScore + spellScore + hpScore;
+
+        // Threat estimate: average enemy tier at location (fallback medium)
+        const locationEnemies = gameData.enemies.filter(e => !e.isUnique);
+        const avgEnemyTier = locationEnemies.length > 0 ? locationEnemies.reduce((s,e)=>s+(e.level||1),0)/locationEnemies.length : 3;
+        const dangerMultiplier = 6; // tuneable
+        const threat = avgEnemyTier * dangerMultiplier;
+
+        const engageScore = readiness - threat; // higher means safer to fight
+        if (healthRatio < 0.3) return priorityToWeight(Priority.DISABLED);
+        if (engageScore < 0) return priorityToWeight(Priority.LOW);
+        if (engageScore < 20) return priorityToWeight(Priority.MEDIUM);
+        return priorityToWeight(Priority.HIGH);
     },
     canPerform: (char, worldState) => !worldState.isLocationSafe!,
     async perform(character, gameData) {
@@ -727,7 +781,13 @@ const travelAction: Action = {
         
         // If traveled recently multiple times, drastically reduce weight
         if (recentTravelCount >= 3) {
-            return priorityToWeight(Priority.DISABLED); // Stop wandering!
+            // Fallback: if character is stagnating (no progress) allow escape via travel
+            const lastNonWander = [...(char.actionHistory||[])].reverse().find(a => a.type !== 'misc');
+            const stagnantTicks = (char.actionHistory||[]).slice(-8).every(a => a.type === 'misc') ? 8 : 0;
+            if (stagnantTicks >= 5) {
+                return priorityToWeight(Priority.LOW); // temporarily allow travel to escape
+            }
+            return priorityToWeight(Priority.DISABLED); // Stop wandering normally
         }
         if (recentTravelCount >= 2) {
             return priorityToWeight(Priority.LOW) * 0.3; // Strong penalty
@@ -1108,11 +1168,10 @@ const wanderAction: Action = {
     getWeight: () => 1, // Lowest possible weight, a true fallback
     canPerform: () => true,
     async perform(character, gameData) {
-        // Only produce a thought 15% of the time this action is chosen to avoid spam.
-        if (Math.random() > 0.15) {
+        // Increase thought chance to 30% to reduce dull loops
+        if (Math.random() > 0.30) {
             return { character, logMessage: "" };
         }
-        
         return { character, logMessage: getFallbackThought(character) };
     }
 };

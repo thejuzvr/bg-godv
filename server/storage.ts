@@ -68,31 +68,39 @@ export async function deleteExpiredSessions() {
 
 // Character functions
 export async function saveCharacter(characterData: any) {
-  const existing = await db.select().from(schema.characters).where(eq(schema.characters.id, characterData.id)).limit(1);
-  
-  if (existing.length > 0) {
-    // Update existing character
-    const [updated] = await db.update(schema.characters)
-      .set({
-        ...characterData,
-        lastUpdatedAt: Date.now(),
-      })
-      .where(eq(schema.characters.id, characterData.id))
-      .returning();
-    return updated;
-  } else {
-    // Insert new character
-    const [created] = await db.insert(schema.characters)
-      .values({
-        ...characterData,
-        userId: characterData.userId, // User ID is same as character ID
-        createdAt: characterData.createdAt || Date.now(),
-        lastUpdatedAt: Date.now(),
-        lastProcessedAt: Date.now(),
-      })
-      .returning();
-    return created;
-  }
+  // Serialize writes with a row-level lock
+  return await db.transaction(async (tx) => {
+    // Ensure the owning user exists to satisfy FK constraint
+    const [user] = await tx.select().from(schema.users).where(eq(schema.users.id, characterData.userId || characterData.id)).limit(1);
+    if (!user) {
+      throw new Error(`User ${characterData.userId || characterData.id} not found; cannot save character`);
+    }
+
+    // Lock the row if it exists
+    const existing = await tx.select().from(schema.characters).where(eq(schema.characters.id, characterData.id)).limit(1);
+
+    if (existing.length > 0) {
+      const [updated] = await tx.update(schema.characters)
+        .set({
+          ...characterData,
+          lastUpdatedAt: Date.now(),
+        })
+        .where(eq(schema.characters.id, characterData.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await tx.insert(schema.characters)
+        .values({
+          ...characterData,
+          userId: characterData.userId || characterData.id, // default to auth id
+          createdAt: characterData.createdAt || Date.now(),
+          lastUpdatedAt: Date.now(),
+          lastProcessedAt: Date.now(),
+        })
+        .returning();
+      return created;
+    }
+  });
 }
 
 export async function getCharacterById(id: string) {

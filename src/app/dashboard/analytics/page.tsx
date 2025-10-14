@@ -13,6 +13,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { LineChart, Skull, Dices, Users, Rabbit, Swords, ThumbsUp, ThumbsDown, Bot, BrainCircuit } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 export default function AnalyticsPage() {
     const router = useRouter();
@@ -21,6 +23,12 @@ export default function AnalyticsPage() {
     const [character, setCharacter] = useState<Character | null>(null);
     const [gameData, setGameData] = useState<GameData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [combatSummary, setCombatSummary] = useState<any | null>(null);
+    const [recentBattles, setRecentBattles] = useState<any[]>([]);
+    const [openLogIndex, setOpenLogIndex] = useState<number | null>(null);
+    const [period, setPeriod] = useState<'all' | '24h' | '7d' | '30d'>('all');
+    const [resultFilter, setResultFilter] = useState<'all' | 'victory' | 'defeat' | 'fled'>('all');
+    const [perEnemy, setPerEnemy] = useState<any[]>([]);
 
     useEffect(() => {
         if (!user) return;
@@ -31,6 +39,16 @@ export default function AnalyticsPage() {
                 if (char) {
                     setCharacter(char);
                     setGameData(gData);
+                    // Fetch combat analytics
+                    try {
+                        const res = await fetch(`/api/combat-analytics?characterId=${user.userId}`, { cache: 'no-store' });
+                        if (res.ok) {
+                            const data = await res.json();
+                            setCombatSummary(data.summary);
+                            setRecentBattles(data.recent || []);
+                            setPerEnemy(data.perEnemy || []);
+                        }
+                    } catch {}
                 } else {
                     router.push('/create-character');
                 }
@@ -42,6 +60,24 @@ export default function AnalyticsPage() {
         };
         loadData();
     }, [user, router, toast]);
+
+    // Refetch when filters change (must be declared before any early returns to keep hooks order stable)
+    useEffect(() => {
+        if (!user) return;
+        const run = async () => {
+            const params = new URLSearchParams({ characterId: user.userId });
+            if (period !== 'all') params.set('period', period);
+            if (resultFilter !== 'all') params.set('result', resultFilter);
+            const res = await fetch(`/api/combat-analytics?${params.toString()}`, { cache: 'no-store' });
+            if (res.ok) {
+                const data = await res.json();
+                setCombatSummary(data.summary);
+                setRecentBattles(data.recent || []);
+                setPerEnemy(data.perEnemy || []);
+            }
+        };
+        run();
+    }, [user, period, resultFilter]);
 
     if (authLoading || isLoading) {
         return <div className="flex items-center justify-center min-h-screen font-headline text-xl">Загрузка аналитики...</div>;
@@ -72,6 +108,8 @@ export default function AnalyticsPage() {
             killed: analytics.killedEnemies[enemyId] || 0,
         };
     }).sort((a,b) => b.killed - a.killed);
+
+    
 
     return (
         <div className="w-full font-body p-4 md:p-8 space-y-8">
@@ -199,6 +237,213 @@ export default function AnalyticsPage() {
                 </Card>
             </div>
             
+            {/* Боевые отчеты */}
+            <section className="space-y-4">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <h2 className="text-2xl font-headline flex items-center gap-2"><Swords /> Боевые отчеты</h2>
+                    <div className="flex items-center gap-2">
+                        <select className="border rounded px-2 py-1" value={period} onChange={(e) => setPeriod(e.target.value as any)}>
+                            <option value="all">За всё время</option>
+                            <option value="24h">24 часа</option>
+                            <option value="7d">7 дней</option>
+                            <option value="30d">30 дней</option>
+                        </select>
+                        <select className="border rounded px-2 py-1" value={resultFilter} onChange={(e) => setResultFilter(e.target.value as any)}>
+                            <option value="all">Все результаты</option>
+                            <option value="victory">Победы</option>
+                            <option value="defeat">Поражения</option>
+                            <option value="fled">Побеги</option>
+                        </select>
+                    </div>
+                </div>
+
+                {/* KPI cards */}
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                    <Card>
+                        <CardHeader className="pb-2"><CardTitle className="text-sm">Всего боёв</CardTitle></CardHeader>
+                        <CardContent><div className="text-2xl font-bold">{combatSummary?.totalBattles ?? 0}</div></CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2"><CardTitle className="text-sm">Победы</CardTitle></CardHeader>
+                        <CardContent><div className="text-2xl font-bold">{combatSummary?.victories ?? 0}</div></CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2"><CardTitle className="text-sm">Поражения</CardTitle></CardHeader>
+                        <CardContent><div className="text-2xl font-bold">{combatSummary?.defeats ?? 0}</div></CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2"><CardTitle className="text-sm">Побеги</CardTitle></CardHeader>
+                        <CardContent><div className="text-2xl font-bold">{combatSummary?.flees ?? 0}</div></CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2"><CardTitle className="text-sm">Win rate</CardTitle></CardHeader>
+                        <CardContent><div className="text-2xl font-bold">{combatSummary ? `${combatSummary.winRate}%` : '0%'}</div></CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2"><CardTitle className="text-sm">Всего XP</CardTitle></CardHeader>
+                        <CardContent><div className="text-2xl font-bold">{combatSummary?.totalXpGained ?? 0}</div></CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2"><CardTitle className="text-sm">Средн. нанесённый</CardTitle></CardHeader>
+                        <CardContent><div className="text-2xl font-bold">{combatSummary?.avgDamageDealt ?? 0}</div></CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2"><CardTitle className="text-sm">Средн. полученный</CardTitle></CardHeader>
+                        <CardContent><div className="text-2xl font-bold">{combatSummary?.avgDamageTaken ?? 0}</div></CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2"><CardTitle className="text-sm">Средн. раундов</CardTitle></CardHeader>
+                        <CardContent><div className="text-2xl font-bold">{combatSummary?.avgRoundsPerBattle ?? 0}</div></CardContent>
+                    </Card>
+                </div>
+
+                {/* Recent battles table */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Недавние бои</CardTitle>
+                        <CardDescription>Последние 10 сражений героя.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Дата</TableHead>
+                                    <TableHead>Враг</TableHead>
+                                    <TableHead>Уровень</TableHead>
+                                    <TableHead>Результат</TableHead>
+                                    <TableHead className="text-right">Раунды</TableHead>
+                                    <TableHead className="text-right">Нанесено</TableHead>
+                                    <TableHead className="text-right">Получено</TableHead>
+                                    <TableHead className="text-right">XP</TableHead>
+                                    <TableHead className="text-right">Лог</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {recentBattles.map((b, idx) => {
+                                    const result = b.fled ? 'Побег' : (b.victory ? 'Победа' : 'Поражение');
+                                    const date = new Date(b.timestamp).toLocaleString();
+                                    return (
+                                        <TableRow key={b.id ?? idx}>
+                                            <TableCell className="whitespace-nowrap">{date}</TableCell>
+                                            <TableCell className="font-medium">{b.enemyName}</TableCell>
+                                            <TableCell>{b.enemyLevel}</TableCell>
+                                            <TableCell>{result}</TableCell>
+                                            <TableCell className="text-right">{b.roundsCount}</TableCell>
+                                            <TableCell className="text-right">{b.damageDealt}</TableCell>
+                                            <TableCell className="text-right">{b.damageTaken}</TableCell>
+                                            <TableCell className="text-right">{b.xpGained}</TableCell>
+                                            <TableCell className="text-right">
+                                                <Dialog open={openLogIndex === idx} onOpenChange={(open) => setOpenLogIndex(open ? idx : null)}>
+                                                    <DialogTrigger asChild>
+                                                        <Button size="sm" variant="outline">Лог</Button>
+                                                    </DialogTrigger>
+                                                    <DialogContent className="max-w-2xl">
+                                                        <DialogHeader>
+                                                            <DialogTitle>Лог боя — {b.enemyName}</DialogTitle>
+                                                        </DialogHeader>
+                                                        <pre className="whitespace-pre-wrap text-sm max-h-[60vh] overflow-auto">{(b.combatLog || []).join('\n')}</pre>
+                                                    </DialogContent>
+                                                </Dialog>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })}
+                                {recentBattles.length === 0 && (
+                                    <TableRow>
+                                        <TableCell colSpan={9} className="text-center text-muted-foreground">Недавних боёв пока нет.</TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+
+                {/* Charts */}
+                <div className="grid lg:grid-cols-2 gap-8">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Нанесено vs Получено</CardTitle>
+                            <CardDescription>Последние бои: сравнение урона.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <ResponsiveContainer width="100%" height={300}>
+                                <BarChart data={recentBattles.map((b, i) => ({ name: `${i + 1}`, Dealt: b.damageDealt, Taken: b.damageTaken }))}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                    <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                                    <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
+                                    <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))" }} />
+                                    <Legend />
+                                    <Bar dataKey="Dealt" fill="hsl(var(--primary))" radius={[4,4,0,0]} />
+                                    <Bar dataKey="Taken" fill="hsl(var(--muted-foreground))" radius={[4,4,0,0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Раунды в бою</CardTitle>
+                            <CardDescription>Длительность последних боёв.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <ResponsiveContainer width="100%" height={300}>
+                                <BarChart data={recentBattles.map((b, i) => ({ name: `${i + 1}`, Rounds: b.roundsCount }))}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                    <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                                    <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
+                                    <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))" }} />
+                                    <Bar dataKey="Rounds" fill="hsl(var(--primary))" radius={[4,4,0,0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* Per-enemy aggregation */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Сводка по врагам</CardTitle>
+                        <CardDescription>Винрейт и средние показатели по каждому врагу.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Враг</TableHead>
+                                    <TableHead className="text-right">Бои</TableHead>
+                                    <TableHead className="text-right">Winrate</TableHead>
+                                    <TableHead className="text-right">Победы</TableHead>
+                                    <TableHead className="text-right">Поражения</TableHead>
+                                    <TableHead className="text-right">Побеги</TableHead>
+                                    <TableHead className="text-right">Ø Нанесено</TableHead>
+                                    <TableHead className="text-right">Ø Получено</TableHead>
+                                    <TableHead className="text-right">Ø Раундов</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {perEnemy.map((e) => (
+                                    <TableRow key={e.enemyId}>
+                                        <TableCell className="font-medium">{e.enemyName}</TableCell>
+                                        <TableCell className="text-right">{e.battles}</TableCell>
+                                        <TableCell className="text-right">{e.winRate}%</TableCell>
+                                        <TableCell className="text-right">{e.wins}</TableCell>
+                                        <TableCell className="text-right">{e.defeats}</TableCell>
+                                        <TableCell className="text-right">{e.flees}</TableCell>
+                                        <TableCell className="text-right">{e.avgDealt}</TableCell>
+                                        <TableCell className="text-right">{e.avgTaken}</TableCell>
+                                        <TableCell className="text-right">{e.avgRounds}</TableCell>
+                                    </TableRow>
+                                ))}
+                                {perEnemy.length === 0 && (
+                                    <TableRow>
+                                        <TableCell colSpan={9} className="text-center text-muted-foreground">Нет данных по врагам для выбранных фильтров.</TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            </section>
+
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
