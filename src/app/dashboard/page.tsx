@@ -126,18 +126,22 @@ export default function DashboardPage() {
   const [logLimit, setLogLimit] = useState<number>(10);
   
   // Custom hook for the game loop
-  const { character, adventureLog, combatLog, setCharacter } = useGameLoop(initialCharacter, gameData);
+  const { character, adventureLog, combatLog, setCharacter } = useGameLoop(initialCharacter, gameData, { adventureLimit: logLimit });
 
   const processedAdventureLog = useMemo(() => {
     if (!adventureLog) return [];
-    // 1. Сортировка: новые вверху (уже сделано в useGameLoop, но для надежности)
-    // 2. Фильтр от повторов
-    const uniqueLogs = adventureLog.filter((log, index, self) =>
-        index === 0 || log.message !== self[index - 1].message
-    );
-
-    // 3. Ограничение количества
-    return uniqueLogs.slice(0, logLimit);
+    // Sort strictly by timestamp desc and dedupe by id
+    const sorted = [...adventureLog].sort((a: any, b: any) => b.timestamp - a.timestamp);
+    const seen = new Set<string>();
+    const deduped = [] as any[];
+    for (const item of sorted) {
+      const key = (item as any).id ?? `${(item as any).timestamp}-${(item as any).message}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        deduped.push(item);
+      }
+    }
+    return deduped.slice(0, logLimit);
   }, [adventureLog, logLimit]);
 
   const adventureLogRef = useRef<HTMLDivElement>(null);
@@ -320,10 +324,10 @@ export default function DashboardPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="flex-1 flex flex-col">
-                    <ScrollArea className="h-72 w-full flex-1" ref={adventureLogRef}> <div className="space-y-4 pr-4"> {processedAdventureLog.map((log, index) => (
+                    <ScrollArea className="h-72 w-full flex-1" ref={adventureLogRef}> <div className="space-y-4 pr-4"> {processedAdventureLog.map((log: any, index) => (
                         <div key={index}>
                             <p className="text-sm text-foreground/90">
-                            <span className="font-mono text-muted-foreground mr-2">[{log.time}]</span>
+                            <span className="font-mono text-muted-foreground mr-2">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
                             {log.message}
                             </p>
                             { index < adventureLog.length -1 && <Separator className="mt-4" /> }

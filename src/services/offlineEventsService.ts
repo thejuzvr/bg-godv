@@ -41,6 +41,14 @@ export async function getUnreadOfflineEvents(userId: string) {
   return await storage.getUnreadOfflineEvents(userId);
 }
 
+export async function getRecentOfflineEvents(userId: string, limit = 40) {
+  if (!userId) {
+    console.warn("User not authenticated. Cannot fetch recent offline events.");
+    return [];
+  }
+  return await storage.getRecentOfflineEvents(userId, limit);
+}
+
 /**
  * Marks all offline events as read for a character
  */

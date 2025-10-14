@@ -217,6 +217,14 @@ export async function getUnreadOfflineEvents(characterId: string) {
     .orderBy(desc(schema.offlineEvents.timestamp));
 }
 
+export async function getRecentOfflineEvents(characterId: string, limit = 40) {
+  return await db.select()
+    .from(schema.offlineEvents)
+    .where(eq(schema.offlineEvents.characterId, characterId))
+    .orderBy(desc(schema.offlineEvents.timestamp))
+    .limit(limit);
+}
+
 export async function markOfflineEventsAsRead(characterId: string) {
   await db.update(schema.offlineEvents)
     .set({ isRead: true })

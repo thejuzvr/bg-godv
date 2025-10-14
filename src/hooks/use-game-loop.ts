@@ -5,9 +5,8 @@ import { useState, useEffect, useRef } from 'react';
 import type { Character } from "@/types/character";
 import type { GameData } from "@/services/gameDataService";
 import { fetchCharacter } from "@/app/dashboard/shared-actions";
-import { getOfflineEvents } from "@/actions/offline-events-actions";
+import { getOfflineEvents, getRecentEvents, markEventsRead } from "@/actions/offline-events-actions";
 
-const ADVENTURE_LOG_STORAGE_KEY = 'adventureLog';
 const POLL_INTERVAL = 3000; // Poll server every 3 seconds
 
 // ==================================
@@ -16,19 +15,10 @@ const POLL_INTERVAL = 3000; // Poll server every 3 seconds
 // Background Worker handles all game ticks.
 // Client only polls for updated state and displays it.
 
-export function useGameLoop(initialCharacter: Character | null, gameData: GameData | null) {
+export function useGameLoop(initialCharacter: Character | null, gameData: GameData | null, options?: { adventureLimit?: number }) {
   const [character, setCharacter] = useState<Character | null>(initialCharacter);
-  const [adventureLog, setAdventureLog] = useState<{time: string, message: string}[]>(() => {
-    if (typeof window === 'undefined') {
-      return [];
-    }
-    const savedLog = localStorage.getItem(ADVENTURE_LOG_STORAGE_KEY);
-    try {
-      return savedLog ? JSON.parse(savedLog) : [];
-    } catch {
-      return [];
-    }
-  });
+  type AdventureLogItem = { id: string; timestamp: number; type: string; message: string };
+  const [adventureLog, setAdventureLog] = useState<AdventureLogItem[]>([]);
   const [combatLog, setCombatLog] = useState<string[]>([]);
 
   // Refs to hold the latest state for the interval closure
@@ -47,44 +37,49 @@ export function useGameLoop(initialCharacter: Character | null, gameData: GameDa
     setCharacter(initialCharacter);
   }, [initialCharacter]);
 
-  // Save adventure log to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem(ADVENTURE_LOG_STORAGE_KEY, JSON.stringify(adventureLog));
-  }, [adventureLog]);
-
-  // Load offline events on mount
+  // Load recent offline events on mount and when limit changes
   useEffect(() => {
     if (!initialCharacter) return;
 
     const loadOfflineEvents = async () => {
       try {
-        const events = await getOfflineEvents(initialCharacter.id);
+        const limit = options?.adventureLimit ?? 40;
+        const events = await getRecentEvents(initialCharacter.id, limit);
         if (events && events.length > 0) {
-          // Separate events by type
-          const adventureEvents = events
+          // Build structured adventure items from 'system' events
+          const adventureItems = events
             .filter((event: any) => event.type === 'system')
             .map((event: any) => ({
-              time: new Date(event.timestamp).toLocaleTimeString(),
-              message: event.message
-            }));
-          
+              id: event.id,
+              timestamp: new Date(event.timestamp).getTime(),
+              type: event.type,
+              message: event.message,
+            } as AdventureLogItem));
+
           const combatMessages = events
             .filter((event: any) => event.type === 'combat')
             .map((event: any) => event.message);
-          
-          // Update logs separately
-          if (adventureEvents.length > 0) {
-            setAdventureLog(prev => [...adventureEvents, ...prev].slice(0, 50));
+
+          if (adventureItems.length > 0) {
+            setAdventureLog(prev => {
+              const byId = new Map<string, AdventureLogItem>(prev.map(e => [e.id, e]));
+              for (const item of adventureItems) byId.set(item.id, item);
+              return Array.from(byId.values())
+                .sort((a, b) => b.timestamp - a.timestamp)
+                .slice(0, 50);
+            });
           }
-          
+
           if (combatMessages.length > 0) {
             setCombatLog(prev => [...combatMessages, ...prev].slice(0, 50));
           }
-          
-          // Mark last event as seen
-          if (events.length > 0) {
-            lastSeenTimestampRef.current = new Date(events[0].timestamp).getTime();
+
+          // Update last seen and mark events as read so they won't reappear on refresh
+          const newestTs = Math.max(...events.map((e: any) => new Date(e.timestamp).getTime()));
+          if (Number.isFinite(newestTs)) {
+            lastSeenTimestampRef.current = newestTs;
           }
+          // Do not mark read here (recent includes read+unread). We'll mark read only for unread fetches in polling
         }
       } catch (error) {
         console.error('Error loading offline events:', error);
@@ -92,7 +87,7 @@ export function useGameLoop(initialCharacter: Character | null, gameData: GameDa
     };
 
     loadOfflineEvents();
-  }, [initialCharacter]);
+  }, [initialCharacter, options?.adventureLimit]);
 
   // The main polling interval - fetch updated character state from server
   useEffect(() => {
@@ -130,36 +125,45 @@ export function useGameLoop(initialCharacter: Character | null, gameData: GameDa
           // Check for new offline events (if character was processed by worker)
           const newEvents = await getOfflineEvents(currentCharacter.id);
           if (newEvents && newEvents.length > 0) {
-            // Filter events that are newer than last seen timestamp
-            const unseenEvents = newEvents.filter(e => 
+            // Consider only items newer than last seen
+            const unseenEvents = newEvents.filter(e =>
               new Date(e.timestamp).getTime() > lastSeenTimestampRef.current
             );
 
             if (unseenEvents.length > 0) {
-              // Separate events by type
-              const adventureEvents = unseenEvents
+              const adventureItems = unseenEvents
                 .filter(event => event.type === 'system')
                 .map(event => ({
-                  time: new Date(event.timestamp).toLocaleTimeString(),
-                  message: event.message
-                }));
-              
+                  id: event.id,
+                  timestamp: new Date(event.timestamp).getTime(),
+                  type: event.type,
+                  message: event.message,
+                } as AdventureLogItem));
+
               const combatMessages = unseenEvents
                 .filter(event => event.type === 'combat')
                 .map(event => event.message);
-              
-              // Update logs separately
-              if (adventureEvents.length > 0) {
-                setAdventureLog(prev => [...adventureEvents, ...prev].slice(0, 50));
+
+              if (adventureItems.length > 0) {
+                setAdventureLog(prev => {
+                  const byId = new Map<string, AdventureLogItem>(prev.map(e => [e.id, e]));
+                  for (const item of adventureItems) byId.set(item.id, item);
+                  return Array.from(byId.values())
+                    .sort((a, b) => b.timestamp - a.timestamp)
+                    .slice(0, 50);
+                });
               }
-              
+
               if (combatMessages.length > 0) {
                 setCombatLog(prev => [...combatMessages, ...prev].slice(0, 50));
               }
-              
-              // Update last seen timestamp to the newest event
-              const newestTimestamp = Math.max(...newEvents.map(e => new Date(e.timestamp).getTime()));
-              lastSeenTimestampRef.current = newestTimestamp;
+
+              // Update last seen and mark as read
+              const newestTimestamp = Math.max(...unseenEvents.map(e => new Date(e.timestamp).getTime()));
+              if (Number.isFinite(newestTimestamp)) {
+                lastSeenTimestampRef.current = newestTimestamp;
+              }
+              await markEventsRead(currentCharacter.id);
             }
           }
 

@@ -1,6 +1,6 @@
 'use server';
 
-import { getUnreadOfflineEvents, markOfflineEventsAsRead } from '@/services/offlineEventsService';
+import { getUnreadOfflineEvents, getRecentOfflineEvents, markOfflineEventsAsRead } from '@/services/offlineEventsService';
 
 export interface OfflineEvent {
   id: string;
@@ -26,6 +26,24 @@ export async function getOfflineEvents(characterId: string): Promise<OfflineEven
     }));
   } catch (error) {
     console.error('Error fetching offline events:', error);
+    return [];
+  }
+}
+
+export async function getRecentEvents(characterId: string, limit: number): Promise<OfflineEvent[]> {
+  try {
+    const events = await getRecentOfflineEvents(characterId, limit);
+    return events.map((event: any) => ({
+      id: event.id,
+      characterId: event.characterId,
+      timestamp: new Date(event.timestamp),
+      type: event.type,
+      message: event.message,
+      data: event.data,
+      isRead: event.isRead,
+    }));
+  } catch (error) {
+    console.error('Error fetching recent offline events:', error);
     return [];
   }
 }
