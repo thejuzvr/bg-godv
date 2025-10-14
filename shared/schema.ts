@@ -269,6 +269,35 @@ export const gameEnemies = pgTable('game_enemies', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
+// Game Thoughts table (hero thoughts, context-driven content)
+export const gameThoughts = pgTable('game_thoughts', {
+  id: text('id').primaryKey(),
+  text: text('text').notNull(),
+  tags: jsonb('tags').$type<string[] | null>(),
+  conditions: jsonb('conditions').$type<Record<string, any> | null>(),
+  weight: integer('weight').notNull().default(1),
+  cooldownKey: text('cooldown_key'),
+  locale: text('locale').notNull().default('ru'),
+  isEnabled: boolean('is_enabled').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// NPC Dialogue Lines table (fine-grained dialogue with conditions/weights)
+export const npcDialogueLines = pgTable('npc_dialogue_lines', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  npcId: text('npc_id').notNull().references(() => gameNpcs.id, { onDelete: 'cascade' }),
+  text: text('text').notNull(),
+  tags: jsonb('tags').$type<string[] | null>(),
+  conditions: jsonb('conditions').$type<Record<string, any> | null>(),
+  weight: integer('weight').notNull().default(1),
+  cooldownKey: text('cooldown_key'),
+  locale: text('locale').notNull().default('ru'),
+  isEnabled: boolean('is_enabled').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 // Combat Analytics - stores last 10 battles per character for analytics
 export const combatAnalytics = pgTable('combat_analytics', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -333,3 +362,9 @@ export type NewGameEnemy = typeof gameEnemies.$inferInsert;
 
 export type CombatAnalytics = typeof combatAnalytics.$inferSelect;
 export type NewCombatAnalytics = typeof combatAnalytics.$inferInsert;
+
+export type GameThought = typeof gameThoughts.$inferSelect;
+export type NewGameThought = typeof gameThoughts.$inferInsert;
+
+export type NpcDialogueLine = typeof npcDialogueLines.$inferSelect;
+export type NewNpcDialogueLine = typeof npcDialogueLines.$inferInsert;

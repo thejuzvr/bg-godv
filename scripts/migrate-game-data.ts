@@ -2,13 +2,14 @@ import 'dotenv/config';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pkg from 'pg';
 const { Pool } = pkg;
-import { gameLocations, gameItems, gameNpcs, gameEnemies } from '../shared/schema.js';
+import { gameLocations, gameItems, gameNpcs, gameEnemies, gameThoughts, npcDialogueLines } from '../shared/schema.js';
 
 // Import game data from static files
 import { initialLocations } from '../src/data/locations.js';
 import { initialItems } from '../src/data/items.js';
 import { initialNpcs } from '../src/data/npcs.js';
 import { initialEnemies } from '../src/data/enemies.js';
+import { getFallbackThought } from '../src/data/thoughts.js';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,

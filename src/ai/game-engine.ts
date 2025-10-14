@@ -4,9 +4,11 @@
 import type { Character, ActiveEffect, Weather, Season } from "@/types/character";
 import type { GameData } from "@/services/gameDataService";
 import { processCharacterTurn } from '@/ai/brain';
+// Future: wire simple policy here by swapping determineNextAction in brain or calling policy
 import { addChronicleEntry } from "@/services/chronicleService";
 import { allDivinities } from "@/data/divinities";
 import { getFallbackThought } from "@/data/thoughts";
+import { gameDataService } from "../../server/game-data-service";
 
 
 /**
@@ -704,8 +706,111 @@ async function processTempleCompletion(character: Character): Promise<{ char: Ch
 
 
 async function processEpicPhraseGeneration(character: Character): Promise<{ char: Character, log: string | null }> {
-    if (Math.random() > 0.08) { // ~8% chance per tick to even consider this, avoids spamming
+    if (Math.random() > 0.08) {
         return { char: character, log: null };
+    }
+
+    // Try DB-backed contextual selector
+    try {
+        const all = await gameDataService.getAllThoughts();
+        const inGameDate = new Date(character.gameDate);
+        const hour = inGameDate.getHours();
+        const timeOfDay: 'night' | 'morning' | 'day' | 'evening' = (
+            hour < 5 ? 'night' :
+            hour < 12 ? 'morning' :
+            hour < 18 ? 'day' : 'evening'
+        );
+        const factionIds = Object.keys(character.factions || {});
+        const activeQuestIds: string[] = [
+            character.activeSovngardeQuest ? (character.activeSovngardeQuest as any).id : null,
+            character.activeCryptQuest ? (character.activeCryptQuest as any).id : null,
+            character.currentAction?.type === 'quest' ? character.currentAction.questId! : null,
+        ].filter(Boolean) as string[];
+        const completedQuestIds = character.completedQuests || [];
+
+        const ctx = {
+            status: character.status,
+            weather: character.weather,
+            mood: character.mood,
+            hpRatio: character.stats.health.current / Math.max(1, character.stats.health.max),
+            location: character.location,
+            season: character.season,
+            timeOfDay,
+            factionIds,
+            activeQuestIds,
+            completedQuestIds,
+        };
+        const now = Date.now();
+
+        function matchesConditions(rec: any): boolean {
+            const c = rec.conditions || {};
+            if (c.status && Array.isArray(c.status) && !c.status.includes(ctx.status)) return false;
+            if (c.weather && Array.isArray(c.weather) && !c.weather.includes(ctx.weather)) return false;
+            if (typeof c.moodMin === 'number' && ctx.mood < c.moodMin) return false;
+            if (typeof c.moodMax === 'number' && ctx.mood > c.moodMax) return false;
+            if (typeof c.hpBelow === 'number' && ctx.hpRatio >= c.hpBelow) return false;
+            if (c.locations && Array.isArray(c.locations) && !c.locations.includes(ctx.location)) return false;
+            if (c.season && Array.isArray(c.season) && !c.season.includes(ctx.season)) return false;
+            if (c.timeOfDay && Array.isArray(c.timeOfDay) && !c.timeOfDay.includes(ctx.timeOfDay)) return false;
+            if (c.factionsAny && Array.isArray(c.factionsAny)) {
+                const anyFaction = c.factionsAny.some((fid: string) => ctx.factionIds.includes(fid));
+                if (!anyFaction) return false;
+            }
+            if (c.questFlagsAny && Array.isArray(c.questFlagsAny)) {
+                // Supported values:
+                // - 'sovngarde_active', 'crypt_active'
+                // - 'active:<questId>' matches current active quest ids
+                // - 'completed:<questId>' matches completed quest ids
+                const hasAny = c.questFlagsAny.some((flag: string) => {
+                    if (flag === 'sovngarde_active') return !!character.activeSovngardeQuest;
+                    if (flag === 'crypt_active') return !!character.activeCryptQuest;
+                    if (flag.startsWith('active:')) return ctx.activeQuestIds.includes(flag.slice('active:'.length));
+                    if (flag.startsWith('completed:')) return ctx.completedQuestIds.includes(flag.slice('completed:'.length));
+                    return false;
+                });
+                if (!hasAny) return false;
+            }
+            return true;
+        }
+
+        function isOnCooldown(rec: any): boolean {
+            const key = rec.cooldownKey || rec.id;
+            const recent = character.analytics?.epicPhrases || [];
+            // We do not store timestamps for phrases; keep light anti-repeat by not reusing the last one
+            const last = recent[recent.length - 1];
+            return last && last === rec.text;
+        }
+
+        const candidates = all
+            .filter((r: any) => !!r.isEnabled)
+            .filter((r: any) => matchesConditions(r))
+            .filter((r: any) => !isOnCooldown(r));
+
+        let chosen: any | null = null;
+        if (candidates.length > 0) {
+            const totalWeight = candidates.reduce((acc: number, r: any) => acc + Math.max(1, r.weight || 1), 0);
+            let roll = Math.random() * totalWeight;
+            for (const rec of candidates) {
+                roll -= Math.max(1, rec.weight || 1);
+                if (roll <= 0) { chosen = rec; break; }
+            }
+            if (!chosen) chosen = candidates[candidates.length - 1];
+        }
+
+        const phrase = (chosen && chosen.text) || getFallbackThought(character);
+        if (phrase) {
+            let updatedChar = structuredClone(character);
+            if (!updatedChar.analytics.epicPhrases) {
+                updatedChar.analytics.epicPhrases = [];
+            }
+            updatedChar.analytics.epicPhrases.push(phrase);
+            if (updatedChar.analytics.epicPhrases.length > 20) {
+                updatedChar.analytics.epicPhrases.shift();
+            }
+            return { char: updatedChar, log: `У героя родилась мысль: "${phrase}"` };
+        }
+    } catch (e) {
+        // Fallback silently on any error
     }
 
     const phrase = getFallbackThought(character);
@@ -715,15 +820,11 @@ async function processEpicPhraseGeneration(character: Character): Promise<{ char
             updatedChar.analytics.epicPhrases = [];
         }
         updatedChar.analytics.epicPhrases.push(phrase);
-        
-        // Limit to last 20 phrases
         if (updatedChar.analytics.epicPhrases.length > 20) {
             updatedChar.analytics.epicPhrases.shift();
         }
-        
         return { char: updatedChar, log: `У героя родилась мысль: "${phrase}"` };
     }
-    
     return { char: character, log: null };
 }
 

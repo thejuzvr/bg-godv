@@ -119,3 +119,59 @@ export async function deleteEnemy(id: string) {
 }
 
 
+// ===== THOUGHTS =====
+export async function listThoughts() {
+  await requireAdmin();
+  return await gameDataService.getAllThoughts();
+}
+
+export async function getThought(id: string) {
+  await requireAdmin();
+  return await gameDataService.getThoughtById(id);
+}
+
+export async function createThought(data: { id: string; text: string; tags?: string[] | null; conditions?: Record<string, any> | null; weight?: number | null; cooldownKey?: string | null; locale?: string | null; isEnabled?: boolean | null; }) {
+  await requireAdmin();
+  return await gameDataService.createThought(data);
+}
+
+export async function updateThought(id: string, data: Partial<{ text: string; tags: string[] | null; conditions: Record<string, any> | null; weight: number | null; cooldownKey: string | null; locale: string | null; isEnabled: boolean | null }>) {
+  await requireAdmin();
+  return await gameDataService.updateThought(id, data);
+}
+
+export async function deleteThought(id: string) {
+  await requireAdmin();
+  await gameDataService.deleteThought(id);
+  return { success: true };
+}
+
+// ===== NPC DIALOGUE LINES =====
+export async function listNpcDialogueLines(npcId?: string) {
+  await requireAdmin();
+  if (npcId) return await gameDataService.getNpcDialogueLinesByNpcId(npcId);
+  return await gameDataService.getAllNpcDialogueLines();
+}
+
+export async function getNpcDialogueLine(id: string) {
+  await requireAdmin();
+  return await gameDataService.getNpcDialogueLineById(id);
+}
+
+export async function createNpcDialogueLine(data: { npcId: string; text: string; tags?: string[] | null; conditions?: Record<string, any> | null; weight?: number | null; cooldownKey?: string | null; locale?: string | null; isEnabled?: boolean | null; }) {
+  await requireAdmin();
+  return await gameDataService.createNpcDialogueLine(data);
+}
+
+export async function updateNpcDialogueLine(id: string, data: Partial<{ text: string; tags: string[] | null; conditions: Record<string, any> | null; weight: number | null; cooldownKey: string | null; locale: string | null; isEnabled: boolean | null }>) {
+  await requireAdmin();
+  return await gameDataService.updateNpcDialogueLine(id, data);
+}
+
+export async function deleteNpcDialogueLine(id: string) {
+  await requireAdmin();
+  await gameDataService.deleteNpcDialogueLine(id);
+  return { success: true };
+}
+
+

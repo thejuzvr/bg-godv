@@ -6,6 +6,7 @@
  */
 
 import type { Character, WorldState, ActiveEffect, ActiveAction, EquipmentSlot, CharacterInventoryItem, ActiveCryptQuest, Weather, CharacterSkills, CharacterAttributes } from "@/types/character";
+import { selectActionSimple } from './policy';
 import type { GameData } from "@/services/gameDataService";
 import { allSpells } from "@/data/spells";
 import { allPerks } from "@/data/perks";
@@ -128,7 +129,7 @@ function priorityToWeight(basePriority: Priority): number {
 // Action Definitions
 // ==================================
 
-interface Action {
+export interface Action {
     name: string;
     type: 'combat' | 'quest' | 'explore' | 'travel' | 'rest' | 'learn' | 'social' | 'misc' | 'system';
     canPerform: (character: Character, worldState: WorldState, gameData: GameData) => boolean;
@@ -1353,7 +1354,7 @@ const startCryptExplorationAction: Action = {
     }
 };
 
-const wanderAction: Action = {
+export const wanderAction: Action = {
     name: "Слоняться без дела",
     type: "misc",
     getWeight: () => 1, // Lowest possible weight, a true fallback
@@ -1901,7 +1902,7 @@ const tradeWithNPCAction: Action = {
 // ==================================
 
 const reflexActions: ReflexAction[] = [fleeFromCombatReflex, useBuffPotionReflex, usePotionReflex];
-const idleActions: Action[] = [
+export const idleActions: Action[] = [
     makeCampAction,
     autoAssignPointsAction,
     startCryptExplorationAction,
@@ -1924,9 +1925,9 @@ const idleActions: Action[] = [
     interactWithNPCAction,
     tradeWithNPCAction
 ];
-const combatActions: Action[] = [fightEnemyAction];
-const deadActions: Action[] = [takeSovngardeQuestAction, wanderSovngardeAction];
-const exploringActions: Action[] = [processCryptStageAction];
+export const combatActions: Action[] = [fightEnemyAction];
+export const deadActions: Action[] = [takeSovngardeQuestAction, wanderSovngardeAction];
+export const exploringActions: Action[] = [processCryptStageAction];
 
 
 /**
@@ -2025,30 +2026,9 @@ async function determineNextAction(character: Character, gameData: GameData): Pr
         }
     }
 
-    // 7. Weighted Random Selection
-    const weightedActions = possibleActions.map(action => {
-        const base = action.getWeight?.(character, worldState, gameData) ?? 0;
-        // Apply diversity multiplier to penalize repeated recent action types
-        const diversity = getRepetitionPenalty(character, action.type);
-        const weight = base * diversity;
-        return { action, weight };
-    }).filter(wa => wa.weight > 0);
-
-    const totalWeight = weightedActions.reduce((sum, wa) => sum + wa.weight, 0);
-
-    if (totalWeight === 0) {
-        return wanderAction;
-    }
-
-    let random = Math.random() * totalWeight;
-    for (const wa of weightedActions) {
-        if (random < wa.weight) {
-            return wa.action;
-        }
-        random -= wa.weight;
-    }
-
-    return wanderAction; // Fallback to wander
+    // 7. Simplified policy selection (Godville-like): weighted random + variety boost
+    const choice = selectActionSimple(possibleActions, { character, gameData });
+    return choice ?? wanderAction;
 }
 
 /**

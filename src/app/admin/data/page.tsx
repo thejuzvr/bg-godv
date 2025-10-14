@@ -26,9 +26,196 @@ import {
   listItems, getItem, createItem, updateItem, deleteItem,
   listNpcs, getNpc, createNpc, updateNpc, deleteNpc,
   listEnemies, getEnemy, createEnemy, updateEnemy, deleteEnemy,
+  listThoughts, getThought, createThought, updateThought, deleteThought,
+  listNpcDialogueLines, getNpcDialogueLine, createNpcDialogueLine, updateNpcDialogueLine, deleteNpcDialogueLine,
 } from "./actions";
 
-type TabKey = "locations" | "items" | "npcs" | "enemies";
+type TabKey = "locations" | "items" | "npcs" | "enemies" | "thoughts";
+
+function NpcDialogueManager({ npcId }: { npcId: string }) {
+  const { toast } = useToast();
+  const [isBusy, setIsBusy] = useState(false);
+  const [lines, setLines] = useState<Array<{ id: string; npcId: string; text: string; tags: string[] | null; conditions: any | null; weight: number; cooldownKey?: string | null; locale: string; isEnabled: boolean }>>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const isEditing = useMemo(() => editingId !== null, [editingId]);
+
+  const [draft, setDraft] = useState<{ id?: string; npcId: string; text: string; tags: string[] | null; conditions: any | null; weight: number; cooldownKey?: string | null; locale: string; isEnabled: boolean }>({ npcId, text: "", tags: [], conditions: null, weight: 1, cooldownKey: null, locale: 'ru', isEnabled: true });
+  const [tagsStr, setTagsStr] = useState<string>("[]");
+  const [conditionsStr, setConditionsStr] = useState<string>("{}");
+
+  useEffect(() => {
+    void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [npcId]);
+
+  async function refresh() {
+    setIsBusy(true);
+    try {
+      const res = await listNpcDialogueLines(npcId);
+      setLines(res as any);
+    } catch (e: any) {
+      toast({ title: 'Ошибка загрузки реплик', description: e?.message, variant: 'destructive' });
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  function isValidJson(value: string): boolean {
+    if (!value || value.trim() === "") return true;
+    try { JSON.parse(value); return true; } catch { return false; }
+  }
+  function beautifyJson(value: string, fallback: string = ""): string {
+    try { return JSON.stringify(JSON.parse(value || fallback), null, 2); } catch { return value; }
+  }
+  function parseJsonOrToast<T>(value: string, fallback: T, field: string): T | null {
+    if (!value || value.trim() === "") return fallback;
+    try { return JSON.parse(value) as T; } catch (e: any) {
+      toast({ title: `Некорректный JSON в поле ${field}`, description: e?.message || 'Ошибка парсинга', variant: 'destructive' });
+      return null;
+    }
+  }
+
+  function startCreate() {
+    setEditingId(null);
+    setDraft({ npcId, text: "", tags: [], conditions: null, weight: 1, cooldownKey: null, locale: 'ru', isEnabled: true });
+    setTagsStr("[]");
+    setConditionsStr("{}");
+  }
+
+  async function startEdit(id: string) {
+    setEditingId(id);
+    setIsBusy(true);
+    try {
+      const val = await getNpcDialogueLine(id);
+      if (val) {
+        setDraft({
+          id: (val as any).id,
+          npcId: (val as any).npcId,
+          text: (val as any).text,
+          tags: (val as any).tags || [],
+          conditions: (val as any).conditions || null,
+          weight: (val as any).weight || 1,
+          cooldownKey: (val as any).cooldownKey || null,
+          locale: (val as any).locale || 'ru',
+          isEnabled: !!(val as any).isEnabled,
+        });
+        setTagsStr(JSON.stringify((val as any).tags || [], null, 2));
+        setConditionsStr(JSON.stringify((val as any).conditions || {}, null, 2));
+      }
+    } catch (e: any) {
+      toast({ title: 'Ошибка', description: e?.message || 'Не удалось загрузить реплику', variant: 'destructive' });
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function save() {
+    setIsBusy(true);
+    try {
+      const tags = parseJsonOrToast<string[]>(tagsStr, [], 'tags');
+      if (tags === null) return setIsBusy(false);
+      const conditions = parseJsonOrToast<any>(conditionsStr, null as any, 'conditions');
+      if (conditions === null && conditionsStr.trim() !== "") return setIsBusy(false);
+      const payload = { text: draft.text, tags, conditions, weight: draft.weight, cooldownKey: draft.cooldownKey ?? null, locale: draft.locale, isEnabled: !!draft.isEnabled };
+      if (isEditing && draft.id) await updateNpcDialogueLine(draft.id, payload as any);
+      else await createNpcDialogueLine({ npcId, ...payload });
+      toast({ title: 'Сохранено' });
+      await refresh();
+      startCreate();
+    } catch (e: any) {
+      toast({ title: 'Ошибка сохранения', description: e?.message || 'Проверьте введенные данные', variant: 'destructive' });
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function remove(id: string) {
+    if (!confirm('Удалить реплику?')) return;
+    setIsBusy(true);
+    try {
+      await deleteNpcDialogueLine(id);
+      toast({ title: 'Удалено' });
+      await refresh();
+      startCreate();
+    } catch (e: any) {
+      toast({ title: 'Ошибка удаления', description: e?.message || 'Не удалось удалить', variant: 'destructive' });
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-8">
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="font-semibold">Реплики NPC</h4>
+        <div className="flex gap-2">
+          <Button size="sm" variant="secondary" onClick={() => refresh()} disabled={isBusy}>Обновить</Button>
+          <Button size="sm" onClick={() => save()} disabled={isBusy || !draft.text}>Сохранить реплику</Button>
+          <Button size="sm" variant="outline" onClick={() => startCreate()} disabled={isBusy}>Создать новую</Button>
+        </div>
+      </div>
+      <div className="grid lg:grid-cols-2 gap-4">
+        <div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>ID</TableHead>
+                <TableHead>Текст</TableHead>
+                <TableHead>Вкл</TableHead>
+                <TableHead className="text-right">Действия</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {lines.map(l => (
+                <TableRow key={l.id}>
+                  <TableCell className="max-w-[140px] truncate" title={l.id}>{l.id}</TableCell>
+                  <TableCell className="max-w-[260px] truncate" title={l.text}>{l.text}</TableCell>
+                  <TableCell>{l.isEnabled ? '✓' : ''}</TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button size="sm" variant="outline" onClick={() => startEdit(l.id)}>Редактировать</Button>
+                      <Button size="sm" variant="destructive" onClick={() => remove(l.id)}><Trash2 className="h-4 w-4" /></Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+        <div className="space-y-3">
+          <Label>Текст</Label>
+          <Textarea className="min-h-[100px]" value={draft.text} onChange={(e) => setDraft(prev => ({ ...(prev as any), text: e.target.value }))} />
+          <div className="flex items-center justify-between">
+            <Label>Теги (JSON [string])</Label>
+            <div className="flex gap-2 text-xs">
+              <Button variant="ghost" size="sm" onClick={() => setTagsStr(beautifyJson(tagsStr, "[]"))}>Форматировать</Button>
+              {!isValidJson(tagsStr) && <span className="text-red-500">Некорректный JSON</span>}
+            </div>
+          </div>
+          <Textarea className="font-mono text-xs min-h-[100px]" value={tagsStr} onChange={(e) => setTagsStr(e.target.value)} placeholder='["greeting"]' />
+          <div className="flex items-center justify-between">
+            <Label>Условия (JSON)</Label>
+            <div className="flex gap-2 text-xs">
+              <Button variant="ghost" size="sm" onClick={() => setConditionsStr(beautifyJson(conditionsStr, "{}"))}>Форматировать</Button>
+              {!isValidJson(conditionsStr) && <span className="text-red-500">Некорректный JSON</span>}
+            </div>
+          </div>
+          <Textarea className="font-mono text-xs min-h-[120px]" value={conditionsStr} onChange={(e) => setConditionsStr(e.target.value)} placeholder='{"locations":["whiterun"]}' />
+          <Label>Вес</Label>
+          <Input type="number" value={draft.weight ?? 1} onChange={(e) => setDraft(prev => ({ ...(prev as any), weight: Number(e.target.value) }))} />
+          <Label>Cooldown Key</Label>
+          <Input value={draft.cooldownKey ?? ""} onChange={(e) => setDraft(prev => ({ ...(prev as any), cooldownKey: e.target.value || null }))} />
+          <Label>Locale</Label>
+          <Input value={draft.locale || 'ru'} onChange={(e) => setDraft(prev => ({ ...(prev as any), locale: e.target.value }))} />
+          <div className="flex items-center gap-2">
+            <Switch checked={!!draft.isEnabled} onCheckedChange={(v) => setDraft(prev => ({ ...(prev as any), isEnabled: !!v }))} />
+            <span>Включено</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function DataManagerPage() {
   const { user, loading } = useAuth(true);
@@ -43,6 +230,7 @@ export default function DataManagerPage() {
   const [items, setItems] = useState<CharacterInventoryItem[]>([]);
   const [npcs, setNpcs] = useState<NPC[]>([]);
   const [enemies, setEnemies] = useState<Enemy[]>([]);
+  const [thoughts, setThoughts] = useState<Array<{ id: string; text: string; tags: string[]; conditions: any | null; weight: number; cooldownKey?: string | null; locale: string; isEnabled: boolean }>>([]);
 
   // Edit buffers
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -52,6 +240,7 @@ export default function DataManagerPage() {
   const [itemDraft, setItemDraft] = useState<CharacterInventoryItem | null>(null);
   const [npcDraft, setNpcDraft] = useState<NPC | null>(null);
   const [enemyDraft, setEnemyDraft] = useState<Enemy | null>(null);
+  const [thoughtDraft, setThoughtDraft] = useState<{ id: string; text: string; tags: string[]; conditions: any | null; weight: number; cooldownKey?: string | null; locale: string; isEnabled: boolean } | null>(null);
 
   const locationTypes = ["city", "town", "ruin", "dungeon", "camp"] as const;
   const itemTypes = ["weapon", "armor", "potion", "misc", "gold", "spell_tome", "key_item", "learning_book", "food"] as const;
@@ -64,6 +253,8 @@ export default function DataManagerPage() {
   const [npcInventoryStr, setNpcInventoryStr] = useState<string>("");
   const [enemyGuaranteedDropStr, setEnemyGuaranteedDropStr] = useState<string>("");
   const [enemyAppliesEffectStr, setEnemyAppliesEffectStr] = useState<string>("");
+  const [thoughtTagsStr, setThoughtTagsStr] = useState<string>("[]");
+  const [thoughtConditionsStr, setThoughtConditionsStr] = useState<string>("{}");
 
   const isValidJson = (value: string): boolean => {
     if (!value || value.trim() === "") return true; // empty allowed
@@ -104,6 +295,7 @@ export default function DataManagerPage() {
     setItemDraft(null);
     setNpcDraft(null);
     setEnemyDraft(null);
+    setThoughtDraft(null);
   };
 
   useEffect(() => {
@@ -116,16 +308,18 @@ export default function DataManagerPage() {
   async function refreshAll() {
     setIsBusy(true);
     try {
-      const [locs, its, ns, es] = await Promise.all([
+      const [locs, its, ns, es, ths] = await Promise.all([
         listLocations(),
         listItems(),
         listNpcs(),
         listEnemies(),
+        listThoughts(),
       ]);
       setLocations(locs);
       setItems(its);
       setNpcs(ns);
       setEnemies(es);
+      setThoughts(ths as any);
     } catch (e: any) {
       toast({ title: "Ошибка загрузки", description: e?.message || "Не удалось загрузить данные", variant: "destructive" });
     } finally {
@@ -137,7 +331,8 @@ export default function DataManagerPage() {
     if (activeTab === "locations") return locations;
     if (activeTab === "items") return items;
     if (activeTab === "npcs") return npcs;
-    return enemies;
+    if (activeTab === "enemies") return enemies;
+    return thoughts;
   }
 
   function exportCurrent() {
@@ -189,6 +384,18 @@ export default function DataManagerPage() {
             const exist = enemies.find(e => e.id === rec.id) || await getEnemy(rec.id);
             const payload = { name: rec.name ?? exist?.name ?? '', health: rec.health ?? exist?.health ?? 10, damage: rec.damage ?? exist?.damage ?? 2, xp: rec.xp ?? exist?.xp ?? 5, level: rec.level ?? exist?.level ?? 1, minLevel: rec.minLevel ?? (exist as any)?.minLevel ?? null, isUnique: rec.isUnique ?? (exist as any)?.isUnique ?? false, guaranteedDrop: rec.guaranteedDrop ?? (exist as any)?.guaranteedDrop ?? null, appliesEffect: rec.appliesEffect ?? (exist as any)?.appliesEffect ?? null, armor: rec.armor ?? (exist as any)?.armor ?? null };
             if (exist) await updateEnemy(rec.id, payload); else await createEnemy({ id: rec.id, ...payload });
+          } else if (activeTab === 'thoughts') {
+            const exist = thoughts.find(t => t.id === rec.id) || await getThought(rec.id);
+            const payload = {
+              text: rec.text ?? exist?.text ?? '',
+              tags: rec.tags ?? (exist as any)?.tags ?? [],
+              conditions: rec.conditions ?? (exist as any)?.conditions ?? null,
+              weight: rec.weight ?? (exist as any)?.weight ?? 1,
+              cooldownKey: rec.cooldownKey ?? (exist as any)?.cooldownKey ?? null,
+              locale: rec.locale ?? (exist as any)?.locale ?? 'ru',
+              isEnabled: rec.isEnabled ?? (exist as any)?.isEnabled ?? true,
+            };
+            if (exist) await updateThought(rec.id, payload as any); else await createThought({ id: rec.id, ...payload });
           }
           success++;
         } catch {
@@ -234,6 +441,10 @@ export default function DataManagerPage() {
       setEnemyDraft({ id: "", name: "", health: 10, damage: 2, xp: 5, level: 1 } as Enemy);
       setEnemyGuaranteedDropStr("[]");
       setEnemyAppliesEffectStr("{}");
+    } else if (entity === "thoughts") {
+      setThoughtDraft({ id: "", text: "", tags: [], conditions: null, weight: 1, cooldownKey: null, locale: "ru", isEnabled: true });
+      setThoughtTagsStr("[]");
+      setThoughtConditionsStr("{}");
     }
   }
 
@@ -259,6 +470,22 @@ export default function DataManagerPage() {
         setEnemyDraft(val as Enemy);
         setEnemyGuaranteedDropStr(val && (val as any).guaranteedDrop ? JSON.stringify((val as any).guaranteedDrop, null, 2) : "[]");
         setEnemyAppliesEffectStr(val && (val as any).appliesEffect ? JSON.stringify((val as any).appliesEffect, null, 2) : "{}");
+      } else if (entity === "thoughts") {
+        const val = await getThought(id);
+        if (val) {
+          setThoughtDraft({
+            id: val.id,
+            text: val.text,
+            tags: (val as any).tags || [],
+            conditions: (val as any).conditions || null,
+            weight: (val as any).weight || 1,
+            cooldownKey: (val as any).cooldownKey || null,
+            locale: (val as any).locale || 'ru',
+            isEnabled: !!(val as any).isEnabled,
+          });
+          setThoughtTagsStr(JSON.stringify((val as any).tags || [], null, 2));
+          setThoughtConditionsStr(JSON.stringify((val as any).conditions || {}, null, 2));
+        }
       }
     } catch (e: any) {
       toast({ title: "Ошибка", description: e?.message || "Не удалось загрузить запись", variant: "destructive" });
@@ -310,6 +537,15 @@ export default function DataManagerPage() {
         if (isEditing) await updateEnemy(enemyDraft.id, payload);
         else await createEnemy({ id: enemyDraft.id, ...payload });
       }
+      if (activeTab === "thoughts" && thoughtDraft) {
+        const tags = parseJsonOrToast<string[]>(thoughtTagsStr, [], "tags");
+        if (tags === null) return setIsBusy(false);
+        const conditions = parseJsonOrToast<any>(thoughtConditionsStr, null as any, "conditions");
+        if (conditions === null && thoughtConditionsStr.trim() !== "") return setIsBusy(false);
+        const payload = { text: thoughtDraft.text, tags, conditions, weight: thoughtDraft.weight, cooldownKey: thoughtDraft.cooldownKey ?? null, locale: thoughtDraft.locale, isEnabled: !!thoughtDraft.isEnabled };
+        if (isEditing) await updateThought(thoughtDraft.id, payload as any);
+        else await createThought({ id: thoughtDraft.id, ...payload });
+      }
       toast({ title: "Сохранено" });
       resetDrafts();
       await refreshAll();
@@ -328,6 +564,7 @@ export default function DataManagerPage() {
       if (activeTab === "items") await deleteItem(id);
       if (activeTab === "npcs") await deleteNpc(id);
       if (activeTab === "enemies") await deleteEnemy(id);
+      if (activeTab === "thoughts") await deleteThought(id);
       toast({ title: "Удалено" });
       resetDrafts();
       await refreshAll();
@@ -386,11 +623,12 @@ export default function DataManagerPage() {
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as TabKey); resetDrafts(); }}>
-            <TabsList className="grid grid-cols-4 w-full">
+            <TabsList className="grid grid-cols-5 w-full">
               <TabsTrigger value="locations">Локации</TabsTrigger>
               <TabsTrigger value="items">Предметы</TabsTrigger>
               <TabsTrigger value="npcs">NPC</TabsTrigger>
               <TabsTrigger value="enemies">Враги</TabsTrigger>
+              <TabsTrigger value="thoughts">Мысли</TabsTrigger>
             </TabsList>
 
             <TabsContent value="locations" className="grid lg:grid-cols-2 gap-6">
@@ -604,6 +842,74 @@ export default function DataManagerPage() {
                   <Input id="npc-combat" value={(npcDraft as any)?.companionDetails?.combatStyle ?? ""} onChange={(e) => setNpcDraft(prev => ({ ...(prev as any), companionDetails: { ...(prev as any)?.companionDetails, combatStyle: e.target.value } }))} disabled={isBusy} />
                   <Label htmlFor="npc-skill">Primary Skill</Label>
                   <Input id="npc-skill" value={(npcDraft as any)?.companionDetails?.primarySkill ?? ""} onChange={(e) => setNpcDraft(prev => ({ ...(prev as any), companionDetails: { ...(prev as any)?.companionDetails, primarySkill: e.target.value } }))} disabled={isBusy} />
+                </div>
+                {/* NPC Dialogue Lines sub-table */}
+                {npcDraft && (
+                  <NpcDialogueManager npcId={npcDraft.id} />
+                )}
+              </div>
+            </TabsContent>
+            <TabsContent value="thoughts" className="grid lg:grid-cols-2 gap-6">
+              <div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Текст</TableHead>
+                      <TableHead>Вкл</TableHead>
+                      <TableHead className="text-right">Действия</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {thoughts.map((t) => (
+                      <TableRow key={t.id}>
+                        <TableCell>{t.id}</TableCell>
+                        <TableCell className="max-w-[360px] truncate" title={t.text}>{t.text}</TableCell>
+                        <TableCell>{t.isEnabled ? '✓' : ''}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" variant="outline" onClick={() => startEdit("thoughts", t.id)}>Редактировать</Button>
+                            <Button size="sm" variant="destructive" onClick={() => removeCurrent(t.id)}><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="space-y-4">
+                <h3 className="font-semibold">{isEditing ? "Редактирование мысли" : "Новая мысль"}</h3>
+                <div className="grid gap-3">
+                  <Label htmlFor="th-id">ID</Label>
+                  <Input id="th-id" value={thoughtDraft?.id || ""} onChange={(e) => setThoughtDraft(prev => ({ ...(prev || { id: "", text: "", tags: [], conditions: null, weight: 1, cooldownKey: null, locale: 'ru', isEnabled: true }), id: e.target.value }))} disabled={isEditing || isBusy} />
+                  <Label htmlFor="th-text">Текст</Label>
+                  <Textarea id="th-text" className="min-h-[100px]" value={thoughtDraft?.text || ""} onChange={(e) => setThoughtDraft(prev => ({ ...(prev as any), text: e.target.value }))} disabled={isBusy} />
+                  <div className="flex items-center justify-between">
+                    <Label>Теги (JSON [string])</Label>
+                    <div className="flex gap-2 text-xs">
+                      <Button variant="ghost" size="sm" onClick={() => setThoughtTagsStr(beautifyJson(thoughtTagsStr, "[]"))}>Форматировать</Button>
+                      {!isValidJson(thoughtTagsStr) && <span className="text-red-500">Некорректный JSON</span>}
+                    </div>
+                  </div>
+                  <Textarea className="font-mono text-xs min-h-[120px]" value={thoughtTagsStr} onChange={(e) => setThoughtTagsStr(e.target.value)} placeholder={`["meme","lore"]`} />
+                  <div className="flex items-center justify-between">
+                    <Label>Условия (JSON)</Label>
+                    <div className="flex gap-2 text-xs">
+                      <Button variant="ghost" size="sm" onClick={() => setThoughtConditionsStr(beautifyJson(thoughtConditionsStr, "{}"))}>Форматировать</Button>
+                      {!isValidJson(thoughtConditionsStr) && <span className="text-red-500">Некорректный JSON</span>}
+                    </div>
+                  </div>
+                  <Textarea className="font-mono text-xs min-h-[120px]" value={thoughtConditionsStr} onChange={(e) => setThoughtConditionsStr(e.target.value)} placeholder={`{"status":["idle"],"weather":["Clear"],"moodMin":40}`} />
+                  <Label htmlFor="th-weight">Вес</Label>
+                  <Input id="th-weight" type="number" value={thoughtDraft?.weight ?? 1} onChange={(e) => setThoughtDraft(prev => ({ ...(prev as any), weight: Number(e.target.value) }))} disabled={isBusy} />
+                  <Label htmlFor="th-cooldown">Cooldown Key</Label>
+                  <Input id="th-cooldown" value={thoughtDraft?.cooldownKey ?? ""} onChange={(e) => setThoughtDraft(prev => ({ ...(prev as any), cooldownKey: e.target.value || null }))} disabled={isBusy} />
+                  <Label htmlFor="th-locale">Locale</Label>
+                  <Input id="th-locale" value={thoughtDraft?.locale || "ru"} onChange={(e) => setThoughtDraft(prev => ({ ...(prev as any), locale: e.target.value }))} disabled={isBusy} />
+                  <div className="flex items-center gap-2">
+                    <Switch checked={!!thoughtDraft?.isEnabled} onCheckedChange={(v) => setThoughtDraft(prev => ({ ...(prev as any), isEnabled: !!v }))} />
+                    <span>Включено</span>
+                  </div>
                 </div>
               </div>
             </TabsContent>

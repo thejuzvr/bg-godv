@@ -17,6 +17,7 @@
     "start:all": "concurrently \"npm run start\" \"npm run worker\"",
     "migrate:from-neon": "tsx scripts/migrate-from-neon.ts",
     "migrate:game-data": "tsx scripts/migrate-game-data.ts",
+    "seed:thoughts": "tsx scripts/seed-thoughts.ts",
     "test": "vitest run"
   },
   "dependencies": {

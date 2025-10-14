@@ -6,7 +6,7 @@ import pkg from 'pg';
 const { Pool } = pkg;
 
 import * as schema from '../shared/schema';
-import { gameLocations, gameItems, gameNpcs, gameEnemies, type GameLocation, type GameItem, type GameNpc, type GameEnemy } from '../shared/schema';
+import { gameLocations, gameItems, gameNpcs, gameEnemies, gameThoughts, npcDialogueLines, type GameLocation, type GameItem, type GameNpc, type GameEnemy, type GameThought, type NpcDialogueLine } from '../shared/schema';
 import type { Location } from '../src/types/location';
 import type { CharacterInventoryItem } from '../src/types/character';
 import type { NPC } from '../src/types/npc';
@@ -381,6 +381,180 @@ export class GameDataService {
 
   async deleteEnemy(id: string): Promise<void> {
     await db.delete(gameEnemies).where(eq(gameEnemies.id, id));
+  }
+
+  // ===== THOUGHTS =====
+  async getAllThoughts(): Promise<Array<{
+    id: string;
+    text: string;
+    tags: string[];
+    conditions: Record<string, any> | null;
+    weight: number;
+    cooldownKey?: string | null;
+    locale: string;
+    isEnabled: boolean;
+  }>> {
+    const rows = await db.select().from(gameThoughts);
+    return rows.map(r => ({
+      id: r.id,
+      text: r.text,
+      tags: (r.tags as any) || [],
+      conditions: (r.conditions as any) || null,
+      weight: r.weight || 1,
+      cooldownKey: (r.cooldownKey as any) || null,
+      locale: r.locale || 'ru',
+      isEnabled: !!r.isEnabled,
+    }));
+  }
+
+  async getThoughtById(id: string): Promise<{
+    id: string;
+    text: string;
+    tags: string[];
+    conditions: Record<string, any> | null;
+    weight: number;
+    cooldownKey?: string | null;
+    locale: string;
+    isEnabled: boolean;
+  } | null> {
+    const rows = await db.select().from(gameThoughts).where(eq(gameThoughts.id, id));
+    const r = rows[0];
+    if (!r) return null;
+    return {
+      id: r.id,
+      text: r.text,
+      tags: (r.tags as any) || [],
+      conditions: (r.conditions as any) || null,
+      weight: r.weight || 1,
+      cooldownKey: (r.cooldownKey as any) || null,
+      locale: r.locale || 'ru',
+      isEnabled: !!r.isEnabled,
+    };
+  }
+
+  async createThought(payload: {
+    id: string;
+    text: string;
+    tags?: string[] | null;
+    conditions?: Record<string, any> | null;
+    weight?: number | null;
+    cooldownKey?: string | null;
+    locale?: string | null;
+    isEnabled?: boolean | null;
+  }): Promise<NonNullable<Awaited<ReturnType<GameDataService['getThoughtById']>>>> {
+    await db.insert(gameThoughts).values({
+      id: payload.id,
+      text: payload.text,
+      tags: payload.tags ?? null,
+      conditions: payload.conditions ?? null,
+      weight: payload.weight ?? 1,
+      cooldownKey: payload.cooldownKey ?? null,
+      locale: payload.locale ?? 'ru',
+      isEnabled: payload.isEnabled ?? true,
+    });
+    const created = await this.getThoughtById(payload.id);
+    if (!created) throw new Error('Failed to create thought');
+    return created;
+  }
+
+  async updateThought(id: string, updates: Partial<{
+    text: string;
+    tags: string[] | null;
+    conditions: Record<string, any> | null;
+    weight: number | null;
+    cooldownKey: string | null;
+    locale: string | null;
+    isEnabled: boolean | null;
+  }>): Promise<ReturnType<GameDataService['getThoughtById']>> {
+    const set: any = {};
+    if (updates.text !== undefined) set.text = updates.text;
+    if (updates.tags !== undefined) set.tags = updates.tags as any;
+    if (updates.conditions !== undefined) set.conditions = updates.conditions as any;
+    if (updates.weight !== undefined) set.weight = updates.weight as any;
+    if (updates.cooldownKey !== undefined) set.cooldownKey = updates.cooldownKey as any;
+    if (updates.locale !== undefined) set.locale = updates.locale as any;
+    if (updates.isEnabled !== undefined) set.isEnabled = updates.isEnabled as any;
+    if (Object.keys(set).length > 0) {
+      set.updatedAt = new Date();
+      await db.update(gameThoughts).set(set).where(eq(gameThoughts.id, id));
+    }
+    return await this.getThoughtById(id);
+  }
+
+  async deleteThought(id: string): Promise<void> {
+    await db.delete(gameThoughts).where(eq(gameThoughts.id, id));
+  }
+
+  // ===== NPC DIALOGUE LINES =====
+  async getAllNpcDialogueLines(): Promise<Array<NpcDialogueLine>> {
+    const rows = await db.select().from(npcDialogueLines);
+    return rows as unknown as NpcDialogueLine[];
+  }
+
+  async getNpcDialogueLinesByNpcId(npcId: string): Promise<Array<NpcDialogueLine>> {
+    const rows = await db.select().from(npcDialogueLines).where(eq(npcDialogueLines.npcId, npcId));
+    return rows as unknown as NpcDialogueLine[];
+  }
+
+  async getNpcDialogueLineById(id: string): Promise<NpcDialogueLine | null> {
+    const rows = await db.select().from(npcDialogueLines).where(eq(npcDialogueLines.id, id));
+    return (rows[0] as unknown as NpcDialogueLine) || null;
+  }
+
+  async createNpcDialogueLine(payload: {
+    id?: string; // optional, default uuid set in schema
+    npcId: string;
+    text: string;
+    tags?: string[] | null;
+    conditions?: Record<string, any> | null;
+    weight?: number | null;
+    cooldownKey?: string | null;
+    locale?: string | null;
+    isEnabled?: boolean | null;
+  }): Promise<NpcDialogueLine> {
+    await db.insert(npcDialogueLines).values({
+      id: (payload as any).id ?? undefined,
+      npcId: payload.npcId,
+      text: payload.text,
+      tags: payload.tags ?? null,
+      conditions: payload.conditions ?? null,
+      weight: payload.weight ?? 1,
+      cooldownKey: payload.cooldownKey ?? null,
+      locale: payload.locale ?? 'ru',
+      isEnabled: payload.isEnabled ?? true,
+    });
+    const created = await db.select().from(npcDialogueLines).where(eq(npcDialogueLines.npcId, payload.npcId));
+    const last = created[created.length - 1];
+    if (!last) throw new Error('Failed to create dialogue line');
+    return last as unknown as NpcDialogueLine;
+  }
+
+  async updateNpcDialogueLine(id: string, updates: Partial<{
+    text: string;
+    tags: string[] | null;
+    conditions: Record<string, any> | null;
+    weight: number | null;
+    cooldownKey: string | null;
+    locale: string | null;
+    isEnabled: boolean | null;
+  }>): Promise<NpcDialogueLine | null> {
+    const set: any = {};
+    if (updates.text !== undefined) set.text = updates.text;
+    if (updates.tags !== undefined) set.tags = updates.tags as any;
+    if (updates.conditions !== undefined) set.conditions = updates.conditions as any;
+    if (updates.weight !== undefined) set.weight = updates.weight as any;
+    if (updates.cooldownKey !== undefined) set.cooldownKey = updates.cooldownKey as any;
+    if (updates.locale !== undefined) set.locale = updates.locale as any;
+    if (updates.isEnabled !== undefined) set.isEnabled = updates.isEnabled as any;
+    if (Object.keys(set).length > 0) {
+      set.updatedAt = new Date();
+      await db.update(npcDialogueLines).set(set).where(eq(npcDialogueLines.id, id));
+    }
+    return await this.getNpcDialogueLineById(id);
+  }
+
+  async deleteNpcDialogueLine(id: string): Promise<void> {
+    await db.delete(npcDialogueLines).where(eq(npcDialogueLines.id, id));
   }
 }
 

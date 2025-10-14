@@ -15,6 +15,13 @@
       "when": 1759841312664,
       "tag": "0001_boring_the_enforcers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1760476289830,
+      "tag": "0002_elite_titania",
+      "breakpoints": true
     }
   ]
 }
