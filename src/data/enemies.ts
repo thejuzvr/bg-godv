@@ -252,6 +252,117 @@ export const initialEnemies: Enemy[] = [
       goldMax: 40
     }
   },
+  // === DISEASE SOURCES ===
+  {
+    id: 'vampire_thrall',
+    name: 'Прислужник вампира',
+    health: 55,
+    damage: 7,
+    xp: 80,
+    level: 5,
+    armor: 12,
+    lootTable: {
+      common: [ { id: 'misc_lockpicks', quantity: 1, chance: 0.6 } ],
+      uncommon: [ { id: 'potion_health_weak', quantity: 1, chance: 0.25 } ],
+      rare: [],
+      legendary: [],
+      goldChance: 0.6,
+      goldMin: 20,
+      goldMax: 45
+    },
+    appliesEffect: {
+      id: 'disease_vampirism',
+      name: 'Вампиризм',
+      description: 'Нечистая кровь наполняет вены. Днем мучительно, ночью терпимо. Требуется кровь.',
+      icon: 'Moon',
+      type: 'debuff',
+      chance: 0.15,
+      duration: 0
+    }
+  },
+  {
+    id: 'vampire_master',
+    name: 'Повелитель вампиров',
+    health: 110,
+    damage: 14,
+    xp: 220,
+    level: 10,
+    armor: 15,
+    isUnique: false,
+    lootTable: {
+      common: [ { id: 'misc_lockpicks', quantity: 2, chance: 0.7 } ],
+      uncommon: [ { id: 'potion_health_weak', quantity: 1, chance: 0.35 } ],
+      rare: [],
+      legendary: [],
+      goldChance: 0.8,
+      goldMin: 40,
+      goldMax: 90
+    },
+    appliesEffect: {
+      id: 'disease_vampirism',
+      name: 'Вампиризм',
+      description: 'Нечистая кровь наполняет вены. Днем мучительно, ночью терпимо. Требуется кровь.',
+      icon: 'Moon',
+      type: 'debuff',
+      chance: 0.25,
+      duration: 0
+    }
+  },
+  {
+    id: 'werewolf',
+    name: 'Оборотень',
+    health: 95,
+    damage: 13,
+    xp: 180,
+    level: 9,
+    armor: 14,
+    lootTable: {
+      common: [ { id: 'wolf_pelt', quantity: 2, chance: 0.9 } ],
+      uncommon: [ { id: 'leather', quantity: 2, chance: 0.4 } ],
+      rare: [],
+      legendary: [],
+      goldChance: 0.3,
+      goldMin: 10,
+      goldMax: 25
+    },
+    appliesEffect: {
+      id: 'disease_lycanthropy',
+      name: 'Ликантропия',
+      description: 'Древнее проклятие луны. Ночью сильнее, но растёт звериный голод.',
+      icon: 'PawPrint',
+      type: 'debuff',
+      chance: 0.18,
+      duration: 0
+    }
+  },
+  {
+    id: 'werewolf_alpha',
+    name: 'Вожак оборотней',
+    health: 140,
+    damage: 18,
+    xp: 300,
+    level: 12,
+    armor: 16,
+    isUnique: false,
+    lootTable: {
+      common: [ { id: 'wolf_pelt', quantity: 3, chance: 0.95 } ],
+      uncommon: [ { id: 'leather', quantity: 3, chance: 0.5 } ],
+      rare: [],
+      legendary: [],
+      goldChance: 0.3,
+      goldMin: 20,
+      goldMax: 40
+    },
+    appliesEffect: {
+      id: 'disease_lycanthropy',
+      name: 'Ликантропия',
+      description: 'Древнее проклятие луны. Ночью сильнее, но растёт звериный голод.',
+      icon: 'PawPrint',
+      type: 'debuff',
+      chance: 0.25,
+      duration: 0
+    }
+  },
   { id: 'bandit_chief', name: 'Главарь бандитов', health: 100, damage: 10, xp: 100, isUnique: true, level: 5, armor: 15 },
   { id: 'goblin', name: 'Гоблин', health: 18, damage: 4, xp: 12, level: 1, armor: 10 },
   { id: 'ice_wraith', name: 'Ледяное привидение', health: 70, damage: 10, xp: 120, level: 7, armor: 13 },

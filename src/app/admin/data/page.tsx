@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, Save, Trash2, Undo2 } from "lucide-react";
+import { Loader2, Plus, Save, Trash2, Undo2, RefreshCw, BarChart3 } from "lucide-react";
 
 import type { Location } from "@/types/location";
 import type { CharacterInventoryItem } from "@/types/character";
@@ -225,6 +225,10 @@ export default function DataManagerPage() {
   const [isBusy, setIsBusy] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Diagnostics state
+  const [diag, setDiag] = useState<{ snapshot: any; actions: Array<{ name: string; type: string; weight: number }>; simulation?: { ticks: number; frequencies: Record<string, number> } } | null>(null);
+  const [diagTicks, setDiagTicks] = useState<number>(200);
+
   // Data states
   const [locations, setLocations] = useState<Location[]>([]);
   const [items, setItems] = useState<CharacterInventoryItem[]>([]);
@@ -324,6 +328,19 @@ export default function DataManagerPage() {
       toast({ title: "Ошибка загрузки", description: e?.message || "Не удалось загрузить данные", variant: "destructive" });
     } finally {
       setIsBusy(false);
+    }
+  }
+
+  async function fetchDiagnostics(simulate: boolean) {
+    try {
+      const url = simulate ? `/api/ai/diagnostics?ticks=${Math.max(0, Math.min(1000, diagTicks || 0))}` : `/api/ai/diagnostics`;
+      const res = await fetch(url, { method: 'GET' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Diagnostics error');
+      setDiag(data);
+    } catch (e: any) {
+      setDiag(null);
+      toast({ title: 'Диагностика не удалась', description: e?.message || 'Ошибка запроса', variant: 'destructive' });
     }
   }
 
@@ -622,6 +639,91 @@ export default function DataManagerPage() {
           </div>
         </CardHeader>
         <CardContent>
+          <div className="mb-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold flex items-center gap-2"><BarChart3 className="h-4 w-4" />Диагностика AI</h3>
+                <p className="text-sm text-muted-foreground">Текущие веса действий и симуляция тико́в</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input className="w-28" type="number" value={diagTicks} onChange={(e) => setDiagTicks(Number(e.target.value))} />
+                <Button variant="secondary" onClick={() => fetchDiagnostics(false)}><RefreshCw className="h-4 w-4" />Обновить</Button>
+                <Button onClick={() => fetchDiagnostics(true)}>Симулировать</Button>
+              </div>
+            </div>
+            {diag && (
+              <div className="mt-3 grid md:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Снапшот</CardTitle>
+                    <CardDescription>{diag.snapshot?.name} — {diag.snapshot?.status} @ {diag.snapshot?.location}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-sm grid grid-cols-2 gap-2">
+                      <div>HP: {diag.snapshot?.hp}</div>
+                      <div>MP: {diag.snapshot?.mp}</div>
+                      <div>SP: {diag.snapshot?.sp}</div>
+                      <div>Настроение: {diag.snapshot?.mood}</div>
+                      <div>Время: {diag.snapshot?.timeOfDay}</div>
+                      <div>Погода: {diag.snapshot?.weather}</div>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Веса действий</CardTitle>
+                    <CardDescription>После variety‑boost</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Действие</TableHead>
+                          <TableHead>Категория</TableHead>
+                          <TableHead className="text-right">Вес</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {diag.actions?.sort((a,b) => b.weight - a.weight).slice(0, 12).map((a, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell>{a.name}</TableCell>
+                            <TableCell>{a.type}</TableCell>
+                            <TableCell className="text-right">{a.weight.toFixed(2)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+                {diag.simulation && (
+                  <Card className="md:col-span-2">
+                    <CardHeader>
+                      <CardTitle className="text-base">Симуляция</CardTitle>
+                      <CardDescription>{diag.simulation.ticks} тиков — частоты по категориям</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Категория</TableHead>
+                            <TableHead className="text-right">Количество</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {Object.entries(diag.simulation.frequencies).map(([k,v]) => (
+                            <TableRow key={k}>
+                              <TableCell>{k}</TableCell>
+                              <TableCell className="text-right">{v as any}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
+          </div>
           <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as TabKey); resetDrafts(); }}>
             <TabsList className="grid grid-cols-5 w-full">
               <TabsTrigger value="locations">Локации</TabsTrigger>

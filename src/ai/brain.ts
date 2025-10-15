@@ -1,11 +1,10 @@
-
-'use server';
+// Server-only module, but not a Next.js Server Action file.
 /**
  * @fileoverview This file contains the core AI logic for the character.
  * SIMPLIFIED (Godville-style): Uses simple priority system instead of complex weighted decisions.
  */
 
-import type { Character, WorldState, ActiveEffect, ActiveAction, EquipmentSlot, CharacterInventoryItem, ActiveCryptQuest, Weather, CharacterSkills, CharacterAttributes } from "@/types/character";
+import type { Character, WorldState, ActiveEffect, ActiveAction, EquipmentSlot, CharacterInventoryItem, ActiveCryptQuest, Weather, CharacterSkills, CharacterAttributes, TimeOfDay, WeatherEffect, TimeOfDayEffect } from "@/types/character";
 import type { LootEntry } from "@/types/enemy";
 import { selectActionSimple } from './policy';
 import type { GameData } from "@/services/gameDataService";
@@ -47,6 +46,115 @@ import { computeBaseValue } from "@/services/pricing";
 import { getCharacterById } from "../../server/storage";
 import { saveCombatAnalytics } from "@/services/combatAnalyticsService";
 
+// Weather and time modifier functions (duplicated from game-engine.ts)
+function getWeatherModifiers(weather: Weather): WeatherEffect {
+    switch (weather) {
+        case 'Clear':
+            return {
+                attackModifier: 0,
+                stealthModifier: 0,
+                findChanceModifier: 1.0,
+                fatigueModifier: 1.0,
+                moodModifier: 2,
+                regenModifier: { health: 1.0, magicka: 1.0, stamina: 1.0, fatigue: 1.0 }
+            };
+        case 'Cloudy':
+            return {
+                attackModifier: 0,
+                stealthModifier: 0,
+                findChanceModifier: 1.0,
+                fatigueModifier: 1.0,
+                moodModifier: -1,
+                regenModifier: { health: 1.0, magicka: 1.0, stamina: 1.0, fatigue: 1.0 }
+            };
+        case 'Rain':
+            return {
+                attackModifier: -2,
+                stealthModifier: 0,
+                findChanceModifier: 0.9,
+                fatigueModifier: 1.1,
+                moodModifier: -2,
+                regenModifier: { health: 0.8, magicka: 0.9, stamina: 0.9, fatigue: 0.8 }
+            };
+        case 'Snow':
+            return {
+                attackModifier: -1,
+                stealthModifier: 0,
+                findChanceModifier: 0.85,
+                fatigueModifier: 1.2,
+                moodModifier: -1,
+                regenModifier: { health: 0.9, magicka: 0.95, stamina: 0.9, fatigue: 0.9 }
+            };
+        case 'Fog':
+            return {
+                attackModifier: -1,
+                stealthModifier: 2,
+                findChanceModifier: 0.8,
+                fatigueModifier: 1.0,
+                moodModifier: -1,
+                regenModifier: { health: 1.0, magicka: 1.0, stamina: 1.0, fatigue: 1.0 }
+            };
+        default:
+            return {
+                attackModifier: 0,
+                stealthModifier: 0,
+                findChanceModifier: 1.0,
+                fatigueModifier: 1.0,
+                moodModifier: 0,
+                regenModifier: { health: 1.0, magicka: 1.0, stamina: 1.0, fatigue: 1.0 }
+            };
+    }
+}
+
+function getTimeOfDayModifiers(timeOfDay: TimeOfDay): TimeOfDayEffect {
+    switch (timeOfDay) {
+        case 'night':
+            return {
+                findChanceModifier: 0.7,
+                enemyStrengthModifier: 1.2,
+                stealthModifier: 2,
+                fleeChanceModifier: 1.1,
+                regenModifier: { health: 0.9, magicka: 0.7, stamina: 0.9, fatigue: 0.8 },
+                npcAvailability: false
+            };
+        case 'morning':
+            return {
+                findChanceModifier: 1.0,
+                enemyStrengthModifier: 1.0,
+                stealthModifier: 0,
+                fleeChanceModifier: 1.0,
+                regenModifier: { health: 1.5, magicka: 1.2, stamina: 1.5, fatigue: 1.5 },
+                npcAvailability: true
+            };
+        case 'day':
+            return {
+                findChanceModifier: 1.0,
+                enemyStrengthModifier: 1.0,
+                stealthModifier: 0,
+                fleeChanceModifier: 1.0,
+                regenModifier: { health: 1.0, magicka: 1.0, stamina: 1.0, fatigue: 1.0 },
+                npcAvailability: true
+            };
+        case 'evening':
+            return {
+                findChanceModifier: 1.1,
+                enemyStrengthModifier: 1.0,
+                stealthModifier: 0,
+                fleeChanceModifier: 1.0,
+                regenModifier: { health: 1.0, magicka: 1.0, stamina: 1.0, fatigue: 1.0 },
+                npcAvailability: false
+            };
+        default:
+            return {
+                findChanceModifier: 1.0,
+                enemyStrengthModifier: 1.0,
+                stealthModifier: 0,
+                fleeChanceModifier: 1.0,
+                regenModifier: { health: 1.0, magicka: 1.0, stamina: 1.0, fatigue: 1.0 },
+                npcAvailability: true
+            };
+    }
+}
 
 /**
  * A helper function to add an item to the character's inventory. It handles stacking.
@@ -268,7 +376,34 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
     updatedChar.combat.combatLog.push(`=== Раунд ${updatedChar.combat.rounds} ===`);
     
     const getAttributeBonus = (value: number) => Math.max(0, Math.floor((value - 10) / 2));
+
+    // Computes armor class gained from equipped armor pieces.
+    // Rule: every 5 points of armor on gear gives +1 to armor class.
+    const computeEquipmentArmorClass = (char: Character): number => {
+        const equippedArmorSum = Object.entries(char.equippedItems)
+            .filter(([slot]) => ['head', 'torso', 'legs', 'hands', 'feet'].includes(slot as any))
+            .reduce((sum, [, itemId]) => {
+                const item = char.inventory.find(i => i.id === itemId);
+                return sum + (item?.armor || 0);
+            }, 0);
+        return Math.floor(equippedArmorSum / 5);
+    };
     
+    // Compute disease-based damage modifiers for hero
+    const hasVampirism = updatedChar.effects.some(e => e.id === 'disease_vampirism');
+    const hasLycanthropy = updatedChar.effects.some(e => e.id === 'disease_lycanthropy');
+    let heroDamageMultiplier = 1;
+    if (hasVampirism && updatedChar.timeOfDay === 'day') {
+        heroDamageMultiplier *= 0.8; // Daylight penalty
+        const vamp = updatedChar.effects.find(e => e.id === 'disease_vampirism');
+        if (vamp?.data?.penaltyBoostUntil && Date.now() < vamp.data.penaltyBoostUntil) {
+            heroDamageMultiplier *= 0.75; // Stronger penalty during boosted period
+        }
+    }
+    if (hasLycanthropy && updatedChar.timeOfDay === 'night') {
+        heroDamageMultiplier *= 1.2; // Night bonus
+    }
+
     // --- Hero's Turn ---
     logMessages.push('--- Ход героя ---');
 
@@ -319,12 +454,19 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
     // Perform action
     if (heroAction === 'flee') {
         updatedChar.combat!.fleeAttempted = true;
+        
+        // Apply weather and time modifiers to flee chance
+        const weatherEffect = getWeatherModifiers(updatedChar.weather);
+        const timeOfDayEffect = getTimeOfDayModifiers(updatedChar.timeOfDay);
+        const fleeModifier = weatherEffect.stealthModifier + timeOfDayEffect.fleeChanceModifier;
+        const fleeDC = Math.max(5, 10 - Math.floor(fleeModifier)); // Lower DC is better
+        
         const { roll, updatedCharacter: charWithRoll } = rollD20(updatedChar);
         updatedChar = charWithRoll;
-        const fleeSuccess = roll >= 10; // DC 10 to flee
+        const fleeSuccess = roll >= fleeDC;
         
         if (fleeSuccess) {
-            logMessages.push(`🏃 Герой пытается сбежать... и успешно отступает! (бросок: ${roll})`);
+            logMessages.push(`🏃 Герой пытается сбежать... и успешно отступает! (бросок: ${roll}, цель: ${fleeDC})`);
             // Append round messages to combat log before saving analytics
             if (updatedChar.combat?.combatLog) {
                 updatedChar.combat.combatLog.push(...logMessages);
@@ -335,7 +477,7 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             updatedChar.mood = Math.max(0, updatedChar.mood - 10);
             return updatedChar;
         } else {
-            logMessages.push(`🏃 Герой пытается сбежать, но ${enemy.name} преграждает путь! (бросок: ${roll})`);
+            logMessages.push(`🏃 Герой пытается сбежать, но ${enemy.name} преграждает путь! (бросок: ${roll}, цель: ${fleeDC})`);
             // Fleeing failed, enemy gets a free attack
         }
     } else if (heroAction === 'attack') {
@@ -343,19 +485,24 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
         const skillBonus = Math.floor(updatedChar.skills.oneHanded / 5);
         const totalBonus = strengthBonus + skillBonus;
 
+        // Apply weather modifier to attack roll
+        const weatherEffect = getWeatherModifiers(updatedChar.weather);
+        const weatherModifier = weatherEffect.attackModifier;
+        const weatherBonusText = weatherModifier !== 0 ? ` (погода: ${weatherModifier > 0 ? '+' : ''}${weatherModifier})` : '';
+
         const { roll, updatedCharacter: charWithRoll } = rollD20(updatedChar);
         updatedChar = charWithRoll;
-        const totalRoll = roll + totalBonus;
+        const totalRoll = roll + totalBonus + weatherModifier;
 
         const success = totalRoll >= enemy.armor;
-        updatedChar.combat!.lastRoll = { actor: 'hero', action: 'Атака', roll, bonus: totalBonus, total: totalRoll, target: enemy.armor, success };
-        logMessages.push(`Бросок атаки: ${roll} + ${strengthBonus} (сила) + ${skillBonus} (навык) = ${totalRoll} (цель: ${enemy.armor})`);
+        updatedChar.combat!.lastRoll = { actor: 'hero', action: 'Атака', roll, bonus: totalBonus + weatherModifier, total: totalRoll, target: enemy.armor, success };
+        logMessages.push(`Бросок атаки: ${roll} + ${strengthBonus} (сила) + ${skillBonus} (навык)${weatherBonusText} = ${totalRoll} (цель: ${enemy.armor})`);
 
         if (roll === 20) {
             const weaponId = updatedChar.equippedItems.weapon;
             const weapon = weaponId ? updatedChar.inventory.find((i: CharacterInventoryItem) => i.id === weaponId) : null;
             const baseDamage = 1 + getAttributeBonus(updatedChar.attributes.strength);
-            let heroDamage = Math.max(1, Math.floor(((weapon ? weapon.damage || 1 : 1) + baseDamage) * 2)); // Double damage
+            let heroDamage = Math.max(1, Math.floor(((weapon ? weapon.damage || 1 : 1) + baseDamage) * 2 * heroDamageMultiplier)); // Double damage with mods
             enemy.health.current -= heroDamage;
             updatedChar.combat!.totalDamageDealt = (updatedChar.combat!.totalDamageDealt || 0) + heroDamage;
             const msg = `🎲 Критический успех! Герой наносит сокрушительный удар на ${heroDamage} урона!`;
@@ -375,7 +522,7 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             const weaponId = updatedChar.equippedItems.weapon;
             const weapon = weaponId ? updatedChar.inventory.find((i: CharacterInventoryItem) => i.id === weaponId) : null;
             const baseDamage = 1 + getAttributeBonus(updatedChar.attributes.strength);
-            let heroDamage = Math.max(1, (weapon ? weapon.damage || 1 : 1) + baseDamage);
+            let heroDamage = Math.max(1, Math.floor(((weapon ? weapon.damage || 1 : 1) + baseDamage) * heroDamageMultiplier));
             enemy.health.current -= heroDamage;
             logMessages.push(`Попадание! Герой наносит ${heroDamage} урона.`);
             updatedChar.combat!.totalDamageDealt = (updatedChar.combat!.totalDamageDealt || 0) + heroDamage;
@@ -527,18 +674,14 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
     updatedChar = charAfterEnemyRoll;
     let enemyTotalRoll = enemyRoll + enemyAttackBonus;
     
-    // Calculate total armor from equipped items
-    const totalArmor = 5 + Object.entries(updatedChar.equippedItems)
-        .filter(([slot]) => ['head', 'torso', 'legs', 'hands', 'feet'].includes(slot as EquipmentSlot))
-        .reduce((sum, [, itemId]) => {
-            const item = updatedChar.inventory.find(i => i.id === itemId);
-            return sum + (item?.armor || 0);
-        }, 0);
-    
-    let heroDefenseTarget = 10 + getAttributeBonus(updatedChar.attributes.agility) + totalArmor; // Base dodge + armor
+    // Calculate hero armor class (defense target)
+    const equipmentAC = computeEquipmentArmorClass(updatedChar);
+    const MAX_AC = 25; // Avoid unreachable targets (no 30+ AC)
+    let heroDefenseTarget = 10 + getAttributeBonus(updatedChar.attributes.agility) + equipmentAC;
     if (heroAction === 'defend') {
-        heroDefenseTarget += 5 + getAttributeBonus(updatedChar.attributes.strength); // Bonus for active block
+        heroDefenseTarget += 5 + getAttributeBonus(updatedChar.attributes.strength);
     }
+    heroDefenseTarget = Math.max(8, Math.min(MAX_AC, heroDefenseTarget));
 
     const enemySuccess = enemyTotalRoll >= heroDefenseTarget;
     updatedChar.combat!.lastRoll = { actor: 'enemy', action: 'Атака', roll: enemyRoll, bonus: enemyAttackBonus, total: enemyTotalRoll, target: heroDefenseTarget, success: enemySuccess };
@@ -549,6 +692,8 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
         updatedChar.stats.health.current -= damageTaken;
         updatedChar.combat!.totalDamageTaken = (updatedChar.combat!.totalDamageTaken || 0) + damageTaken;
         logMessages.push(`🎲 Критический удар! ${enemy.name} наносит ${damageTaken} урона.`);
+        // Attempt to infect on critical hit as well
+        updatedChar = tryApplyInfection(updatedChar, baseEnemyDef, logMessages);
     } else if (enemyRoll === 1) {
         logMessages.push(`🎲 Критический провал! ${enemy.name} спотыкается и падает, не нанося урона.`);
     } else if (enemySuccess) {
@@ -560,6 +705,8 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
         updatedChar.stats.health.current -= damageTaken;
         updatedChar.combat!.totalDamageTaken = (updatedChar.combat!.totalDamageTaken || 0) + damageTaken;
         logMessages.push(`${enemy.name} попадает, нанося ${damageTaken} урона.`);
+        // Attempt to infect on successful hit
+        updatedChar = tryApplyInfection(updatedChar, baseEnemyDef, logMessages);
     } else {
         logMessages.push("Герой ловко уворачивается от атаки!");
     }
@@ -574,6 +721,33 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
     // Death check is handled in the main loop for clarity
     return updatedChar;
 };
+
+// Tries to apply disease infection from enemy to hero
+function tryApplyInfection(character: Character, baseEnemyDef: any, logMessages: string[]): Character {
+    if (!baseEnemyDef?.appliesEffect) return character;
+    const eff = baseEnemyDef.appliesEffect;
+    // Only diseases we recognize should persist permanently
+    const isDisease = eff.id === 'disease_vampirism' || eff.id === 'disease_lycanthropy';
+    if (!isDisease) return character;
+    const alreadyDiseased = character.effects.some(e => e.id === 'disease_vampirism' || e.id === 'disease_lycanthropy');
+    if (alreadyDiseased) return character;
+    if (Math.random() < Math.max(0, Math.min(1, eff.chance))) {
+        const updatedChar = structuredClone(character);
+        const newEffect: ActiveEffect = {
+            id: eff.id,
+            name: eff.name,
+            description: eff.description,
+            icon: eff.icon,
+            type: 'permanent',
+            expiresAt: Infinity,
+            data: { hungerLevel: 0, lastFedAt: Date.now() }
+        };
+        updatedChar.effects.push(newEffect);
+        logMessages.push(`☠️ Герой заражен: ${eff.name}!`);
+        return updatedChar;
+    }
+    return character;
+}
 
 
 // --- IDLE ACTIONS ---
@@ -638,6 +812,16 @@ const takeQuestAction: Action = {
     name: "Взять задание",
     type: "quest",
     getWeight: (char, worldState) => {
+        // STRICT SEQUENCING: High priority when just arrived and haven't completed activity
+        const now = Date.now();
+        const arrivalTime = char.lastLocationArrival || 0;
+        const timeSinceArrival = now - arrivalTime;
+        const fiveMinutes = 5 * 60 * 1000;
+        
+        if (timeSinceArrival < fiveMinutes && !char.hasCompletedLocationActivity) {
+            return priorityToWeight(Priority.HIGH); // Highest priority on fresh arrival
+        }
+        
         // IMPROVED: Quests should be the main activity for healthy characters
         const healthRatio = char.stats.health.current / char.stats.health.max;
         const staminaRatio = char.stats.stamina.current / char.stats.stamina.max;
@@ -692,7 +876,7 @@ const takeQuestAction: Action = {
                 health: { current: Math.floor(baseEnemy.health * levelMultiplier), max: Math.floor(baseEnemy.health * levelMultiplier) }, 
                 damage: Math.floor(baseEnemy.damage * levelMultiplier), 
                 xp: Math.floor(baseEnemy.xp * levelMultiplier),
-                armor: baseEnemy.armor || (10 + (baseEnemy.level || 1)),
+                armor: Math.max(8, Math.min(25, (baseEnemy.armor ?? (10 + (baseEnemy.level || 1))))),
                 appliesEffect: baseEnemy.appliesEffect || null,
             };
 
@@ -877,10 +1061,23 @@ const stealAction: Action = {
         // Only try in towns with NPCs/shops
         const hasTargets = gameData.npcs.some(n => n.location === char.location && (n.inventory && n.inventory.length > 0));
         if (!hasTargets) return priorityToWeight(Priority.DISABLED);
+        
+        // Weather and time modifiers for stealing
+        const weatherEffect = getWeatherModifiers(char.weather);
+        const timeOfDayEffect = getTimeOfDayModifiers(char.timeOfDay);
+        const stealthModifier = weatherEffect.stealthModifier + timeOfDayEffect.stealthModifier;
+        
+        // Night time and fog make stealing more attractive
+        let baseWeight = Priority.LOW;
+        if (char.timeOfDay === 'night' || char.weather === 'Fog') {
+            baseWeight = Priority.MEDIUM;
+        }
+        
         // If broke, more motivation
         const gold = char.inventory.find(i => i.id === 'gold')?.quantity || 0;
-        if (gold < 50) return priorityToWeight(Priority.MEDIUM);
-        return priorityToWeight(Priority.LOW);
+        if (gold < 50) baseWeight = Priority.MEDIUM;
+        
+        return priorityToWeight(baseWeight);
     },
     canPerform: (char, worldState, gameData) => {
         if (!worldState.isLocationSafe) return false;
@@ -891,10 +1088,18 @@ const stealAction: Action = {
         updatedChar.status = 'busy';
         updatedChar.currentAction = { type: 'explore', name: 'Попытка кражи', description: 'Герой осторожно присматривается к добыче.', startedAt: Date.now(), duration: 30 * 1000 };
 
-        // Simple success chance influenced by agility and mood
+        // Success chance influenced by agility, mood, weather, and time
         const agility = updatedChar.attributes.agility || 10;
-        const baseChance = 0.25 + Math.min(0.25, agility * 0.01) + (updatedChar.mood - 50) * 0.002; // 10 agility => +10%
-        const chance = Math.max(0.05, Math.min(0.7, baseChance));
+        const weatherEffect = getWeatherModifiers(updatedChar.weather);
+        const timeOfDayEffect = getTimeOfDayModifiers(updatedChar.timeOfDay);
+        
+        let baseChance = 0.25 + Math.min(0.25, agility * 0.01) + (updatedChar.mood - 50) * 0.002; // 10 agility => +10%
+        
+        // Apply weather and time modifiers
+        const stealthModifier = weatherEffect.stealthModifier + timeOfDayEffect.stealthModifier;
+        baseChance *= (1 + stealthModifier * 0.1); // 10% per stealth modifier point
+        
+        const chance = Math.max(0.05, Math.min(0.8, baseChance));
         const roll = Math.random();
 
         // Pick a random NPC with inventory
@@ -1050,7 +1255,7 @@ const findEnemyAction: Action = {
             health: { current: Math.floor(baseEnemy.health * levelMultiplier), max: Math.floor(baseEnemy.health * levelMultiplier) },
             damage: Math.floor(baseEnemy.damage * levelMultiplier),
             xp: Math.floor(baseEnemy.xp * levelMultiplier),
-            armor: Math.floor((baseEnemy.armor || (10 + (baseEnemy.level || 1))) * (1 + (character.level -1) * 0.05)),
+            armor: Math.max(8, Math.min(25, (baseEnemy.armor ?? (10 + (baseEnemy.level || 1))))),
             appliesEffect: baseEnemy.appliesEffect || null,
         };
         if (Math.random() < 0.1) { // Stealth kill
@@ -1081,6 +1286,17 @@ const travelAction: Action = {
         // IMPROVED: Prevent aimless wandering with repetition penalty
         if (char.divineDestinationId) {
             return priorityToWeight(Priority.HIGH); // Divine command is always high
+        }
+        
+        // STRICT SEQUENCING: Check if character has completed location activity
+        const now = Date.now();
+        const arrivalTime = char.lastLocationArrival || 0;
+        const timeSinceArrival = now - arrivalTime;
+        const fiveMinutes = 5 * 60 * 1000;
+        
+        // If arrived recently and hasn't completed activity, disable travel
+        if (timeSinceArrival < fiveMinutes && !char.hasCompletedLocationActivity) {
+            return priorityToWeight(Priority.DISABLED);
         }
         
         // Check recent travel history - discourage constant travel
@@ -1146,6 +1362,16 @@ const restAtTavernAction: Action = {
     type: "rest",
     getWeight: (char, worldState) => {
         if (!worldState.isLocationSafe || !worldState.isInjured) return 0;
+        
+        // STRICT SEQUENCING: Medium priority when just arrived and haven't completed activity
+        const now = Date.now();
+        const arrivalTime = char.lastLocationArrival || 0;
+        const timeSinceArrival = now - arrivalTime;
+        const fiveMinutes = 5 * 60 * 1000;
+        
+        if (timeSinceArrival < fiveMinutes && !char.hasCompletedLocationActivity) {
+            return priorityToWeight(Priority.MEDIUM); // Medium priority on fresh arrival
+        }
         
         // SIMPLIFIED (Godville-style): Priority based on health
         const healthRatio = char.stats.health.current / char.stats.health.max;
@@ -1589,7 +1815,16 @@ const fleeFromCombatReflex: ReflexAction = {
             logMessage = "Герой слишком измотан, чтобы бежать! Попытка провалилась.";
         } else {
             updatedChar.stats.stamina.current -= staminaCost;
-            const successChance = 0.5 + (updatedChar.stats.stamina.current / updatedChar.stats.stamina.max) * 0.25;
+            
+            // Apply weather and time modifiers to flee chance
+            const weatherEffect = getWeatherModifiers(updatedChar.weather);
+            const timeOfDayEffect = getTimeOfDayModifiers(updatedChar.timeOfDay);
+            const fleeModifier = weatherEffect.stealthModifier + timeOfDayEffect.fleeChanceModifier;
+            
+            let successChance = 0.5 + (updatedChar.stats.stamina.current / updatedChar.stats.stamina.max) * 0.25;
+            successChance *= fleeModifier; // Apply weather/time modifier
+            successChance = Math.min(0.95, Math.max(0.05, successChance)); // Clamp between 5% and 95%
+            
             if (Math.random() < successChance) {
                 updatedChar.status = 'idle';
                 updatedChar.mood = Math.max(0, updatedChar.mood - 15);
@@ -1905,6 +2140,10 @@ const interactWithNPCAction: Action = {
     canPerform: (char, worldState, gameData) => {
         if (!worldState.isLocationSafe) return false;
         
+        // Check if NPCs are available at current time
+        const timeOfDayEffect = getTimeOfDayModifiers(char.timeOfDay);
+        if (!timeOfDayEffect.npcAvailability) return false;
+        
         // Check if there are NPCs at current location
         const locationNPCs = gameData.npcs.filter(
             npc => npc.location === char.location || npc.location === 'on_road'
@@ -1954,6 +2193,11 @@ const tradeWithNPCAction: Action = {
     getWeight: (char, worldState) => {
         if (!worldState.isLocationSafe) return 0;
         
+        // STRICT SEQUENCING: High priority after completing location activity
+        if (char.hasCompletedLocationActivity) {
+            return priorityToWeight(Priority.HIGH); // High priority after quest/rest completion
+        }
+        
         // Check if we need healing potions
         const potions = char.inventory.filter(i => i.type === 'potion');
         const hasLowPotions = potions.reduce((sum, p) => sum + p.quantity, 0) < 3;
@@ -1970,6 +2214,10 @@ const tradeWithNPCAction: Action = {
     },
     canPerform: (char, worldState, gameData) => {
         if (!worldState.isLocationSafe) return false;
+        
+        // Check if NPCs are available at current time
+        const timeOfDayEffect = getTimeOfDayModifiers(char.timeOfDay);
+        if (!timeOfDayEffect.npcAvailability) return false;
         
         // Check if there are merchant NPCs at current location
         const merchantNPCs = gameData.npcs.filter(
@@ -2096,6 +2344,18 @@ async function determineNextAction(character: Character, gameData: GameData): Pr
     const inventoryCapacity = 150 + (character.attributes.strength * 5);
     const inventoryWeight = character.inventory.reduce((acc, item) => acc + (item.weight * item.quantity), 0);
 
+    // Get weather and time modifiers
+    const weatherEffect = getWeatherModifiers(character.weather);
+    const timeOfDayEffect = getTimeOfDayModifiers(character.timeOfDay);
+    const isNightTime = character.timeOfDay === 'night';
+
+    const diseaseFlags = (() => {
+        const hasVampirism = character.effects.some(e => e.id === 'disease_vampirism');
+        const hasLycanthropy = character.effects.some(e => e.id === 'disease_lycanthropy');
+        const disease = character.effects.find(e => e.id === 'disease_vampirism' || e.id === 'disease_lycanthropy');
+        const isHungry = !!(disease && (disease.data?.hungerLevel || 0) >= 2);
+        return { hasVampirism, hasLycanthropy, isHungry };
+    })();
     const worldState: WorldState = {
         isIdle: character.status === 'idle',
         isInCombat: character.status === 'in-combat',
@@ -2128,6 +2388,15 @@ async function determineNextAction(character: Character, gameData: GameData): Pr
         isOverencumbered: inventoryWeight > inventoryCapacity,
         hasPoisonDebuff: character.effects.some(e => e.id === 'weak_poison'),
         hasBuffPotion: character.inventory.some(i => i.type === 'potion' && i.effect?.type === 'buff' && i.effect.id != null && !character.effects.some(e => e.id === i.effect!.id)),
+        hasVampirism: diseaseFlags.hasVampirism,
+        hasLycanthropy: diseaseFlags.hasLycanthropy,
+        isHungry: diseaseFlags.isHungry,
+        // Time and weather state
+        timeOfDay: character.timeOfDay,
+        isNightTime,
+        weatherModifier: weatherEffect.attackModifier,
+        weatherEffect,
+        timeOfDayEffect,
     };
 
     // 3. Check for high-priority reflex actions first
@@ -2175,6 +2444,9 @@ async function determineNextAction(character: Character, gameData: GameData): Pr
     return choice ?? wanderAction;
 }
 
+// Diagnostics helpers (pure, no side-effects)
+// diagnostics moved to src/ai/diagnostics.ts
+
 /**
  * Processes a single "turn" for the character AI.
  * It determines the character's next action, performs it, and returns the updated state.
@@ -2219,6 +2491,83 @@ export async function processCharacterTurn(
 
 
     return { ...result, character: finalChar };
+}
+
+// Reflex: use legendary cure potion when diseased
+const useLegendaryCureReflex: ReflexAction = {
+    name: "Использовать легендарное зелье исцеления",
+    type: "misc",
+    isTriggered: (char) => char.effects.some(e => e.id === 'disease_vampirism' || e.id === 'disease_lycanthropy') && char.inventory.some(i => i.id === 'potion_cure_legendary' && i.quantity > 0),
+    canPerform: (char) => true,
+    async perform(character) {
+        const updatedChar = structuredClone(character);
+        const pot = updatedChar.inventory.find(i => i.id === 'potion_cure_legendary');
+        if (pot) {
+            pot.quantity -= 1;
+            if (pot.quantity <= 0) updatedChar.inventory = updatedChar.inventory.filter(i => i.id !== pot.id);
+        }
+        updatedChar.effects = updatedChar.effects.filter(e => e.id !== 'disease_vampirism' && e.id !== 'disease_lycanthropy');
+        return { character: updatedChar, logMessage: 'Герой выпивает легендарное зелье. Проклятие снято.' };
+    }
+};
+
+// Register reflex after declaration to avoid TDZ
+// Ensures the array is updated only once
+if (!reflexActions.includes(useLegendaryCureReflex)) {
+    reflexActions.splice(1, 0, useLegendaryCureReflex);
+}
+
+// Action: start disease cure quest
+const startCureDiseaseAction: Action = {
+    name: "Начать лечение болезни",
+    type: "quest",
+    getWeight: (char, worldState) => (worldState.hasVampirism || worldState.hasLycanthropy) ? priorityToWeight(worldState.isHungry ? Priority.HIGH : Priority.MEDIUM) : priorityToWeight(Priority.DISABLED),
+    canPerform: (char, worldState) => worldState.isIdle && (worldState.hasVampirism || worldState.hasLycanthropy) && !char.currentAction,
+    async perform(character) {
+        const updatedChar = structuredClone(character);
+        updatedChar.status = 'busy';
+        updatedChar.currentAction = { type: 'quest', name: 'Лечение болезни', description: 'Поиск исцеления от проклятия.', startedAt: Date.now(), duration: 45 * 60 * 1000 };
+        return { character: updatedChar, logMessage: 'Герой отправляется искать исцеление от своей болезни.' };
+    }
+};
+
+// Action: hunt for blood (vampire) at night
+const huntForBloodAction: Action = {
+    name: "Охота за кровью",
+    type: "quest",
+    getWeight: (char, worldState) => (worldState.hasVampirism && worldState.isNightTime && worldState.isHungry) ? priorityToWeight(Priority.HIGH) : priorityToWeight(Priority.DISABLED),
+    canPerform: (char, worldState) => worldState.isIdle && worldState.hasVampirism && worldState.isNightTime && !char.currentAction,
+    async perform(character) {
+        const updatedChar = structuredClone(character);
+        updatedChar.status = 'busy';
+        updatedChar.currentAction = { type: 'quest', name: 'Охота за кровью', description: 'Тихий поиск добычи в ночи.', startedAt: Date.now(), duration: 10 * 60 * 1000 };
+        return { character: updatedChar, logMessage: 'Жажда крови зовёт — герой выходит на охоту.' };
+    }
+};
+
+// Action: hunt as beast (werewolf) at night
+const huntAsBeastAction: Action = {
+    name: "Охота на зверя",
+    type: "quest",
+    getWeight: (char, worldState) => (worldState.hasLycanthropy && worldState.isNightTime && worldState.isHungry) ? priorityToWeight(Priority.HIGH) : priorityToWeight(Priority.DISABLED),
+    canPerform: (char, worldState) => worldState.isIdle && worldState.hasLycanthropy && worldState.isNightTime && !char.currentAction,
+    async perform(character) {
+        const updatedChar = structuredClone(character);
+        updatedChar.status = 'busy';
+        updatedChar.currentAction = { type: 'quest', name: 'Охота на зверя', description: 'Поддаться звериным инстинктам и насытиться.', startedAt: Date.now(), duration: 10 * 60 * 1000 };
+        return { character: updatedChar, logMessage: 'Волчий голод ведёт героя в темноту.' };
+    }
+};
+
+// Register disease-related actions after their declarations to avoid TDZ
+if (!idleActions.includes(startCureDiseaseAction)) {
+    idleActions.splice(5, 0, startCureDiseaseAction);
+}
+if (!idleActions.includes(huntForBloodAction)) {
+    idleActions.splice(6, 0, huntForBloodAction);
+}
+if (!idleActions.includes(huntAsBeastAction)) {
+    idleActions.splice(7, 0, huntAsBeastAction);
 }
 
     

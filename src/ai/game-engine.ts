@@ -111,6 +111,13 @@ function processEffects(character: Character): {char: Character, logs: string[]}
     if (updatedChar.effects && updatedChar.effects.length > 0) {
         for (const effect of updatedChar.effects) {
             if (effect.type !== 'permanent' && Date.now() >= effect.expiresAt) {
+                // Revert attribute changes for temporary 'lucky' if applied
+                if (effect.id === 'lucky' && (effect as any).data?.applied) {
+                    updatedChar.attributes.strength -= 5;
+                    updatedChar.attributes.agility -= 5;
+                    updatedChar.attributes.intelligence -= 5;
+                    updatedChar.attributes.endurance -= 5;
+                }
                 logs.push(`Действие эффекта "${effect.name}" закончилось.`);
                 continue;
             }
@@ -118,6 +125,45 @@ function processEffects(character: Character): {char: Character, logs: string[]}
                 const poisonDamage = effect.value || 2;
                 updatedChar.stats.health.current -= poisonDamage;
                 logs.push(`Герой теряет ${poisonDamage} здоровья от яда.`);
+            }
+
+            // Disease handling: hunger and day/night penalties
+            if (effect.id === 'disease_vampirism' || effect.id === 'disease_lycanthropy') {
+                const now = Date.now();
+                if (!effect.data) effect.data = {};
+                if (!effect.data.lastFedAt) effect.data.lastFedAt = now;
+
+                const elapsed = now - effect.data.lastFedAt;
+                const stage = Math.max(0, Math.min(3, Math.floor(elapsed / (30 * 60 * 1000)))); // +1 stage per 30m, cap 3
+                if ((effect.data.hungerLevel || 0) !== stage) {
+                    effect.data.hungerLevel = stage;
+                    if (stage > 0) logs.push(`Голод усиливается (${stage}).`);
+                }
+
+                // Apply periodic penalties based on hunger
+                let drain = stage; // 0..3
+                if (effect.data.penaltyBoostUntil && now < effect.data.penaltyBoostUntil) {
+                    drain *= 2; // doubled penalties during crit fail window
+                }
+                if (drain > 0) {
+                    updatedChar.stats.stamina.current = Math.max(0, updatedChar.stats.stamina.current - drain);
+                    if (Math.random() < 0.1) logs.push('Голод подтачивает силы героя.');
+                }
+
+                // Daylight discomfort for vampires
+                if (effect.id === 'disease_vampirism' && updatedChar.timeOfDay === 'day') {
+                    updatedChar.mood = Math.max(0, updatedChar.mood - 1);
+                }
+            }
+
+            // Temporary attribute application for 'lucky'
+            if (effect.id === 'lucky' && !(effect as any).data?.applied) {
+                if (!effect.data) effect.data = {};
+                updatedChar.attributes.strength += 5;
+                updatedChar.attributes.agility += 5;
+                updatedChar.attributes.intelligence += 5;
+                updatedChar.attributes.endurance += 5;
+                effect.data.applied = true as any;
             }
             activeEffects.push(effect);
         }
@@ -272,6 +318,8 @@ async function processActionCompletion(character: Character, gameData: GameData,
             logs.push(`Отдых в таверне подошел к концу. Герой чувствует себя посвежевшим.`);
             updatedChar.mood = Math.min(100, updatedChar.mood + 5);
             updatedChar.status = 'idle';
+            // Mark location activity as completed for strict sequencing
+            updatedChar.hasCompletedLocationActivity = true;
             break;
         case 'travel_rest':
             logs.push("Привал окончен. Отдых придал герою сил и бодрости. Он чувствует себя готовым к новым свершениям!");
@@ -279,6 +327,8 @@ async function processActionCompletion(character: Character, gameData: GameData,
             updatedChar.stats.stamina.current = updatedChar.stats.stamina.max;
             updatedChar.stats.fatigue.current = 0;
             updatedChar.mood = Math.min(100, updatedChar.mood + 10);
+            // Mark location activity as completed for strict sequencing
+            updatedChar.hasCompletedLocationActivity = true;
             break;
         case 'jail':
             logs.push("Стража выпустила героя из-под стражи. Свобода сладка, даже если немного стыдно.");
@@ -340,6 +390,11 @@ async function processActionCompletion(character: Character, gameData: GameData,
             updatedChar.location = currentAction.destinationId!;
             const destination = gameData.locations.find(l=>l.id === currentAction.destinationId);
             logs.push(`...После долгого пути, герой наконец прибыл в ${destination?.name || 'новые земли'}.`);
+            
+            // Reset location arrival tracking for strict sequencing
+            updatedChar.lastLocationArrival = Date.now();
+            updatedChar.hasCompletedLocationActivity = false;
+            
             const hasVisited = updatedChar.visitedLocations?.includes(destination!.id);
             if (destination && destination.type === 'city' && !hasVisited) {
                 if (!updatedChar.visitedLocations) updatedChar.visitedLocations = [];
@@ -408,9 +463,56 @@ async function processActionCompletion(character: Character, gameData: GameData,
 
                 await addChronicleEntry(userId, { type: 'quest_complete', title: `Задание выполнено: ${quest.title}`, description: quest.description, icon: 'BookCheck', data: { questId: quest.id } });
                 logs.push(logMessage);
+                // Mark location activity as completed for strict sequencing
+                updatedChar.hasCompletedLocationActivity = true;
             }
             updatedChar.status = 'idle';
             break;
+        default:
+            break;
+    }
+
+    // Handle special named quests not in static quests: Disease cure and hunts
+    if (character.currentAction?.type === 'quest') {
+        const actionName = character.currentAction.name;
+        if (actionName === 'Лечение болезни') {
+            // Roll D20
+            const roll = Math.floor(Math.random() * 20) + 1;
+            logs.push(`Бросок D20 на излечение: ${roll}.`);
+
+            const hasDisease = updatedChar.effects.some(e => e.id === 'disease_vampirism' || e.id === 'disease_lycanthropy');
+            if (!hasDisease) {
+                logs.push('Лечить оказалось нечего.');
+            } else if (roll === 1) {
+                // Critical failure: keep disease and double penalties for 2h
+                const eff = updatedChar.effects.find(e => e.id === 'disease_vampirism' || e.id === 'disease_lycanthropy')!;
+                if (!eff.data) eff.data = {} as any;
+                eff.data.penaltyBoostUntil = Date.now() + 2 * 60 * 60 * 1000;
+                logs.push('Критическая неудача! Штрафы усилились на 2 часа.');
+            } else if (roll === 20) {
+                // Critical success: cure and grant Lucky for 24h
+                updatedChar.effects = updatedChar.effects.filter(e => e.id !== 'disease_vampirism' && e.id !== 'disease_lycanthropy');
+                const lucky: ActiveEffect = { id: 'lucky', name: 'Удачливый', description: 'Все базовые атрибуты повышены на 5.', icon: 'Clover', type: 'buff', expiresAt: Date.now() + 24 * 60 * 60 * 1000, value: 5, data: { applied: false as any } };
+                updatedChar.effects.push(lucky);
+                logs.push('Критический успех! Болезнь исцелена, герой чувствует необычайную удачу (+5 к атрибутам на 24 часа).');
+            } else if (roll >= 13) {
+                // Success: cure disease
+                updatedChar.effects = updatedChar.effects.filter(e => e.id !== 'disease_vampirism' && e.id !== 'disease_lycanthropy');
+                logs.push('Успех! Болезнь исцелена.');
+            } else {
+                logs.push('Провал. Болезнь осталась.');
+            }
+            updatedChar.status = 'idle';
+        } else if (actionName === 'Охота за кровью' || actionName === 'Охота на зверя') {
+            const eff = updatedChar.effects.find(e => e.id === 'disease_vampirism' || e.id === 'disease_lycanthropy');
+            if (eff) {
+                if (!eff.data) eff.data = {} as any;
+                eff.data.lastFedAt = Date.now();
+                eff.data.hungerLevel = 0;
+                logs.push('Охота завершена. Голод утих.');
+            }
+            updatedChar.status = 'idle';
+        }
     }
     
     updatedChar.currentAction = null;
@@ -432,14 +534,39 @@ function processPassiveRegen(character: Character): {char: Character, log: strin
     if (hasShameDebuff && Math.random() < 0.1) {
         logMessage = "Чувствуя на себе косые взгляды, герой восстанавливает силы медленнее обычного.";
     }
-    const regenMultiplier = hasShameDebuff ? 0.5 : 1;
+    
+    // Get weather and time modifiers
+    const weatherEffect = getWeatherModifiers(updatedChar.weather);
+    const timeOfDayEffect = getTimeOfDayModifiers(updatedChar.timeOfDay);
+    
+    // Combine all regeneration multipliers
+    const baseRegenMultiplier = hasShameDebuff ? 0.5 : 1;
     const staminaRegenMultiplier = hasRestedBuff ? 1.5 : 1;
+    
+    // Apply weather and time modifiers
+    const healthRegenMultiplier = baseRegenMultiplier * weatherEffect.regenModifier.health * timeOfDayEffect.regenModifier.health;
+    const magickaRegenMultiplier = baseRegenMultiplier * weatherEffect.regenModifier.magicka * timeOfDayEffect.regenModifier.magicka;
+    const staminaRegenMultiplierFinal = staminaRegenMultiplier * weatherEffect.regenModifier.stamina * timeOfDayEffect.regenModifier.stamina;
+    const fatigueRegenMultiplier = weatherEffect.regenModifier.fatigue * timeOfDayEffect.regenModifier.fatigue;
 
+    // Regenerate stamina
     if (updatedChar.stats.stamina.current < updatedChar.stats.stamina.max) {
-        updatedChar.stats.stamina.current = Math.min(updatedChar.stats.stamina.max, updatedChar.stats.stamina.current + Math.floor(updatedChar.stats.stamina.max * 0.15 * regenMultiplier * staminaRegenMultiplier));
+        updatedChar.stats.stamina.current = Math.min(updatedChar.stats.stamina.max, updatedChar.stats.stamina.current + Math.floor(updatedChar.stats.stamina.max * 0.15 * staminaRegenMultiplierFinal));
     }
+    
+    // Regenerate magicka
     if (updatedChar.stats.magicka.current < updatedChar.stats.magicka.max) {
-         updatedChar.stats.magicka.current = Math.min(updatedChar.stats.magicka.max, updatedChar.stats.magicka.current + Math.floor(updatedChar.stats.magicka.max * 0.05 * regenMultiplier));
+         updatedChar.stats.magicka.current = Math.min(updatedChar.stats.magicka.max, updatedChar.stats.magicka.current + Math.floor(updatedChar.stats.magicka.max * 0.05 * magickaRegenMultiplier));
+    }
+    
+    // Regenerate health (slower than other stats)
+    if (updatedChar.stats.health.current < updatedChar.stats.health.max) {
+        updatedChar.stats.health.current = Math.min(updatedChar.stats.health.max, updatedChar.stats.health.current + Math.floor(updatedChar.stats.health.max * 0.02 * healthRegenMultiplier));
+    }
+    
+    // Regenerate fatigue (remove fatigue over time)
+    if (updatedChar.stats.fatigue.current > 0) {
+        updatedChar.stats.fatigue.current = Math.max(0, updatedChar.stats.fatigue.current - Math.floor(updatedChar.stats.fatigue.max * 0.1 * fatigueRegenMultiplier));
     }
     
     return { char: updatedChar, log: logMessage };
@@ -482,7 +609,7 @@ function processTravelEvents(character: Character, gameData: GameData): { char: 
                             health: { current: Math.floor(baseEnemy.health * levelMultiplier), max: Math.floor(baseEnemy.health * levelMultiplier) }, 
                             damage: Math.max(1, Math.floor(baseEnemy.damage * levelMultiplier)), 
                             xp: Math.floor(baseEnemy.xp * levelMultiplier),
-                            armor: baseEnemy.armor || (10 + (baseEnemy.level || 1)),
+                            armor: Math.max(8, Math.min(25, (baseEnemy.armor ?? (10 + (baseEnemy.level || 1))))),
                             appliesEffect: baseEnemy.appliesEffect || null,
                         };
                         
@@ -507,13 +634,35 @@ function processTravelEvents(character: Character, gameData: GameData): { char: 
                     break;
                 case 'item':
                     if (event.itemId && event.itemQuantity) {
-                         const baseItem = gameData.items.find(i => i.id === event.itemId);
-                         if (baseItem) {
-                            const { updatedCharacter: charWithItem, logMessage } = addItemToInventory(updatedChar, baseItem, event.itemQuantity);
-                            updatedChar = charWithItem;
-                            logs.push(logMessage.replace('Получен предмет:', 'Найден предмет:'));
-                            updatedChar.mood = Math.min(100, updatedChar.mood + 5);
-                         }
+                        // Apply weather and time modifiers to item finding
+                        const weatherEffect = getWeatherModifiers(updatedChar.weather);
+                        const timeOfDayEffect = getTimeOfDayModifiers(updatedChar.timeOfDay);
+                        const findChanceModifier = weatherEffect.findChanceModifier * timeOfDayEffect.findChanceModifier;
+                        
+                        // Only find item if weather/time conditions allow
+                        if (Math.random() < findChanceModifier) {
+                            const baseItem = gameData.items.find(i => i.id === event.itemId);
+                            if (baseItem) {
+                                const { updatedCharacter: charWithItem, logMessage } = addItemToInventory(updatedChar, baseItem, event.itemQuantity);
+                                updatedChar = charWithItem;
+                                logs.push(logMessage.replace('Получен предмет:', 'Найден предмет:'));
+                                updatedChar.mood = Math.min(100, updatedChar.mood + 5);
+                            }
+                        } else {
+                            // Weather/time prevented finding the item
+                            const weatherNames = {
+                                'Rain': 'дождь',
+                                'Snow': 'снег', 
+                                'Fog': 'туман',
+                                'Cloudy': 'облачная погода'
+                            };
+                            const timeNames = {
+                                'night': 'ночью',
+                                'evening': 'вечером'
+                            };
+                            const reason = updatedChar.weather !== 'Clear' ? weatherNames[updatedChar.weather] : timeNames[updatedChar.timeOfDay];
+                            logs.push(`Герой заметил что-то интересное, но ${reason} не удалось разглядеть детали.`);
+                        }
                     }
                     break;
                 case 'npc':
@@ -526,8 +675,14 @@ function processTravelEvents(character: Character, gameData: GameData): { char: 
                 case 'narrative':
                     if (event.id === 'travel_explore_battlefield') {
                         let lootLog = "";
-                        // 80% chance for common misc
-                        if (Math.random() < 0.8) {
+                        
+                        // Apply weather and time modifiers to item finding
+                        const weatherEffect = getWeatherModifiers(updatedChar.weather);
+                        const timeOfDayEffect = getTimeOfDayModifiers(updatedChar.timeOfDay);
+                        const findChanceModifier = weatherEffect.findChanceModifier * timeOfDayEffect.findChanceModifier;
+                        
+                        // 80% chance for common misc (modified by weather/time)
+                        if (Math.random() < 0.8 * findChanceModifier) {
                             const possibleItems = gameData.items.filter(i => i.rarity === 'common' && i.type === 'misc');
                             if (possibleItems.length > 0) {
                                 const chosenItem = possibleItems[Math.floor(Math.random() * possibleItems.length)];
@@ -536,8 +691,8 @@ function processTravelEvents(character: Character, gameData: GameData): { char: 
                                 lootLog += ` Он находит ${chosenItem.name}.`;
                             }
                         }
-                        // 30% chance for a common weapon
-                        if (Math.random() < 0.3) {
+                        // 30% chance for a common weapon (modified by weather/time)
+                        if (Math.random() < 0.3 * findChanceModifier) {
                             const possibleItems = gameData.items.filter(i => i.rarity === 'common' && i.type === 'weapon');
                             if (possibleItems.length > 0) {
                                 const chosenItem = possibleItems[Math.floor(Math.random() * possibleItems.length)];
@@ -572,9 +727,141 @@ function processTravelFatigue(character: Character): { char: Character } {
         return { char: character };
     }
 
-    updatedChar.stats.fatigue.current = Math.min(updatedChar.stats.fatigue.max, updatedChar.stats.fatigue.current + 5);
+    // Get weather modifier for fatigue
+    const weatherEffect = getWeatherModifiers(updatedChar.weather);
+    const fatigueGain = Math.floor(5 * weatherEffect.fatigueModifier);
+    
+    updatedChar.stats.fatigue.current = Math.min(updatedChar.stats.fatigue.max, updatedChar.stats.fatigue.current + fatigueGain);
     
     return { char: updatedChar };
+}
+
+/**
+ * Calculates time of day from game date
+ */
+function calculateTimeOfDay(gameDate: number): TimeOfDay {
+    const date = new Date(gameDate);
+    const hour = date.getHours();
+    
+    if (hour >= 21 || hour < 5) return 'night';
+    if (hour >= 5 && hour < 12) return 'morning';
+    if (hour >= 12 && hour < 18) return 'day';
+    return 'evening';
+}
+
+/**
+ * Gets weather modifiers for the current weather condition
+ */
+function getWeatherModifiers(weather: Weather): WeatherEffect {
+    switch (weather) {
+        case 'Clear':
+            return {
+                attackModifier: 0,
+                stealthModifier: 0,
+                findChanceModifier: 1.0,
+                fatigueModifier: 1.0,
+                moodModifier: 2, // Small mood bonus
+                regenModifier: { health: 1.0, magicka: 1.0, stamina: 1.0, fatigue: 1.0 }
+            };
+        case 'Cloudy':
+            return {
+                attackModifier: 0,
+                stealthModifier: 0,
+                findChanceModifier: 1.0,
+                fatigueModifier: 1.0,
+                moodModifier: -1, // Small mood penalty
+                regenModifier: { health: 1.0, magicka: 1.0, stamina: 1.0, fatigue: 1.0 }
+            };
+        case 'Rain':
+            return {
+                attackModifier: -2, // Harder to hit in rain
+                stealthModifier: 0,
+                findChanceModifier: 0.9,
+                fatigueModifier: 1.1, // 10% more fatigue from travel
+                moodModifier: -2, // Rain affects mood
+                regenModifier: { health: 0.8, magicka: 0.9, stamina: 0.9, fatigue: 0.8 } // Slower regen
+            };
+        case 'Snow':
+            return {
+                attackModifier: -1, // Slightly harder to hit
+                stealthModifier: 0,
+                findChanceModifier: 0.85,
+                fatigueModifier: 1.2, // 20% more fatigue from travel
+                moodModifier: -1,
+                regenModifier: { health: 0.9, magicka: 0.95, stamina: 0.9, fatigue: 0.9 }
+            };
+        case 'Fog':
+            return {
+                attackModifier: -1, // Harder to hit in fog
+                stealthModifier: 2, // Bonus to stealth actions
+                findChanceModifier: 0.8, // 20% less chance to find items
+                fatigueModifier: 1.0,
+                moodModifier: -1,
+                regenModifier: { health: 1.0, magicka: 1.0, stamina: 1.0, fatigue: 1.0 }
+            };
+        default:
+            return {
+                attackModifier: 0,
+                stealthModifier: 0,
+                findChanceModifier: 1.0,
+                fatigueModifier: 1.0,
+                moodModifier: 0,
+                regenModifier: { health: 1.0, magicka: 1.0, stamina: 1.0, fatigue: 1.0 }
+            };
+    }
+}
+
+/**
+ * Gets time of day modifiers
+ */
+function getTimeOfDayModifiers(timeOfDay: TimeOfDay): TimeOfDayEffect {
+    switch (timeOfDay) {
+        case 'night':
+            return {
+                findChanceModifier: 0.7, // 30% less chance to find items
+                enemyStrengthModifier: 1.2, // 20% stronger enemies
+                stealthModifier: 2, // Bonus to stealth actions
+                fleeChanceModifier: 1.1, // 10% bonus to flee chance
+                regenModifier: { health: 0.9, magicka: 0.7, stamina: 0.9, fatigue: 0.8 }, // Slower regen
+                npcAvailability: false // NPCs not available at night
+            };
+        case 'morning':
+            return {
+                findChanceModifier: 1.0,
+                enemyStrengthModifier: 1.0,
+                stealthModifier: 0,
+                fleeChanceModifier: 1.0,
+                regenModifier: { health: 1.5, magicka: 1.2, stamina: 1.5, fatigue: 1.5 }, // Fast regen
+                npcAvailability: true
+            };
+        case 'day':
+            return {
+                findChanceModifier: 1.0,
+                enemyStrengthModifier: 1.0,
+                stealthModifier: 0,
+                fleeChanceModifier: 1.0,
+                regenModifier: { health: 1.0, magicka: 1.0, stamina: 1.0, fatigue: 1.0 }, // Normal regen
+                npcAvailability: true
+            };
+        case 'evening':
+            return {
+                findChanceModifier: 1.1, // 10% bonus to finding items
+                enemyStrengthModifier: 1.0,
+                stealthModifier: 0,
+                fleeChanceModifier: 1.0,
+                regenModifier: { health: 1.0, magicka: 1.0, stamina: 1.0, fatigue: 1.0 },
+                npcAvailability: false // Some NPCs not available in evening
+            };
+        default:
+            return {
+                findChanceModifier: 1.0,
+                enemyStrengthModifier: 1.0,
+                stealthModifier: 0,
+                fleeChanceModifier: 1.0,
+                regenModifier: { health: 1.0, magicka: 1.0, stamina: 1.0, fatigue: 1.0 },
+                npcAvailability: true
+            };
+    }
 }
 
 /**
@@ -653,6 +940,10 @@ function processTimeAndSeasons(character: Character): { char: Character, log: st
         logMessage = `Наступила ${seasonTranslations[newSeason]}.`;
     }
 
+    // Update time of day
+    const newTimeOfDay = calculateTimeOfDay(updatedChar.gameDate);
+    updatedChar.timeOfDay = newTimeOfDay;
+
     return { char: updatedChar, log: logMessage };
 }
 
@@ -663,6 +954,30 @@ function processMood(character: Character): {char: Character, logs: string[]} {
     let updatedChar = structuredClone(character);
     const logs: string[] = [];
     let moodChanged = false;
+
+    // Get weather modifier for mood
+    const weatherEffect = getWeatherModifiers(updatedChar.weather);
+    
+    // Apply weather mood modifier
+    if (weatherEffect.moodModifier !== 0) {
+        updatedChar.mood += weatherEffect.moodModifier;
+        moodChanged = true;
+        
+        // Log weather mood effects occasionally
+        if (Math.random() < 0.1) {
+            if (weatherEffect.moodModifier > 0) {
+                logs.push("Ясная погода поднимает герою настроение.");
+            } else if (weatherEffect.moodModifier < 0) {
+                const weatherNames = {
+                    'Cloudy': 'облачная погода',
+                    'Rain': 'дождь',
+                    'Snow': 'снег',
+                    'Fog': 'туман'
+                };
+                logs.push(`${weatherNames[updatedChar.weather] || 'плохая погода'} портит герою настроение.`);
+            }
+        }
+    }
 
     // Mood drift towards neutral (50)
     if (updatedChar.status !== 'in-combat') {

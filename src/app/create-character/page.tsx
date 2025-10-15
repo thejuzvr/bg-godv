@@ -64,6 +64,9 @@ const backstories = [
   { value: 'shipwrecked', label: 'Потерпевший кораблекрушение', description: 'Начинает на ледяном берегу около Данстара в простой одежде.' },
   { value: 'left_for_dead', label: 'Оставленный умирать', description: 'Начинает в глуши со слабым здоровьем и в обрывках одежды.' },
   { value: 'companion', label: 'Новобранец Соратников', description: 'Начинает в Вайтране в тяжелой броне и с боевым топором.' },
+  { value: 'escaped_prisoner', label: 'Сбежавший заключенный', description: 'Начинает в глуши в тюремных лохмотьях с навыками скрытности.' },
+  { value: 'mercenary', label: 'Наемник', description: 'Начинает в Рифтене с базовым оружием и броней, сбалансированные боевые навыки.' },
+  { value: 'pilgrim', label: 'Паломник', description: 'Начинает в случайном столичном городе в простых одеждах с божественным благословением.' },
 ];
 
 export default function CharacterCreationPage() {
@@ -141,6 +144,7 @@ export default function CharacterCreationPage() {
       pendingTravel: null,
       season: 'Summer',
       weather: 'Clear',
+      timeOfDay: 'day',
       actionCooldowns: {},
       activeCryptQuest: null,
       visitedLocations: [],
@@ -166,7 +170,8 @@ export default function CharacterCreationPage() {
         if (result.success) {
             toast({
                 title: "Герой создан!",
-                description: "Ваше приключение в Скайриме начинается.",
+                description: result.welcomeMessage || "Ваше приключение в Скайриме начинается.",
+                duration: 8000,
             });
             router.push("/dashboard");
         } else {

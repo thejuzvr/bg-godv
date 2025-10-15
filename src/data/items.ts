@@ -50,6 +50,8 @@ export const initialItems: BaseItem[] = [
       icon: 'Brain'
     } 
   },
+  // === LEGENDARY CURE ===
+  { id: 'potion_cure_legendary', name: 'Легендарное зелье исцеления', weight: 0.5, type: 'potion', rarity: 'legendary', effect: { type: 'buff', stat: 'cure_disease', amount: 0, description: 'Мгновенно снимает любые проклятия и болезни.', icon: 'FlaskRound' } },
   
   // === POTIONS ===
   { id: 'potion_health_weak', name: 'Слабый эликсир здоровья', weight: 0.5, type: 'potion', rarity: 'common', effect: { type: 'heal', stat: 'health', amount: 25 } },

@@ -27,7 +27,7 @@ import { EffectsPanel } from '@/components/dashboard/effects-panel';
 import { SpellsPanel } from '@/components/dashboard/spells-panel';
 import { ActionProgressPanel, CryptExplorationPanel } from '@/components/dashboard/action-panels';
 import { CombatLogPanel, CombatStatusPanel } from '@/components/dashboard/combat-panels';
-import { SovngardeStatusPanel, SleepingStatusPanel, SovngardeConditionsPanel } from '@/components/dashboard/status-panels';
+import { SovngardeStatusPanel, SleepingStatusPanel, SovngardeConditionsPanel, DiseaseStatusPanel } from '@/components/dashboard/status-panels';
 import { performIntervention } from "./actions";
 import { RealTimeClock } from '@/components/dashboard/RealTimeClock';
 import {
@@ -361,6 +361,7 @@ export default function DashboardPage() {
              ) : (
                 <WeatherPanel character={character} />
              )}
+             <DiseaseStatusPanel character={character} />
              <Card>
                 <CardHeader>
                     <CardTitle className="font-headline text-lg flex items-center gap-2">

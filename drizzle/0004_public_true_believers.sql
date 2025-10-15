@@ -1,0 +1,1 @@
+ALTER TABLE "characters" ADD COLUMN "time_of_day" text NOT NULL;

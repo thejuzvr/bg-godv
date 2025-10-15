@@ -1,4 +1,4 @@
-'use server';
+// Module contains both pure helpers and a server action; avoid top-level 'use server'
 
 import type { Character } from "@/types/character";
 import type { GameData } from "@/services/gameDataService";
@@ -75,6 +75,7 @@ export function evaluateAchievements(character: Character, gameData: GameData): 
 }
 
 export async function persistAchievementUnlocks(userId: string, character: Character, unlocks: AchievementUnlock[]) {
+  'use server';
   if (unlocks.length === 0) return;
   // Persist also into preferences to survive DB round-trip without schema changes
   character.preferences = {

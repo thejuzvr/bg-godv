@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { weightedSample, applyVarietyBoost, selectActionSimple } from '@/ai/policy';
 import { DEFAULT_POLICY_CONFIG } from '@/ai/policy.config';
+import { listPossibleActions } from '@/ai/diagnostics';
+import { fetchGameData } from '@/services/gameDataService';
+import type { Character } from '@/types/character';
 
 // Minimal Action shape for tests
 type TestAction = {
@@ -84,6 +87,27 @@ describe('policy.selectActionSimple', () => {
     const ratio = social / Math.max(1, trading);
     expect(ratio).toBeGreaterThan(0.5);
     expect(ratio).toBeLessThan(2.0);
+  });
+});
+
+describe('brain.listPossibleActions (smoke)', () => {
+  it('includes take quest when healthy enough', async () => {
+    const g = await fetchGameData();
+    const char: any = {
+      id: 't1', name: 'Test', status: 'idle', location: g.locations[0]?.id || 'whiterun',
+      stats: { health: { current: 100, max: 100 }, magicka: { current: 50, max: 50 }, stamina: { current: 60, max: 60 }, fatigue: { current: 0, max: 100 } },
+      attributes: { strength: 10, agility: 10, intelligence: 10, endurance: 10 },
+      skills: { oneHanded: 20, block: 10, heavyArmor: 10, lightArmor: 10, persuasion: 10, alchemy: 10 },
+      points: { attribute: 0, skill: 0 },
+      inventory: [{ id: 'gold', name: 'Золото', weight: 0, type: 'misc', quantity: 100 }],
+      equippedItems: {},
+      effects: [],
+      factions: {},
+      knownSpells: [],
+      timeOfDay: 'day', weather: 'Clear', actionHistory: [],
+    } as Character as any;
+    const actions = listPossibleActions(char as any, g);
+    expect(actions.some(a => a.type === 'quest')).toBe(true);
   });
 });
 

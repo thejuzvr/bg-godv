@@ -121,6 +121,7 @@ export const characters = pgTable('characters', {
   // World state
   season: text('season').notNull(),
   weather: text('weather').notNull(),
+  timeOfDay: text('time_of_day').notNull(),
   
   // Cooldowns and visited locations
   actionCooldowns: jsonb('action_cooldowns').notNull().$type<Record<string, number>>(),
@@ -151,6 +152,13 @@ export const characters = pgTable('characters', {
   // For offline mode - when character was last processed
   lastProcessedAt: bigint('last_processed_at', { mode: 'number' }),
   isActive: boolean('is_active').notNull().default(true), // Whether character continues playing offline
+  
+  // Welcome message tracking
+  hasSeenWelcomeMessage: boolean('has_seen_welcome_message').notNull().default(false),
+  
+  // Location arrival tracking for strict sequencing
+  lastLocationArrival: bigint('last_location_arrival', { mode: 'number' }),
+  hasCompletedLocationActivity: boolean('has_completed_location_activity').notNull().default(false),
 });
 
 export const chronicle = pgTable('chronicle', {

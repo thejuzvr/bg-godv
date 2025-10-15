@@ -136,3 +136,33 @@ export const SovngardeConditionsPanel = () => {
         </Card>
     );
 };
+
+export const DiseaseStatusPanel = ({ character }: { character: Character }) => {
+    const disease = character.effects.find(e => e.id === 'disease_vampirism' || e.id === 'disease_lycanthropy');
+    if (!disease) return null;
+    const isVampire = disease.id === 'disease_vampirism';
+    const hunger = disease.data?.hungerLevel || 0;
+    const isDay = character.timeOfDay === 'day';
+    const status = isVampire ? (isDay ? 'Дневная слабость' : 'Ночная терпимость') : (character.timeOfDay === 'night' ? 'Ночная сила' : 'Дневное спокойствие');
+    const hungerText = ['Сыт', 'Лёгкий голод', 'Голод', 'Сильный голод'][Math.min(3, hunger)];
+    return (
+        <Card className="border-destructive/50 ring-2 ring-destructive/30">
+            <CardHeader>
+                <CardTitle className="font-headline text-lg">
+                    {isVampire ? 'Вампиризм' : 'Ликантропия'}
+                </CardTitle>
+                <CardDescription>{status}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+                <div className="text-sm">
+                    <div className="flex justify-between"><span>Сытость:</span><span className="font-mono">{hungerText}</span></div>
+                </div>
+                {character.currentAction?.name && (character.currentAction.name === 'Лечение болезни' || character.currentAction.name === 'Охота за кровью' || character.currentAction.name === 'Охота на зверя') && (
+                    <div>
+                        <ActionProgressPanel character={character} gameData={{} as any} />
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+};

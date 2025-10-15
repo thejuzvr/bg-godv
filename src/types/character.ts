@@ -10,6 +10,35 @@ export type EquipmentSlot = 'head' | 'torso' | 'legs' | 'hands' | 'feet' | 'ring
 
 export type Season = 'Summer' | 'Autumn' | 'Winter' | 'Spring';
 export type Weather = 'Clear' | 'Cloudy' | 'Rain' | 'Snow' | 'Fog';
+export type TimeOfDay = 'night' | 'morning' | 'day' | 'evening';
+
+export interface WeatherEffect {
+  attackModifier: number; // Modifier to attack rolls
+  stealthModifier: number; // Modifier to stealth actions
+  findChanceModifier: number; // Modifier to item finding chance (as multiplier)
+  fatigueModifier: number; // Modifier to fatigue gain (as multiplier)
+  moodModifier: number; // Modifier to mood changes
+  regenModifier: { // Modifier to regeneration rates
+    health: number;
+    magicka: number;
+    stamina: number;
+    fatigue: number;
+  };
+}
+
+export interface TimeOfDayEffect {
+  findChanceModifier: number; // Modifier to item finding chance (as multiplier)
+  enemyStrengthModifier: number; // Modifier to enemy strength (as multiplier)
+  stealthModifier: number; // Modifier to stealth actions
+  fleeChanceModifier: number; // Modifier to flee chance
+  regenModifier: { // Modifier to regeneration rates
+    health: number;
+    magicka: number;
+    stamina: number;
+    fatigue: number;
+  };
+  npcAvailability: boolean; // Whether NPCs are available for trading
+}
 
 export interface Analytics {
     killedEnemies: Record<string, number>; // { [enemyId]: count }
@@ -129,6 +158,12 @@ export interface ActiveEffect {
     type: 'buff' | 'debuff' | 'permanent';
     expiresAt: number; // For permanent, this can be a huge number
     value?: number;
+    // Optional effect-specific state (real-time timestamps used)
+    data?: {
+        hungerLevel?: number; // 0..N stages
+        lastFedAt?: number; // Date.now() when last feeding/hunt happened
+        penaltyBoostUntil?: number; // real-time until which penalties are doubled (crit fail)
+    };
 }
 
 export type ActionType = 'quest' | 'travel' | 'sovngarde_quest' | 'explore' | 'trading' | 'jail' | 'rest' | 'travel_rest';
@@ -203,6 +238,7 @@ export interface Character {
   completedQuests: string[];
   season: Season;
   weather: Weather;
+  timeOfDay: TimeOfDay;
   actionCooldowns: Partial<Record<string, number>>;
   visitedLocations: string[];
   gameDate: number; // In-game time as a timestamp
@@ -220,6 +256,9 @@ export interface Character {
   actionHistory: ActionHistoryEntry[]; // History of recent actions for AI decision making
   unlockedAchievements?: string[]; // IDs from data/achievements, persisted
   lastThoughtTime?: number; // Timestamp of last thought generation to prevent spam
+  hasSeenWelcomeMessage?: boolean; // Whether character has seen their welcome message
+  lastLocationArrival?: number; // Timestamp when character arrived at current location
+  hasCompletedLocationActivity?: boolean; // Whether character has completed quest/rest at current location
 }
 
 export type WorldState = {
@@ -243,4 +282,14 @@ export type WorldState = {
   isOverencumbered: boolean;
   hasPoisonDebuff: boolean;
   hasBuffPotion: boolean;
+  // Disease-related flags
+  hasVampirism?: boolean;
+  hasLycanthropy?: boolean;
+  isHungry?: boolean;
+  // Time and weather state
+  timeOfDay: TimeOfDay;
+  isNightTime: boolean;
+  weatherModifier: number;
+  weatherEffect: WeatherEffect;
+  timeOfDayEffect: TimeOfDayEffect;
 };

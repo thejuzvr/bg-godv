@@ -6,6 +6,7 @@ import type { Character } from "@/types/character";
 import type { GameData } from "@/services/gameDataService";
 import { fetchCharacter } from "@/app/dashboard/shared-actions";
 import { getOfflineEvents, getRecentEvents, markEventsRead } from "@/actions/offline-events-actions";
+import { getWelcomeMessage, shouldShowWelcomeMessage, markWelcomeMessageSeen } from "@/data/welcomeMessages";
 
 const POLL_INTERVAL = 3000; // Poll server every 3 seconds
 
@@ -46,6 +47,25 @@ export function useGameLoop(initialCharacter: Character | null, gameData: GameDa
       try {
         const limit = options?.adventureLimit ?? 40;
         const events = await getRecentEvents(initialCharacter.id, limit);
+        
+        // Check if we should show welcome message
+        if (shouldShowWelcomeMessage(initialCharacter)) {
+          const welcomeMessage = getWelcomeMessage(initialCharacter);
+          const welcomeItem: AdventureLogItem = {
+            id: 'welcome-' + initialCharacter.id,
+            timestamp: initialCharacter.createdAt,
+            type: 'system',
+            message: welcomeMessage
+          };
+          
+          // Add welcome message to the top of adventure log
+          setAdventureLog(prev => [welcomeItem, ...prev].slice(0, limit));
+          
+          // Mark welcome message as seen
+          const updatedCharacter = markWelcomeMessageSeen(initialCharacter);
+          setCharacter(updatedCharacter);
+        }
+        
         if (events && events.length > 0) {
           // Build structured adventure items from 'system' events
           const adventureItems = events
