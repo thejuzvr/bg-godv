@@ -346,4 +346,42 @@ export const initialItems: BaseItem[] = [
   { id: 'misc_gem_emerald', name: 'Изумруд', weight: 0.1, type: 'misc', rarity: 'rare' },
   { id: 'misc_gem_diamond', name: 'Алмаз', weight: 0.1, type: 'misc', rarity: 'legendary' },
   { id: 'misc_flawless_diamond', name: 'Безупречный алмаз', weight: 0.1, type: 'misc', rarity: 'legendary' },
+
+  // === ALCHEMY INGREDIENTS ===
+  { id: 'ingredient_blue_mountain_flower', name: 'Голубой горный цветок', weight: 0.1, type: 'misc', rarity: 'common' },
+  { id: 'ingredient_lavender', name: 'Лаванда', weight: 0.1, type: 'misc', rarity: 'common' },
+  { id: 'ingredient_red_mountain_flower', name: 'Красный горный цветок', weight: 0.1, type: 'misc', rarity: 'common' },
+  { id: 'ingredient_thistle_branch', name: 'Ветка чертополоха', weight: 0.1, type: 'misc', rarity: 'common' },
+  { id: 'ingredient_creep_cluster', name: 'Ползучий кластер', weight: 0.1, type: 'misc', rarity: 'uncommon' },
+  { id: 'ingredient_dragons_tongue', name: 'Драконий язык', weight: 0.1, type: 'misc', rarity: 'uncommon' },
+  { id: 'ingredient_fire_salts', name: 'Огненные соли', weight: 0.1, type: 'misc', rarity: 'uncommon' },
+  { id: 'ingredient_frost_salts', name: 'Ледяные соли', weight: 0.1, type: 'misc', rarity: 'uncommon' },
+  { id: 'ingredient_void_salts', name: 'Соли пустоты', weight: 0.1, type: 'misc', rarity: 'rare' },
+  { id: 'ingredient_daedra_heart', name: 'Сердце даэдра', weight: 0.5, type: 'misc', rarity: 'legendary' },
+
+  // === ORE & CRAFTING MATERIALS ===
+  { id: 'ore_iron', name: 'Железная руда', weight: 1, type: 'misc', rarity: 'common' },
+  { id: 'ore_silver', name: 'Серебряная руда', weight: 1, type: 'misc', rarity: 'uncommon' },
+  { id: 'ore_gold', name: 'Золотая руда', weight: 1, type: 'misc', rarity: 'uncommon' },
+  { id: 'ore_ebony', name: 'Эбонитовая руда', weight: 1, type: 'misc', rarity: 'rare' },
+  { id: 'ore_daedric', name: 'Даэдрическая руда', weight: 1, type: 'misc', rarity: 'legendary' },
+  { id: 'leather_strips', name: 'Кожаные полоски', weight: 0.5, type: 'misc', rarity: 'common' },
+  { id: 'leather', name: 'Кожа', weight: 1, type: 'misc', rarity: 'common' },
+  { id: 'wolf_pelt', name: 'Волчья шкура', weight: 2, type: 'misc', rarity: 'common' },
+  { id: 'bear_pelt', name: 'Медвежья шкура', weight: 3, type: 'misc', rarity: 'uncommon' },
+  { id: 'sabre_cat_pelt', name: 'Шкура саблезуба', weight: 2.5, type: 'misc', rarity: 'uncommon' },
+
+  // === FOOD VARIETY ===
+  { id: 'food_raw_meat', name: 'Сырое мясо', weight: 1, type: 'food', rarity: 'common', effect: { type: 'heal', stat: 'health', amount: 3 } },
+  { id: 'food_cooked_meat', name: 'Жареное мясо', weight: 1, type: 'food', rarity: 'common', effect: { type: 'heal', stat: 'health', amount: 8 } },
+  { id: 'food_venison_raw', name: 'Сырая оленина', weight: 1.5, type: 'food', rarity: 'common', effect: { type: 'heal', stat: 'health', amount: 4 } },
+  { id: 'food_salmon_raw', name: 'Сырой лосось', weight: 0.8, type: 'food', rarity: 'common', effect: { type: 'heal', stat: 'health', amount: 5 } },
+  { id: 'food_honey', name: 'Мёд', weight: 0.3, type: 'food', rarity: 'uncommon', effect: { type: 'heal', stat: 'health', amount: 6 } },
+  { id: 'food_cheese_wheel_small', name: 'Маленькое колесо сыра', weight: 1, type: 'food', rarity: 'common', effect: { type: 'heal', stat: 'health', amount: 12 } },
+
+  // === POISON INGREDIENTS ===
+  { id: 'poison_ingredient_nightshade', name: 'Паслён', weight: 0.1, type: 'misc', rarity: 'uncommon' },
+  { id: 'poison_ingredient_deathbell', name: 'Колокольчик смерти', weight: 0.1, type: 'misc', rarity: 'rare' },
+  { id: 'poison_ingredient_venom', name: 'Яд', weight: 0.2, type: 'misc', rarity: 'uncommon' },
+  { id: 'poison_ingredient_spider_venom', name: 'Паучий яд', weight: 0.1, type: 'misc', rarity: 'common' },
 ];

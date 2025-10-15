@@ -1,5 +1,21 @@
 
 
+export interface LootEntry {
+    id: string;
+    quantity: number;
+    chance: number; // 0 to 1
+}
+
+export interface LootTable {
+    common: LootEntry[];
+    uncommon: LootEntry[];
+    rare: LootEntry[];
+    legendary: LootEntry[];
+    goldChance: number; // 0 to 1
+    goldMin: number;
+    goldMax: number;
+}
+
 export interface Enemy {
     id: string;
     name: string;
@@ -11,6 +27,7 @@ export interface Enemy {
     level?: number;
     armor?: number; // Armor class for defense rolls
     guaranteedDrop?: { id: string, quantity: number }[];
+    lootTable?: LootTable; // New loot system
     appliesEffect?: {
         id:string;
         name: string;

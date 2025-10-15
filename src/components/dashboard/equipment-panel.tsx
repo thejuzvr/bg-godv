@@ -27,9 +27,9 @@ export const EquipmentPanel = ({ character }: { character: Character }) => {
         weapon: "Оружие",
         head: "Голова",
         torso: "Торс",
-        legs: "Ноги",
+        legs: "Поножи",
         hands: "Руки",
-        feet: "Ступни",
+        feet: "Ботинки",
         amulet: "Амулет",
         ring: "Кольцо",
     };

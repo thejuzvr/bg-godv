@@ -1,0 +1,1 @@
+ALTER TABLE "game_enemies" ADD COLUMN "loot_table" jsonb;

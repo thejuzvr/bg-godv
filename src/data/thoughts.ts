@@ -11,7 +11,11 @@ type ThoughtCategory =
   | 'weather_rain'
   | 'weather_snow'
   | 'weather_clear'
-  | 'weather_fog';
+  | 'weather_fog'
+  | 'faction_companions'
+  | 'faction_college'
+  | 'faction_thieves'
+  | 'faction_dark_brotherhood';
 
 const thoughts: Record<ThoughtCategory, string[]> = {
   generic_happy: [
@@ -137,6 +141,40 @@ const thoughts: Record<ThoughtCategory, string[]> = {
     'Ничего не видно. Хорошо, что у меня есть ведро на голове!',
     'Туман такой густой, что даже Назим меня не найдет.',
   ],
+
+  // === FACTION THOUGHTS ===
+  faction_companions: [
+    'Соратники... Они понимают, что такое честь и доблесть.',
+    'Йоррваскр зовет. Может, стоит заглянуть к Соратникам?',
+    'Эйла говорила об испытании. Интересно, готов ли я?',
+    'Слава Соратников гремит по всему Скайриму. Хочу быть частью этого.',
+    'Вайтран - дом Соратников. Здесь я чувствую себя сильнее.',
+    'Кодекс чести Соратников... Это то, что мне нужно.',
+  ],
+  faction_college: [
+    'Коллегия Винтерхолда... Там хранятся древние знания.',
+    'Магия - это не просто заклинания, это понимание мира.',
+    'Толфир говорил об экзамене. Может, я готов к испытанию?',
+    'Винтерхолд манит своими тайнами и знаниями.',
+    'Архимаг... Звучит внушительно. Хочу стать им.',
+    'Магические артефакты Коллегии - это нечто невероятное.',
+  ],
+  faction_thieves: [
+    'Гильдия Воров... Они знают все секреты Рифтена.',
+    'Бринйольф предлагал работу. Интересно, что это за дело?',
+    'В тени Рифтена скрывается целая империя воров.',
+    'Канализация... Не самое приятное место, но там есть свои секреты.',
+    'Мастер Гильдии... Это звучит заманчиво.',
+    'Воровские навыки могут пригодиться в этом мире.',
+  ],
+  faction_dark_brotherhood: [
+    'Темное Братство... Они служат Матери Ночи.',
+    'Астрид говорила о контракте. Интересно, что это за работа?',
+    'Смерть - это искусство, а я хочу стать мастером.',
+    'Мать Ночи смотрит на меня. Чувствую ее присутствие.',
+    'Контракты Братства... Это не просто убийства, это ритуал.',
+    'В тени любого города можно найти представителей Братства.',
+  ],
 };
 
 function getRandomThought(category: ThoughtCategory): string {
@@ -157,6 +195,26 @@ export function getFallbackThought(character: Character): string {
   }
   if (character.status === 'idle' && character.location) {
      return getRandomThought('in_city');
+  }
+
+  // Faction-based thoughts (if character has reputation with a faction)
+  if (character.factions) {
+    const locationToFaction: Record<string, string> = {
+      'whiterun': 'companions',
+      'winterhold': 'college_of_winterhold',
+      'riften': 'thieves_guild',
+      'solitude': 'dark_brotherhood',
+      'windhelm': 'dark_brotherhood',
+      'markarth': 'dark_brotherhood',
+    };
+    
+    const factionId = locationToFaction[character.location];
+    if (factionId && character.factions[factionId] && character.factions[factionId].reputation > 0) {
+      // 30% chance to think about faction when in their city
+      if (Math.random() < 0.3) {
+        return getRandomThought(`faction_${factionId}` as ThoughtCategory);
+      }
+    }
   }
 
   // Weather-based thoughts

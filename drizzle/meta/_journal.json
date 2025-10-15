@@ -22,6 +22,13 @@
       "when": 1760476289830,
       "tag": "0002_elite_titania",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1760520591911,
+      "tag": "0003_sloppy_peter_quill",
+      "breakpoints": true
     }
   ]
 }

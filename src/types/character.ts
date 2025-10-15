@@ -219,6 +219,7 @@ export interface Character {
   relationships: Record<string, { level: number; lastInteraction: number }>; // NPC relationships: level from -100 to +100
   actionHistory: ActionHistoryEntry[]; // History of recent actions for AI decision making
   unlockedAchievements?: string[]; // IDs from data/achievements, persisted
+  lastThoughtTime?: number; // Timestamp of last thought generation to prevent spam
 }
 
 export type WorldState = {

@@ -24,6 +24,7 @@ export function useGameLoop(initialCharacter: Character | null, gameData: GameDa
   // Refs to hold the latest state for the interval closure
   const characterRef = useRef(character);
   const lastSeenTimestampRef = useRef<number>(0);
+  const failureCountRef = useRef<number>(0);
 
   useEffect(() => {
     characterRef.current = character;
@@ -105,9 +106,15 @@ export function useGameLoop(initialCharacter: Character | null, gameData: GameDa
           const updatedCharacter = await fetchCharacter(currentCharacter.id);
           
           if (!updatedCharacter) {
-            console.error('Failed to fetch character');
+            failureCountRef.current += 1;
+            if (failureCountRef.current % 10 === 0) {
+              console.warn('Character fetch returned null repeatedly. Retrying...');
+            }
             return;
           }
+
+          // Reset failure counter on success
+          failureCountRef.current = 0;
 
           // Check if state changed
           const hasStateChanged = 
@@ -122,48 +129,35 @@ export function useGameLoop(initialCharacter: Character | null, gameData: GameDa
             // Note: All logging now handled by Background Worker via offline_events
           }
 
-          // Check for new offline events (if character was processed by worker)
-          const newEvents = await getOfflineEvents(currentCharacter.id);
-          if (newEvents && newEvents.length > 0) {
-            // Consider only items newer than last seen
-            const unseenEvents = newEvents.filter(e =>
-              new Date(e.timestamp).getTime() > lastSeenTimestampRef.current
-            );
+          // Refresh the latest 40 events (read+unread) every poll
+          const latestEvents = await getOfflineEvents(currentCharacter.id);
+          if (latestEvents && latestEvents.length > 0) {
+            const adventureItems = latestEvents
+              .filter(event => event.type === 'system')
+              .map(event => ({
+                id: event.id,
+                timestamp: new Date(event.timestamp).getTime(),
+                type: event.type,
+                message: event.message,
+              } as AdventureLogItem));
 
-            if (unseenEvents.length > 0) {
-              const adventureItems = unseenEvents
-                .filter(event => event.type === 'system')
-                .map(event => ({
-                  id: event.id,
-                  timestamp: new Date(event.timestamp).getTime(),
-                  type: event.type,
-                  message: event.message,
-                } as AdventureLogItem));
+            const combatMessages = latestEvents
+              .filter(event => event.type === 'combat')
+              .map(event => event.message);
 
-              const combatMessages = unseenEvents
-                .filter(event => event.type === 'combat')
-                .map(event => event.message);
+            if (adventureItems.length > 0) {
+              setAdventureLog(adventureItems
+                .sort((a, b) => b.timestamp - a.timestamp)
+                .slice(0, 50));
+            }
 
-              if (adventureItems.length > 0) {
-                setAdventureLog(prev => {
-                  const byId = new Map<string, AdventureLogItem>(prev.map(e => [e.id, e]));
-                  for (const item of adventureItems) byId.set(item.id, item);
-                  return Array.from(byId.values())
-                    .sort((a, b) => b.timestamp - a.timestamp)
-                    .slice(0, 50);
-                });
-              }
+            if (combatMessages.length > 0) {
+              setCombatLog(prev => [...combatMessages, ...prev].slice(0, 50));
+            }
 
-              if (combatMessages.length > 0) {
-                setCombatLog(prev => [...combatMessages, ...prev].slice(0, 50));
-              }
-
-              // Update last seen and mark as read
-              const newestTimestamp = Math.max(...unseenEvents.map(e => new Date(e.timestamp).getTime()));
-              if (Number.isFinite(newestTimestamp)) {
-                lastSeenTimestampRef.current = newestTimestamp;
-              }
-              await markEventsRead(currentCharacter.id);
+            const newestTimestamp = Math.max(...latestEvents.map(e => new Date(e.timestamp).getTime()));
+            if (Number.isFinite(newestTimestamp)) {
+              lastSeenTimestampRef.current = newestTimestamp;
             }
           }
 

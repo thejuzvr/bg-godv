@@ -13,8 +13,9 @@ export interface OfflineEvent {
 }
 
 export async function getOfflineEvents(characterId: string): Promise<OfflineEvent[]> {
+  // Return the latest 40 events regardless of read status
   try {
-    const events = await getUnreadOfflineEvents(characterId);
+    const events = await getRecentOfflineEvents(characterId, 40);
     return events.map((event: any) => ({
       id: event.id,
       characterId: event.characterId,
@@ -49,9 +50,5 @@ export async function getRecentEvents(characterId: string, limit: number): Promi
 }
 
 export async function markEventsRead(characterId: string): Promise<void> {
-  try {
-    await markOfflineEventsAsRead(characterId);
-  } catch (error) {
-    console.error('Error marking events as read:', error);
-  }
+  // No-op now that the UI shows the latest 40 regardless of read status.
 }

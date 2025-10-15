@@ -255,6 +255,15 @@ export const gameEnemies = pgTable('game_enemies', {
   minLevel: integer('min_level'),
   isUnique: boolean('is_unique').default(false),
   guaranteedDrop: jsonb('guaranteed_drop').$type<Array<{ id: string; quantity: number }>>(),
+  lootTable: jsonb('loot_table').$type<{
+    common: Array<{ id: string; quantity: number; chance: number }>;
+    uncommon: Array<{ id: string; quantity: number; chance: number }>;
+    rare: Array<{ id: string; quantity: number; chance: number }>;
+    legendary: Array<{ id: string; quantity: number; chance: number }>;
+    goldChance: number;
+    goldMin: number;
+    goldMax: number;
+  }>(),
   appliesEffect: jsonb('applies_effect').$type<{
     id: string;
     name: string;

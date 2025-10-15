@@ -6,6 +6,7 @@
  */
 
 import type { Character, WorldState, ActiveEffect, ActiveAction, EquipmentSlot, CharacterInventoryItem, ActiveCryptQuest, Weather, CharacterSkills, CharacterAttributes } from "@/types/character";
+import type { LootEntry } from "@/types/enemy";
 import { selectActionSimple } from './policy';
 import type { GameData } from "@/services/gameDataService";
 import { allSpells } from "@/data/spells";
@@ -14,6 +15,29 @@ import { sovngardeThoughts } from "@/data/sovngarde";
 import { jailHumor } from "@/data/jail";
 import { allFactions } from "@/data/factions";
 import { donateToFaction as performFactionDonation } from "@/app/dashboard/actions";
+
+// Helper functions for faction reputation (duplicated from game-engine.ts)
+function getFactionForLocation(location: string): string | null {
+    const locationToFaction: Record<string, string> = {
+        'whiterun': 'companions',
+        'winterhold': 'college_of_winterhold',
+        'riften': 'thieves_guild',
+        'solitude': 'dark_brotherhood',
+        'windhelm': 'dark_brotherhood',
+        'markarth': 'dark_brotherhood',
+    };
+    return locationToFaction[location] || null;
+}
+
+function getFactionName(factionId: string): string {
+    const factionNames: Record<string, string> = {
+        'companions': 'Соратники',
+        'college_of_winterhold': 'Коллегия Винтерхолда',
+        'thieves_guild': 'Гильдия Воров',
+        'dark_brotherhood': 'Темное Братство',
+    };
+    return factionNames[factionId] || 'Неизвестная фракция';
+}
 import type { Spell } from "@/types/spell";
 import { addChronicleEntry } from "@/services/chronicleService";
 import { getFallbackThought } from "@/data/thoughts";
@@ -424,6 +448,66 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
                 }
             }
         }
+
+        // New loot table system
+        if (baseEnemyDef?.lootTable) {
+            const lootTable = baseEnemyDef.lootTable;
+            const levelMultiplier = 1 + (updatedChar.level - 1) * 0.1; // Scale loot with hero level
+            
+            // Process each rarity tier
+            const rarityTiers = [
+                { tier: 'common', chance: 0.6 },
+                { tier: 'uncommon', chance: 0.3 },
+                { tier: 'rare', chance: 0.08 },
+                { tier: 'legendary', chance: 0.02 }
+            ];
+
+            for (const { tier, chance } of rarityTiers) {
+                if (Math.random() < chance) {
+                    const tierLoot = lootTable[tier as keyof typeof lootTable] as LootEntry[];
+                    if (tierLoot && tierLoot.length > 0) {
+                        // Select random item from this tier
+                        const selectedLoot = tierLoot[Math.floor(Math.random() * tierLoot.length)];
+                        if (Math.random() < selectedLoot.chance) {
+                            const baseItem = items.find(i => i.id === selectedLoot.id);
+                            if (baseItem) {
+                                const quantity = Math.max(1, Math.floor(selectedLoot.quantity * levelMultiplier));
+                                const { updatedCharacter: charWithItem, logMessage } = addItemToInventory(updatedChar, baseItem, quantity);
+                                updatedChar = charWithItem;
+                                winMsg += ` ${logMessage}`;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Gold drop
+            if (Math.random() < lootTable.goldChance) {
+                const goldAmount = Math.floor(
+                    (lootTable.goldMin + Math.random() * (lootTable.goldMax - lootTable.goldMin)) * levelMultiplier
+                );
+                const goldItem = updatedChar.inventory.find(i => i.id === 'gold');
+                if (goldItem) {
+                    goldItem.quantity += goldAmount;
+                    winMsg += ` Найдено ${goldAmount} золота.`;
+                } else {
+                    updatedChar.inventory.push({ id: 'gold', name: 'Золото', weight: 0, type: 'misc', quantity: goldAmount });
+                    winMsg += ` Найдено ${goldAmount} золота.`;
+                }
+            }
+        }
+
+        // Award faction reputation for killing enemies near faction cities
+        const factionId = getFactionForLocation(updatedChar.location);
+        if (factionId) {
+            if (!updatedChar.factions) updatedChar.factions = {};
+            if (!updatedChar.factions[factionId]) {
+                updatedChar.factions[factionId] = { reputation: 0 };
+            }
+            const reputationGain = 2; // Base reputation for killing enemies
+            updatedChar.factions[factionId]!.reputation += reputationGain;
+            winMsg += ` Репутация с ${getFactionName(factionId)} увеличилась на ${reputationGain}.`;
+        }
         
         logMessages.push(winMsg);
         // Append round messages to combat log before saving analytics
@@ -691,17 +775,29 @@ const exploreCityAction: Action = {
     }
 };
 
-// NEW: Sell low-value items to free space or get cash
+// Enhanced: Sell low-value items and duplicates to free space or get cash
 const sellJunkAction: Action = {
     name: "Продать хлам",
     type: "trading",
     getWeight: (char, worldState, gameData) => {
         // High priority if overencumbered
         if (worldState.isOverencumbered) return priorityToWeight(Priority.URGENT);
+        
+        // Check for duplicates (more than 5 of same item)
+        const hasDuplicates = char.inventory.some(i => 
+            i.id !== 'gold' && 
+            i.type !== 'key_item' && 
+            i.type !== 'quest_item' &&
+            i.quantity > 5 && 
+            !Object.values(char.equippedItems || {}).includes(i.id)
+        );
+        if (hasDuplicates) return priorityToWeight(Priority.MEDIUM);
+        
         // Medium if gold is low (< 100) and in safe location with merchant
         const gold = char.inventory.find(i => i.id === 'gold')?.quantity || 0;
         const hasMerchant = gameData.npcs.some(n => (n.location === char.location || n.location === 'on_road') && n.inventory && n.inventory.length > 0);
         if (gold < 100 && hasMerchant) return priorityToWeight(Priority.MEDIUM);
+        
         return priorityToWeight(Priority.DISABLED);
     },
     canPerform: (char, worldState, gameData) => {
@@ -709,7 +805,7 @@ const sellJunkAction: Action = {
         const hasMerchant = gameData.npcs.some(n => (n.location === char.location || n.location === 'on_road') && n.inventory && n.inventory.length > 0);
         if (!hasMerchant) return false;
         // Any sellable item available?
-        return char.inventory.some(i => i.id !== 'gold' && i.type !== 'key_item' && i.quantity > 0 && !Object.values(char.equippedItems || {}).includes(i.id));
+        return char.inventory.some(i => i.id !== 'gold' && i.type !== 'key_item' && i.type !== 'quest_item' && i.quantity > 0 && !Object.values(char.equippedItems || {}).includes(i.id));
     },
     async perform(character, gameData) {
         let updatedChar = structuredClone(character);
@@ -718,17 +814,46 @@ const sellJunkAction: Action = {
         if (merchants.length === 0) {
             return { character, logMessage: 'Рядом нет торговцев.' };
         }
-        // Select sellable items and rank by base value (ascending)
+        
         const equippedSet = new Set(Object.values(updatedChar.equippedItems || {}));
+        const merchant = merchants[Math.floor(Math.random() * merchants.length)];
+        
+        // Priority 1: Sell duplicates (30-50% of excess)
+        const duplicates = updatedChar.inventory.filter(i => 
+            i.id !== 'gold' && 
+            i.type !== 'key_item' && 
+            i.type !== 'quest_item' &&
+            i.quantity > 5 && 
+            !equippedSet.has(i.id)
+        );
+        
+        if (duplicates.length > 0) {
+            const target = duplicates[Math.floor(Math.random() * duplicates.length)];
+            const excessQuantity = target.quantity - 5; // Keep 5, sell the rest
+            const sellQuantity = Math.max(1, Math.floor(excessQuantity * (0.3 + Math.random() * 0.2))); // 30-50% of excess
+            
+            const result = await tradeWithNPC(updatedChar.id, merchant.id, 'sell', target.id, sellQuantity);
+            if (result.success) {
+                const refreshedChar = await getCharacterById(updatedChar.id);
+                if (!refreshedChar) {
+                    return { character, logMessage: 'Ошибка: персонаж не найден после продажи.' };
+                }
+                updatedChar = addToActionHistory(refreshedChar as Character, 'social');
+                return { character: updatedChar, logMessage: `Герой продал ${sellQuantity} ${target.name} торговцу ${merchant.name}. ${result.message}` };
+            }
+        }
+        
+        // Priority 2: Sell low-value items (junk)
         const sellable = updatedChar.inventory
-            .filter(i => i.id !== 'gold' && i.type !== 'key_item' && i.quantity > 0 && !equippedSet.has(i.id) && i.type !== 'spell_tome')
+            .filter(i => i.id !== 'gold' && i.type !== 'key_item' && i.type !== 'quest_item' && i.quantity > 0 && !equippedSet.has(i.id) && i.type !== 'spell_tome')
             .map(i => ({ item: i, value: computeBaseValue(i as any) }))
             .sort((a, b) => a.value - b.value);
+            
         if (sellable.length === 0) {
             return { character, logMessage: 'Нечего продавать.' };
         }
+        
         const target = sellable[0].item;
-        const merchant = merchants[Math.floor(Math.random() * merchants.length)];
         const qty = 1;
         const result = await tradeWithNPC(updatedChar.id, merchant.id, 'sell', target.id, qty);
         if (result.success) {
@@ -1237,9 +1362,11 @@ const donateToFactionAction: Action = {
     type: "social",
     getWeight: (char) => {
         const gold = char.inventory.find(i => i.id === 'gold')?.quantity || 0;
-        if (gold > 1000) return 40;
-        if (gold > 500) return 25;
-        return 0;
+        // Updated weight system based on gold amount
+        if (gold > 2000) return 35; // More frequent when very rich
+        if (gold > 1000) return 20; // Moderate frequency
+        if (gold > 500) return 10;  // Less frequent
+        return 0; // Don't donate when poor
     },
     canPerform: (char, worldState) => worldState.isLocationSafe! && worldState.hasEnoughGoldForDonation!,
     async perform(character, gameData) {
@@ -1253,8 +1380,21 @@ const donateToFactionAction: Action = {
             return { character, logMessage: "" };
         }
 
-        const entityToDonate = entitiesToDonate[Math.floor(Math.random() * entitiesToDonate.length)];
-        const donationAmount = 100;
+        // 70% chance to donate to temple, 30% to factions
+        const isTempleDonation = Math.random() < 0.7;
+        let entityToDonate;
+        
+        if (isTempleDonation) {
+            entityToDonate = { id: `deity_${character.patronDeity}`, name: `Храм Покровителя` };
+        } else {
+            const availableFactions = entitiesToDonate.filter(e => !e.id.startsWith('deity_'));
+            entityToDonate = availableFactions[Math.floor(Math.random() * availableFactions.length)];
+        }
+        
+        // Dynamic donation amount: 5-10% of current gold (min 50, max 500)
+        const currentGold = character.inventory.find(i => i.id === 'gold')?.quantity || 0;
+        const percentage = 0.05 + Math.random() * 0.05; // 5-10%
+        const donationAmount = Math.max(50, Math.min(500, Math.floor(currentGold * percentage)));
         
         // Directly update character data to avoid async server action dependency in brain
         let updatedChar = structuredClone(character);
@@ -1268,7 +1408,10 @@ const donateToFactionAction: Action = {
 
         if (entityToDonate.id.startsWith('deity_')) {
             updatedChar.templeProgress = (updatedChar.templeProgress || 0) + donationAmount;
-            logMessage = `Движимый верой, герой пожертвовал ${donationAmount} золота на постройку храма для своего покровителя.`;
+            const templeProgress = updatedChar.templeProgress;
+            const templeGoal = 1000000; // TEMPLE_GOAL from factions page
+            const progressPercent = (templeProgress / templeGoal) * 100;
+            logMessage = `Движимый верой, герой пожертвовал ${donationAmount} золота на постройку храма для своего покровителя. Прогресс: ${progressPercent.toFixed(2)}%.`;
         } else {
              if (!updatedChar.factions) {
                 updatedChar.factions = {};
@@ -1277,7 +1420,8 @@ const donateToFactionAction: Action = {
                 updatedChar.factions[entityToDonate.id] = { reputation: 0 };
             }
             updatedChar.factions[entityToDonate.id]!.reputation += Math.floor(donationAmount / 10);
-            logMessage = `Герой пожертвовал ${donationAmount} золота фракции "${entityToDonate.name}", укрепляя свою репутацию.`;
+            const newReputation = updatedChar.factions[entityToDonate.id]!.reputation;
+            logMessage = `Герой пожертвовал ${donationAmount} золота фракции "${entityToDonate.name}", укрепляя свою репутацию. Текущая репутация: ${newReputation}.`;
         }
         
         updatedChar = addToActionHistory(updatedChar, 'social');

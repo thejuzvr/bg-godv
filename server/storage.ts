@@ -162,50 +162,63 @@ export async function addOfflineEvent(characterId: string, event: Omit<schema.Ne
     return existingEvent[0]; // Return existing event instead of creating duplicate
   }
   
-  const [created] = await db.insert(schema.offlineEvents)
-    .values({
-      characterId,
-      timestamp: event.timestamp || Date.now(),
-      type: event.type,
-      message: event.message,
-      data: event.data,
-      isRead: false,
-    })
-    .returning();
-  
-  // Enforce max 40 unread events per character (circular buffer)
-  await trimUnreadOfflineEvents(characterId, 40);
-  
-  return created;
-}
-
-// Helper function to keep only the latest N unread events for a character
-async function trimUnreadOfflineEvents(characterId: string, maxCount: number) {
-  // Get count of unread events
-  const unreadEvents = await db.select()
+  // Fixed-size circular buffer across ALL events (read + unread): keep max 40
+  // If fewer than 40 events exist, insert a new one; otherwise overwrite the oldest row
+  const latestIds = await db.select({ id: schema.offlineEvents.id })
     .from(schema.offlineEvents)
-    .where(and(
-      eq(schema.offlineEvents.characterId, characterId),
-      eq(schema.offlineEvents.isRead, false)
-    ))
-    .orderBy(desc(schema.offlineEvents.timestamp));
-  
-  if (unreadEvents.length > maxCount) {
-    // Delete oldest unread events beyond the limit
-    const eventsToDelete = unreadEvents.slice(maxCount);
-    const idsToDelete = eventsToDelete.map(e => e.id);
-    
-    if (idsToDelete.length > 0) {
-      // Delete in batches of 500 to avoid PostgreSQL parameter limit (max 1664)
-      const BATCH_SIZE = 500;
-      for (let i = 0; i < idsToDelete.length; i += BATCH_SIZE) {
-        const batch = idsToDelete.slice(i, i + BATCH_SIZE);
-        await db.delete(schema.offlineEvents)
-          .where(sql`${schema.offlineEvents.id} = ANY(ARRAY[${sql.join(batch.map(id => sql`${id}`), sql`, `)}])`);
-      }
+    .where(eq(schema.offlineEvents.characterId, characterId))
+    .orderBy(desc(schema.offlineEvents.timestamp))
+    .limit(40);
+
+  if (latestIds.length < 40) {
+    const [created] = await db.insert(schema.offlineEvents)
+      .values({
+        characterId,
+        timestamp: event.timestamp || Date.now(),
+        type: event.type,
+        message: event.message,
+        data: event.data,
+        isRead: false,
+      })
+      .returning();
+    return created;
+  } else {
+    // Find the oldest event row and overwrite it
+    const oldest = await db.select()
+      .from(schema.offlineEvents)
+      .where(eq(schema.offlineEvents.characterId, characterId))
+      .orderBy(schema.offlineEvents.timestamp)
+      .limit(1);
+    const row = oldest[0];
+    if (!row) {
+      // Fallback: insert if we failed to fetch oldest (shouldn't happen)
+      const [created] = await db.insert(schema.offlineEvents)
+        .values({
+          characterId,
+          timestamp: event.timestamp || Date.now(),
+          type: event.type,
+          message: event.message,
+          data: event.data,
+          isRead: false,
+        })
+        .returning();
+      return created;
     }
+    const [updated] = await db.update(schema.offlineEvents)
+      .set({
+        timestamp: event.timestamp || Date.now(),
+        type: event.type,
+        message: event.message,
+        data: event.data,
+        isRead: false,
+      })
+      .where(eq(schema.offlineEvents.id, row.id))
+      .returning();
+    return updated;
   }
 }
+
+// Removed unread-only trimming; circular buffer is enforced in addOfflineEvent()
 
 export async function getUnreadOfflineEvents(characterId: string) {
   return await db.select()
@@ -232,10 +245,29 @@ export async function markOfflineEventsAsRead(characterId: string) {
 }
 
 export async function deleteOldOfflineEvents(characterId: string, olderThan: number) {
-  await db.delete(schema.offlineEvents)
+  // Keep at least the latest 40 events regardless of age
+  const newest = await db.select({ id: schema.offlineEvents.id })
+    .from(schema.offlineEvents)
+    .where(eq(schema.offlineEvents.characterId, characterId))
+    .orderBy(desc(schema.offlineEvents.timestamp))
+    .limit(40);
+  const keep = new Set(newest.map(r => r.id));
+
+  const candidates = await db.select()
+    .from(schema.offlineEvents)
     .where(and(
       eq(schema.offlineEvents.characterId, characterId),
       eq(schema.offlineEvents.isRead, true),
       lt(schema.offlineEvents.timestamp, olderThan)
     ));
+
+  const idsToDelete = candidates.filter(e => !keep.has((e as any).id)).map(e => (e as any).id);
+  if (idsToDelete.length === 0) return;
+
+  const BATCH_SIZE = 500;
+  for (let i = 0; i < idsToDelete.length; i += BATCH_SIZE) {
+    const batch = idsToDelete.slice(i, i + BATCH_SIZE);
+    await db.delete(schema.offlineEvents)
+      .where(sql`${schema.offlineEvents.id} = ANY(ARRAY[${sql.join(batch.map(id => sql`${id}`), sql`, `)}])`);
+  }
 }

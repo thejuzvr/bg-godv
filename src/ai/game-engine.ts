@@ -10,6 +10,39 @@ import { allDivinities } from "@/data/divinities";
 import { getFallbackThought } from "@/data/thoughts";
 import { gameDataService } from "../../server/game-data-service";
 
+// Helper functions for faction reputation
+function getFactionForLocation(location: string): string | null {
+    const locationToFaction: Record<string, string> = {
+        'whiterun': 'companions',
+        'winterhold': 'college_of_winterhold',
+        'riften': 'thieves_guild',
+        'solitude': 'dark_brotherhood', // Dark Brotherhood can be found in any city, but Solitude is common
+        'windhelm': 'dark_brotherhood',
+        'markarth': 'dark_brotherhood',
+    };
+    return locationToFaction[location] || null;
+}
+
+function getFactionName(factionId: string): string {
+    const factionNames: Record<string, string> = {
+        'companions': 'Соратники',
+        'college_of_winterhold': 'Коллегия Винтерхолда',
+        'thieves_guild': 'Гильдия Воров',
+        'dark_brotherhood': 'Темное Братство',
+    };
+    return factionNames[factionId] || 'Неизвестная фракция';
+}
+
+function getFactionReputationForQuest(quest: any, location: string): number {
+    // Award reputation for completing quests in faction cities
+    const factionId = getFactionForLocation(location);
+    if (!factionId) return 0;
+    
+    // Base reputation reward based on quest level
+    const baseReward = 5;
+    return baseReward;
+}
+
 
 /**
  * @fileoverview This file contains the core, stateful game engine logic.
@@ -359,6 +392,20 @@ async function processActionCompletion(character: Character, gameData: GameData,
                     }
                 }
 
+                // Award faction reputation for quests in faction cities
+                const factionReputationReward = getFactionReputationForQuest(quest, updatedChar.location);
+                if (factionReputationReward > 0) {
+                    if (!updatedChar.factions) updatedChar.factions = {};
+                    const factionId = getFactionForLocation(updatedChar.location);
+                    if (factionId && !updatedChar.factions[factionId]) {
+                        updatedChar.factions[factionId] = { reputation: 0 };
+                    }
+                    if (factionId) {
+                        updatedChar.factions[factionId]!.reputation += factionReputationReward;
+                        logMessage += ` Репутация с ${getFactionName(factionId)} увеличилась на ${factionReputationReward}.`;
+                    }
+                }
+
                 await addChronicleEntry(userId, { type: 'quest_complete', title: `Задание выполнено: ${quest.title}`, description: quest.description, icon: 'BookCheck', data: { questId: quest.id } });
                 logs.push(logMessage);
             }
@@ -416,8 +463,13 @@ function processTravelEvents(character: Character, gameData: GameData): { char: 
         return true;
     });
 
-    for (const event of allEvents) {
-        if (Math.random() < event.chance) {
+    // Limit to maximum 1 event per travel tick to prevent spam
+    const shuffledEvents = [...allEvents].sort(() => Math.random() - 0.5);
+    let eventTriggered = false;
+    
+    for (const event of shuffledEvents) {
+        if (!eventTriggered && Math.random() < event.chance) {
+            eventTriggered = true;
             logs.push(event.description);
             switch(event.type) {
                 case 'combat':
@@ -706,9 +758,7 @@ async function processTempleCompletion(character: Character): Promise<{ char: Ch
 
 
 async function processEpicPhraseGeneration(character: Character): Promise<{ char: Character, log: string | null }> {
-    if (Math.random() > 0.08) {
-        return { char: character, log: null };
-    }
+    // Chance check is now handled in the calling code
 
     // Try DB-backed contextual selector
     try {
@@ -776,9 +826,9 @@ async function processEpicPhraseGeneration(character: Character): Promise<{ char
         function isOnCooldown(rec: any): boolean {
             const key = rec.cooldownKey || rec.id;
             const recent = character.analytics?.epicPhrases || [];
-            // We do not store timestamps for phrases; keep light anti-repeat by not reusing the last one
-            const last = recent[recent.length - 1];
-            return last && last === rec.text;
+            // Check last 3 thoughts to prevent repetition
+            const lastThree = recent.slice(-3);
+            return lastThree.includes(rec.text);
         }
 
         const candidates = all
@@ -807,6 +857,16 @@ async function processEpicPhraseGeneration(character: Character): Promise<{ char
             if (updatedChar.analytics.epicPhrases.length > 20) {
                 updatedChar.analytics.epicPhrases.shift();
             }
+            
+            // Save thought to chronicle as a system event
+            await addChronicleEntry(character.id, {
+                type: 'system',
+                title: 'Мысль героя',
+                description: phrase,
+                icon: 'Brain',
+                data: { thoughtType: 'epic_phrase' }
+            });
+            
             return { char: updatedChar, log: `У героя родилась мысль: "${phrase}"` };
         }
     } catch (e) {
@@ -823,6 +883,16 @@ async function processEpicPhraseGeneration(character: Character): Promise<{ char
         if (updatedChar.analytics.epicPhrases.length > 20) {
             updatedChar.analytics.epicPhrases.shift();
         }
+        
+        // Save thought to chronicle as a system event
+        await addChronicleEntry(character.id, {
+            type: 'system',
+            title: 'Мысль героя',
+            description: phrase,
+            icon: 'Brain',
+            data: { thoughtType: 'fallback_thought' }
+        });
+        
         return { char: updatedChar, log: `У героя родилась мысль: "${phrase}"` };
     }
     return { char: character, log: null };
@@ -999,10 +1069,19 @@ export async function processGameTick(
     }
 
      // --- 14. NARRATIVE BRAIN (GenAI) ---
-    if (shouldTakeTurn && Math.random() < 0.3) { // Reduced chance to avoid spamming thoughts
+    // Check cooldown and reduce chance to prevent spam
+    const now = Date.now();
+    const lastThoughtTime = updatedChar.lastThoughtTime || 0;
+    const thoughtCooldown = 30 * 1000; // 30 seconds cooldown
+    
+    if (shouldTakeTurn && 
+        (now - lastThoughtTime) > thoughtCooldown && 
+        Math.random() < 0.15) { // Reduced from 30% to 15%
+        
         const epicPhraseResult = await processEpicPhraseGeneration(updatedChar);
         if (epicPhraseResult.log) {
             updatedChar = epicPhraseResult.char;
+            updatedChar.lastThoughtTime = now; // Update last thought time
             adventureLog.push(epicPhraseResult.log);
         }
     }
