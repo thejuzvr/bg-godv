@@ -27,20 +27,22 @@ export async function addChronicleEntry(userId: string, entryData: Omit<Chronicl
 /**
  * Fetches all chronicle entries for a character, ordered by most recent first.
  */
-export async function fetchChronicleEntries(userId: string): Promise<ChronicleEntry[]> {
+export async function fetchChronicleEntries(userId: string, realmId?: string): Promise<ChronicleEntry[]> {
     if (!userId) {
         console.warn("User not authenticated. Cannot fetch chronicle.");
         return [];
     }
 
     const entries = await storage.getChronicleEntries(userId);
-    return entries.map(entry => ({
-      id: entry.id,
-      timestamp: entry.timestamp,
-      type: entry.type as any,
-      title: entry.title,
-      description: entry.description,
-      icon: entry.icon,
-      data: entry.data,
-    }));
+    return entries
+      .filter((e: any) => !realmId || (e as any).realmId === (realmId || 'global'))
+      .map(entry => ({
+        id: entry.id,
+        timestamp: entry.timestamp,
+        type: entry.type as any,
+        title: entry.title,
+        description: entry.description,
+        icon: entry.icon,
+        data: entry.data,
+      }));
 }

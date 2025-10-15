@@ -99,13 +99,19 @@ export async function getCurrentUser(): Promise<{ userId: string; email: string;
     return null;
   }
 
-  const session = await storage.getSession(sessionToken);
+  let session: any = null;
+  try {
+    session = await storage.getSession(sessionToken);
+  } catch (e: any) {
+    // Graceful degrade: treat as unauthenticated instead of 500 to avoid breaking UI
+    console.warn('getCurrentUser: session lookup failed, treating as unauthenticated:', e?.message || e);
+    return null;
+  }
   if (!session || session.expiresAt < Date.now()) {
-    // Session expired
-    if (session) {
-      await storage.deleteSession(sessionToken);
-    }
-    cookieStore.delete(SESSION_COOKIE_NAME);
+    try {
+      if (session) await storage.deleteSession(sessionToken);
+      cookieStore.delete(SESSION_COOKIE_NAME);
+    } catch {}
     return null;
   }
 

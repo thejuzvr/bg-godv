@@ -16,9 +16,18 @@ export const sessions = pgTable('sessions', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// Realms (multi-tenant isolation)
+export const realms = pgTable('realms', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  status: text('status').notNull().default('active'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 export const characters = pgTable('characters', {
   id: text('id').primaryKey(), // Will be the user's auth ID
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  realmId: text('realm_id').notNull().default('global'),
   
   // Basic info
   name: text('name').notNull(),
@@ -164,6 +173,7 @@ export const characters = pgTable('characters', {
 export const chronicle = pgTable('chronicle', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   characterId: text('character_id').notNull().references(() => characters.id, { onDelete: 'cascade' }),
+  realmId: text('realm_id').notNull().default('global'),
   timestamp: bigint('timestamp', { mode: 'number' }).notNull(),
   type: text('type').notNull(), // 'level_up' | 'quest_complete' | 'unique_kill' | 'death' | 'discovery_city'
   title: text('title').notNull(),
@@ -176,6 +186,7 @@ export const chronicle = pgTable('chronicle', {
 export const offlineEvents = pgTable('offline_events', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   characterId: text('character_id').notNull().references(() => characters.id, { onDelete: 'cascade' }),
+  realmId: text('realm_id').notNull().default('global'),
   timestamp: bigint('timestamp', { mode: 'number' }).notNull(),
   type: text('type').notNull(), // 'combat' | 'quest' | 'explore' | 'travel' | 'rest' | 'learn' | 'social' | 'misc' | 'system'
   message: text('message').notNull(),
@@ -319,6 +330,7 @@ export const npcDialogueLines = pgTable('npc_dialogue_lines', {
 export const combatAnalytics = pgTable('combat_analytics', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   characterId: text('character_id').notNull().references(() => characters.id, { onDelete: 'cascade' }),
+  realmId: text('realm_id').notNull().default('global'),
   timestamp: bigint('timestamp', { mode: 'number' }).notNull(),
   
   // Battle info
@@ -348,6 +360,22 @@ export const combatAnalytics = pgTable('combat_analytics', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// Character state snapshots for analytics and restore operations
+export const characterStateSnapshots = pgTable('character_state_snapshots', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  realmId: text('realm_id').notNull().default('global'),
+  characterId: text('character_id').notNull().references(() => characters.id, { onDelete: 'cascade' }),
+  asOfTick: bigint('as_of_tick', { mode: 'number' }).notNull(),
+  summary: jsonb('summary').notNull().$type<{
+    level: number;
+    location: string;
+    status: string;
+    hp: number; mp: number; sp: number;
+    gold: number;
+  }>(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // === TYPE EXPORTS ===
 
 export type User = typeof users.$inferSelect;
@@ -364,6 +392,9 @@ export type NewChronicleDB = typeof chronicle.$inferInsert;
 
 export type OfflineEvent = typeof offlineEvents.$inferSelect;
 export type NewOfflineEvent = typeof offlineEvents.$inferInsert;
+
+export type Realm = typeof realms.$inferSelect;
+export type NewRealm = typeof realms.$inferInsert;
 
 export type GameLocation = typeof gameLocations.$inferSelect;
 export type NewGameLocation = typeof gameLocations.$inferInsert;
@@ -385,3 +416,6 @@ export type NewGameThought = typeof gameThoughts.$inferInsert;
 
 export type NpcDialogueLine = typeof npcDialogueLines.$inferSelect;
 export type NewNpcDialogueLine = typeof npcDialogueLines.$inferInsert;
+
+export type CharacterStateSnapshot = typeof characterStateSnapshots.$inferSelect;
+export type NewCharacterStateSnapshot = typeof characterStateSnapshots.$inferInsert;

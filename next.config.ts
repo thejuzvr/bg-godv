@@ -19,6 +19,9 @@ const nextConfig: NextConfig = {
     ],
   },
   serverExternalPackages: ['pg', 'pg-hstore', 'bcrypt'],
+  env: {
+    WS_URL: process.env.WS_URL,
+  },
   webpack: (config, { isServer }) => {
     if (!isServer) {
       // Don't resolve server-only modules on the client

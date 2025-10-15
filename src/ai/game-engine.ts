@@ -5,10 +5,10 @@ import type { Character, ActiveEffect, Weather, Season } from "@/types/character
 import type { GameData } from "@/services/gameDataService";
 import { processCharacterTurn } from '@/ai/brain';
 // Future: wire simple policy here by swapping determineNextAction in brain or calling policy
-import { addChronicleEntry } from "@/services/chronicleService";
 import { allDivinities } from "@/data/divinities";
 import { getFallbackThought } from "@/data/thoughts";
-import { gameDataService } from "../../server/game-data-service";
+
+type OutboxChronicle = { type: string; title: string; description: string; icon: string; data?: any };
 
 // Helper functions for faction reputation
 function getFactionForLocation(location: string): string | null {
@@ -175,7 +175,7 @@ function processEffects(character: Character): {char: Character, logs: string[]}
 /**
  * Checks if the character has died and handles the death logic.
  */
-async function processDeath(character: Character, userId: string): Promise<{char: Character, log: string | null, didDie: boolean}> {
+async function processDeath(character: Character, userId: string): Promise<{char: Character, log: string | null, didDie: boolean, chronicle?: OutboxChronicle | null}> {
     if (character.stats.health.current <= 0 && character.status !== 'dead') {
         let updatedChar = structuredClone(character);
         let logMessages = "";
@@ -200,17 +200,16 @@ async function processDeath(character: Character, userId: string): Promise<{char
         updatedChar.respawnAt = updatedChar.deathOccurredAt + respawnTime;
         
         logMessages += ` Герой пал... Его душа отправляется в Совнгард. Возрождение через ${Math.floor(respawnTime / (60 * 1000))} минут.`;
-        await addChronicleEntry(userId, { type: 'death', title: 'Герой пал', description: 'Душа героя отправилась в Совнгард на заслуженный (или не очень) отдых.', icon: 'Skull' });
-        
-        return { char: updatedChar, log: logMessages.trim(), didDie: true };
+        const chronicle: OutboxChronicle = { type: 'death', title: 'Герой пал', description: 'Душа героя отправилась в Совнгард на заслуженный (или не очень) отдых.', icon: 'Skull' };
+        return { char: updatedChar, log: logMessages.trim(), didDie: true, chronicle };
     }
-    return { char: character, log: null, didDie: false };
+    return { char: character, log: null, didDie: false, chronicle: null };
 }
 
 /**
  * Handles level up logic and auto-allocation of points.
  */
-async function processLevelUp(character: Character): Promise<{ char: Character, log: string | null }> {
+async function processLevelUp(character: Character): Promise<{ char: Character, log: string | null, chronicle?: OutboxChronicle | null }> {
     if (character.xp.current < character.xp.required) {
         return { char: character, log: null };
     }
@@ -228,7 +227,9 @@ async function processLevelUp(character: Character): Promise<{ char: Character, 
         updatedChar.points.skill += 5;
 
         logMessages += ` Уровень повышен! Герой теперь ${updatedChar.level} уровня! Получено 1 очко характеристик и 5 очков навыков.`;
-        await addChronicleEntry(updatedChar.id, { type: 'level_up', title: `Достигнут ${updatedChar.level} уровень`, description: 'Опыт, полученный в боях, сделал героя сильнее.', icon: 'Award', data: { level: updatedChar.level } });
+        // Chronicle entry will be emitted by worker
+        const chronicle: OutboxChronicle = { type: 'level_up', title: `Достигнут ${updatedChar.level} уровень`, description: 'Опыт, полученный в боях, сделал героя сильнее.', icon: 'Award', data: { level: updatedChar.level } };
+        // Return at the end
     }
 
     // Auto-allocate points if enabled
@@ -297,22 +298,23 @@ async function processLevelUp(character: Character): Promise<{ char: Character, 
     updatedChar.mood = Math.min(100, updatedChar.mood + levelUpMoodBoost);
     logMessages += ` Характеристики восстановлены и улучшены, а настроение взлетело до небес (+${levelUpMoodBoost})!`;
     
-    return { char: updatedChar, log: logMessages.trim() };
+    return { char: updatedChar, log: logMessages.trim(), chronicle: { type: 'level_up', title: `Достигнут ${updatedChar.level} уровень`, description: 'Опыт, полученный в боях, сделал героя сильнее.', icon: 'Award', data: { level: updatedChar.level } } };
 }
 
 
 /**
  * Handles the completion of timed actions like quests, travel, resting, etc.
  */
-async function processActionCompletion(character: Character, gameData: GameData, userId: string): Promise<{char: Character, logs: string[]}> {
+async function processActionCompletion(character: Character, gameData: GameData, userId: string): Promise<{char: Character, logs: string[], chronicles: OutboxChronicle[]}> {
     const logs: string[] = [];
     let updatedChar = structuredClone(character);
     const { currentAction } = character;
 
     if (!currentAction || Date.now() < (currentAction.startedAt + currentAction.duration)) {
-        return { char: character, logs: [] };
+        return { char: character, logs: [], chronicles: [] };
     }
 
+    const chronicles: OutboxChronicle[] = [];
     switch (currentAction.type) {
         case 'rest':
             logs.push(`Отдых в таверне подошел к концу. Герой чувствует себя посвежевшим.`);
@@ -401,7 +403,7 @@ async function processActionCompletion(character: Character, gameData: GameData,
                 updatedChar.visitedLocations.push(destination.id);
                 updatedChar.mood = Math.min(100, updatedChar.mood + 10);
                 updatedChar.xp.current += 100;
-                await addChronicleEntry(userId, { type: 'discovery_city', title: `Открыт город: ${destination.name}`, description: `Герой впервые добрался до одного из великих городов Скайрима. Получено 100 опыта.`, icon: 'MapPin' });
+                chronicles.push({ type: 'discovery_city', title: `Открыт город: ${destination.name}`, description: `Герой впервые добрался до одного из великих городов Скайрима. Получено 100 опыта.`, icon: 'MapPin' });
             }
             updatedChar.status = 'idle';
             break;
@@ -461,7 +463,7 @@ async function processActionCompletion(character: Character, gameData: GameData,
                     }
                 }
 
-                await addChronicleEntry(userId, { type: 'quest_complete', title: `Задание выполнено: ${quest.title}`, description: quest.description, icon: 'BookCheck', data: { questId: quest.id } });
+                chronicles.push({ type: 'quest_complete', title: `Задание выполнено: ${quest.title}`, description: quest.description, icon: 'BookCheck', data: { questId: quest.id } });
                 logs.push(logMessage);
                 // Mark location activity as completed for strict sequencing
                 updatedChar.hasCompletedLocationActivity = true;
@@ -516,7 +518,7 @@ async function processActionCompletion(character: Character, gameData: GameData,
     }
     
     updatedChar.currentAction = null;
-    return { char: updatedChar, logs };
+    return { char: updatedChar, logs, chronicles };
 }
 
 /**
@@ -1035,7 +1037,7 @@ function processDivineFavor(character: Character): { char: Character, log: strin
 /**
  * Checks for temple completion and awards the final prize.
  */
-async function processTempleCompletion(character: Character): Promise<{ char: Character, log: string | null }> {
+async function processTempleCompletion(character: Character): Promise<{ char: Character, log: string | null, chronicle?: OutboxChronicle | null }> {
     const TEMPLE_GOAL = 2000000;
     if (character.templeCompletedFor || (character.templeProgress || 0) < TEMPLE_GOAL) {
         return { char: character, log: null };
@@ -1061,23 +1063,21 @@ async function processTempleCompletion(character: Character): Promise<{ char: Ch
 
     const logMessage = `ВЕЛИКОЕ СВЕРШЕНИЕ! Храм в честь ${deity.name} достроен! В благодарность божество дарует герою вечное благословение: "${permanentEffect.name}" и легендарный артефакт: ${deity.finalReward.artifact.name}!`;
 
-    await addChronicleEntry(character.id, {
+    const chronicle: OutboxChronicle = {
         type: 'quest_complete',
         title: `Храм ${deity.name} достроен!`,
         description: `Годы пожертвований и молитв принесли свои плоды. Великий храм теперь стоит как вечный памятник вере героя.`,
         icon: 'Castle'
-    });
-    
-    return { char: updatedChar, log: logMessage };
+    };
+    return { char: updatedChar, log: logMessage, chronicle };
 }
 
 
-async function processEpicPhraseGeneration(character: Character): Promise<{ char: Character, log: string | null }> {
+async function processEpicPhraseGeneration(character: Character, thoughts: Array<any> = []): Promise<{ char: Character, log: string | null, chronicle?: OutboxChronicle | null }> {
     // Chance check is now handled in the calling code
 
-    // Try DB-backed contextual selector
     try {
-        const all = await gameDataService.getAllThoughts();
+        const all = Array.isArray(thoughts) ? thoughts : [];
         const inGameDate = new Date(character.gameDate);
         const hour = inGameDate.getHours();
         const timeOfDay: 'night' | 'morning' | 'day' | 'evening' = (
@@ -1173,16 +1173,8 @@ async function processEpicPhraseGeneration(character: Character): Promise<{ char
                 updatedChar.analytics.epicPhrases.shift();
             }
             
-            // Save thought to chronicle as a system event
-            await addChronicleEntry(character.id, {
-                type: 'system',
-                title: 'Мысль героя',
-                description: phrase,
-                icon: 'Brain',
-                data: { thoughtType: 'epic_phrase' }
-            });
-            
-            return { char: updatedChar, log: `У героя родилась мысль: "${phrase}"` };
+            const chronicle: OutboxChronicle = { type: 'system', title: 'Мысль героя', description: phrase, icon: 'Brain', data: { thoughtType: 'epic_phrase' } };
+            return { char: updatedChar, log: `У героя родилась мысль: "${phrase}"`, chronicle };
         }
     } catch (e) {
         // Fallback silently on any error
@@ -1199,16 +1191,8 @@ async function processEpicPhraseGeneration(character: Character): Promise<{ char
             updatedChar.analytics.epicPhrases.shift();
         }
         
-        // Save thought to chronicle as a system event
-        await addChronicleEntry(character.id, {
-            type: 'system',
-            title: 'Мысль героя',
-            description: phrase,
-            icon: 'Brain',
-            data: { thoughtType: 'fallback_thought' }
-        });
-        
-        return { char: updatedChar, log: `У героя родилась мысль: "${phrase}"` };
+    const chronicle: OutboxChronicle = { type: 'system', title: 'Мысль героя', description: phrase, icon: 'Brain', data: { thoughtType: 'fallback_thought' } };
+    return { char: updatedChar, log: `У героя родилась мысль: "${phrase}"`, chronicle };
     }
     return { char: character, log: null };
 }
@@ -1222,11 +1206,12 @@ async function processEpicPhraseGeneration(character: Character): Promise<{ char
  */
 export async function processGameTick(
     character: Character, 
-    gameData: GameData
+    gameData: GameData & { thoughts?: Array<any> }
 ): Promise<{ 
     updatedCharacter: Character; 
     adventureLog: string[]; 
     combatLog: string[];
+    chronicleEntries: OutboxChronicle[];
 }> {
     
     if (!character || !gameData || !character.id) {
@@ -1236,6 +1221,7 @@ export async function processGameTick(
     let updatedChar: Character = structuredClone(character);
     const adventureLog: string[] = [];
     const combatLog: string[] = [];
+    const chronicleEntries: OutboxChronicle[] = [];
     const userId = character.id;
     let shouldTakeTurn = true;
     
@@ -1266,7 +1252,8 @@ export async function processGameTick(
     const deathResult = await processDeath(updatedChar, userId);
     if (deathResult.didDie) {
         if(deathResult.log) adventureLog.push(deathResult.log);
-        return { updatedCharacter: deathResult.char, adventureLog, combatLog };
+        if (deathResult.chronicle) chronicleEntries.push(deathResult.chronicle);
+        return { updatedCharacter: deathResult.char, adventureLog, combatLog, chronicleEntries };
     }
     
     // --- 6. DIVINE FAVOR & TEMPLE COMPLETION ---
@@ -1280,6 +1267,7 @@ export async function processGameTick(
     if (templeResult.log) {
         updatedChar = templeResult.char;
         adventureLog.push(templeResult.log);
+        if (templeResult.chronicle) chronicleEntries.push(templeResult.chronicle);
     }
 
 
@@ -1290,6 +1278,7 @@ export async function processGameTick(
             updatedChar = actionResult.char;
             adventureLog.push(...actionResult.logs);
             shouldTakeTurn = !updatedChar.currentAction;
+            if (actionResult.chronicles.length > 0) chronicleEntries.push(...actionResult.chronicles);
         }
     }
     
@@ -1347,6 +1336,7 @@ export async function processGameTick(
     if (levelUpResult.log) {
         updatedChar = levelUpResult.char;
         adventureLog.push(levelUpResult.log);
+        if (levelUpResult.chronicle) chronicleEntries.push(levelUpResult.chronicle);
     }
 
     // --- 12. PASSIVE REGENERATION & OTHER IDLE EFFECTS ---
@@ -1393,11 +1383,12 @@ export async function processGameTick(
         (now - lastThoughtTime) > thoughtCooldown && 
         Math.random() < 0.15) { // Reduced from 30% to 15%
         
-        const epicPhraseResult = await processEpicPhraseGeneration(updatedChar);
+        const epicPhraseResult = await processEpicPhraseGeneration(updatedChar, (gameData as any).thoughts || []);
         if (epicPhraseResult.log) {
             updatedChar = epicPhraseResult.char;
             updatedChar.lastThoughtTime = now; // Update last thought time
             adventureLog.push(epicPhraseResult.log);
+            if (epicPhraseResult.chronicle) chronicleEntries.push(epicPhraseResult.chronicle);
         }
     }
 
@@ -1425,7 +1416,8 @@ export async function processGameTick(
 
     return { 
         updatedCharacter: updatedChar, 
-        adventureLog: adventureLog.filter(Boolean), // Filter out empty messages
+        adventureLog: adventureLog.filter(Boolean),
         combatLog: combatLog.filter(Boolean),
+        chronicleEntries,
     };
 }

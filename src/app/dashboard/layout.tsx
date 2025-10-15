@@ -37,6 +37,9 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { logout } from '@/services/authService';
+import { RealmProvider, useRealm } from '@/context/realm-context';
+import { useEffect, useState } from 'react';
+import { Input } from '@/components/ui/input';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Дашборд' },
@@ -50,6 +53,33 @@ const navItems = [
   { href: '/dashboard/society', icon: Users, label: 'Общество' },
   { href: '/dashboard/chronicle', icon: BookMarked, label: 'Летопись' },
 ];
+
+function RealmSelector() {
+  const { realmId, setRealmId } = useRealm();
+  const [options, setOptions] = useState<Array<{ id: string; name: string }>>([{ id: 'global', name: 'Global' }]);
+  useEffect(() => {
+    fetch('/api/admin/realms')
+      .then(r => r.json())
+      .then(list => {
+        if (Array.isArray(list) && list.length > 0) setOptions(list);
+      })
+      .catch(() => {});
+  }, []);
+  return (
+    <div className="flex items-center gap-2">
+      <label className="text-sm text-muted-foreground hidden md:block">Realm</label>
+      <select
+        className="border rounded px-2 py-1 bg-background"
+        value={realmId}
+        onChange={(e) => setRealmId(e.target.value)}
+      >
+        {options.map(o => (
+          <option key={o.id} value={o.id}>{o.name}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
 
 function MainSidebar() {
   const pathname = usePathname();
@@ -128,22 +158,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full">
-        <MainSidebar />
-        <SidebarInset className="flex-1 flex flex-col">
-          <header className="sticky top-0 z-10 flex h-16 items-center justify-start gap-4 border-b bg-card px-4 md:hidden">
-            <SidebarTrigger>
-                <PanelLeft/>
-            </SidebarTrigger>
-             <Link href="/dashboard" className="flex items-center gap-2 font-headline text-lg font-semibold text-primary">
-                <DragonIcon className="h-6 w-6" />
-            </Link>
-          </header>
-          <main className="flex-1 overflow-auto">
-            {children}
-          </main>
-        </SidebarInset>
-      </div>
+      <RealmProvider>
+        <div className="flex min-h-screen w-full">
+          <MainSidebar />
+          <SidebarInset className="flex-1 flex flex-col">
+            <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-4 border-b bg-card px-4">
+              <div className="flex items-center gap-2 md:hidden">
+                <SidebarTrigger>
+                    <PanelLeft/>
+                </SidebarTrigger>
+                 <Link href="/dashboard" className="flex items-center gap-2 font-headline text-lg font-semibold text-primary">
+                    <DragonIcon className="h-6 w-6" />
+                </Link>
+              </div>
+              <div className="hidden md:flex" />
+              <RealmSelector />
+            </header>
+            <main className="flex-1 overflow-auto">
+              {children}
+            </main>
+          </SidebarInset>
+        </div>
+      </RealmProvider>
     </SidebarProvider>
   );
 }

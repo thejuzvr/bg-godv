@@ -15,9 +15,36 @@ import { initialItems } from '../src/data/items';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  max: Number(process.env.PG_POOL_MAX || '5'),
+  idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT_MS || '30000'),
+  connectionTimeoutMillis: Number(process.env.PG_CONN_TIMEOUT_MS || '10000'),
+  keepAlive: true as any,
+  ssl: String(process.env.PGSSL || '').toLowerCase() === 'true' ? { rejectUnauthorized: String(process.env.PGSSL_REJECT_UNAUTHORIZED || 'false').toLowerCase() === 'true' } as any : undefined,
 });
 
 const db = drizzle(pool, { schema });
+
+async function withDbRetries<T>(label: string, fn: () => Promise<T>, maxAttempts?: number): Promise<T> {
+  const attempts = Number(process.env.DB_RETRY_ATTEMPTS || (maxAttempts ?? 3));
+  const maxBackoffMs = Number(process.env.DB_RETRY_MAX_MS || '3000');
+  let lastErr: any;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastErr = err;
+      const msg = (err?.message || '').toLowerCase();
+      const transient = msg.includes('terminated') || msg.includes('timeout') || msg.includes('reset');
+      if (!transient) throw err;
+      const base = Math.min(maxBackoffMs, 200 * attempt * attempt);
+      const jitter = Math.floor(Math.random() * 100);
+      const backoff = base + jitter;
+      console.warn(`[DB-Retry] ${label} failed (attempt ${attempt}/${attempts}): ${err?.message || err}. Retrying in ${backoff}ms`);
+      await new Promise(r => setTimeout(r, backoff));
+    }
+  }
+  throw lastErr;
+}
 
 export class GameDataService {
   // ===== LOCATIONS =====

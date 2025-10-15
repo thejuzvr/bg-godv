@@ -32,17 +32,18 @@ async function cleanupOldCombatAnalytics(characterId: string) {
   }
 }
 
-export async function getRecentCombatAnalytics(characterId: string, limit: number = 10) {
-  return await db
+export async function getRecentCombatAnalytics(characterId: string, limit: number = 10, realmId?: string) {
+  const base = await db
     .select()
     .from(combatAnalytics)
     .where(eq(combatAnalytics.characterId, characterId))
     .orderBy(desc(combatAnalytics.timestamp))
     .limit(limit);
+  return realmId ? base.filter((r: any) => (r as any).realmId === realmId) : base;
 }
 
-export async function getCombatStatsSummary(characterId: string) {
-  const battles = await getRecentCombatAnalytics(characterId, 10);
+export async function getCombatStatsSummary(characterId: string, realmId?: string) {
+  const battles = await getRecentCombatAnalytics(characterId, 10, realmId);
   
   if (battles.length === 0) {
     return null;

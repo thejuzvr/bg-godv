@@ -10,14 +10,56 @@ let pool: pg.Pool | null = null;
 
 function getPool() {
   if (!pool) {
+    const useSsl = String(process.env.PGSSL || '').toLowerCase() === 'true';
+    const rejectUnauthorized = String(process.env.PGSSL_REJECT_UNAUTHORIZED || 'false').toLowerCase() === 'true';
+    const max = Number(process.env.PG_POOL_MAX || '5');
+    const idleTimeoutMillis = Number(process.env.PG_IDLE_TIMEOUT_MS || '30000');
+    const connectionTimeoutMillis = Number(process.env.PG_CONN_TIMEOUT_MS || '10000');
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
+      max,
+      idleTimeoutMillis,
+      connectionTimeoutMillis,
+      keepAlive: true,
+      ssl: useSsl ? { rejectUnauthorized } as any : undefined,
     });
   }
   return pool;
 }
 
 export const db = drizzle(getPool(), { schema });
+
+// === Transient DB retry helper ===
+function isTransientDbError(error: any): boolean {
+  const msg = (error?.message || '').toLowerCase();
+  return (
+    msg.includes('connection terminated') ||
+    msg.includes('terminat') ||
+    msg.includes('timeout') ||
+    msg.includes('econnreset') ||
+    msg.includes('etimedout')
+  );
+}
+
+async function withDbRetries<T>(label: string, fn: () => Promise<T>, maxAttempts?: number): Promise<T> {
+  const attempts = Number(process.env.DB_RETRY_ATTEMPTS || (maxAttempts ?? 3));
+  const maxBackoffMs = Number(process.env.DB_RETRY_MAX_MS || '3000');
+  let lastErr: any;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastErr = err;
+      if (!isTransientDbError(err)) throw err;
+      const base = Math.min(maxBackoffMs, 200 * attempt * attempt);
+      const jitter = Math.floor(Math.random() * 100);
+      const backoff = base + jitter;
+      console.warn(`[DB-Retry] ${label} failed (attempt ${attempt}/${attempts}): ${err?.message || err}. Retrying in ${backoff}ms`);
+      await new Promise(r => setTimeout(r, backoff));
+    }
+  }
+  throw lastErr;
+}
 
 // User functions
 export async function createUser(id: string, email: string, passwordHash: string) {
@@ -35,8 +77,10 @@ export async function getUserById(id: string) {
 }
 
 export async function getUserByEmail(email: string) {
-  const [user] = await db.select().from(schema.users).where(eq(schema.users.email, email)).limit(1);
-  return user;
+  return await withDbRetries('getUserByEmail', async () => {
+    const [user] = await db.select().from(schema.users).where(eq(schema.users.email, email)).limit(1);
+    return user;
+  });
 }
 
 export async function updateUserLastLogin(id: string) {
@@ -54,8 +98,10 @@ export async function createSession(token: string, userId: string, expiresAt: nu
 }
 
 export async function getSession(token: string) {
-  const [session] = await db.select().from(schema.sessions).where(eq(schema.sessions.token, token)).limit(1);
-  return session;
+  return await withDbRetries('getSession', async () => {
+    const [session] = await db.select().from(schema.sessions).where(eq(schema.sessions.token, token)).limit(1);
+    return session;
+  });
 }
 
 export async function deleteSession(token: string) {
@@ -93,6 +139,7 @@ export async function saveCharacter(characterData: any) {
         .values({
           ...characterData,
           userId: characterData.userId || characterData.id, // default to auth id
+          realmId: characterData.realmId || 'global',
           createdAt: characterData.createdAt || Date.now(),
           lastUpdatedAt: Date.now(),
           lastProcessedAt: Date.now(),
@@ -109,7 +156,9 @@ export async function getCharacterById(id: string) {
 }
 
 export async function getAllActiveCharacters() {
-  return await db.select().from(schema.characters).where(eq(schema.characters.isActive, true));
+  return await withDbRetries('getAllActiveCharacters', async () => {
+    return await db.select().from(schema.characters).where(eq(schema.characters.isActive, true));
+  });
 }
 
 export async function updateCharacterLastProcessed(id: string, timestamp: number) {
@@ -120,9 +169,11 @@ export async function updateCharacterLastProcessed(id: string, timestamp: number
 
 // Chronicle functions
 export async function addChronicleEntry(characterId: string, entry: Omit<schema.NewChronicleDB, 'id' | 'characterId'>) {
+  const realmId = (await getCharacterById(characterId))?.realmId || 'global';
   const [created] = await db.insert(schema.chronicle)
     .values({
       characterId,
+      realmId,
       timestamp: entry.timestamp || Date.now(),
       type: entry.type,
       title: entry.title,
@@ -179,6 +230,7 @@ export async function addOfflineEvent(characterId: string, event: Omit<schema.Ne
         message: event.message,
         data: event.data,
         isRead: false,
+        realmId: (await getCharacterById(characterId))?.realmId || 'global',
       })
       .returning();
     return created;
@@ -269,5 +321,26 @@ export async function deleteOldOfflineEvents(characterId: string, olderThan: num
     const batch = idsToDelete.slice(i, i + BATCH_SIZE);
     await db.delete(schema.offlineEvents)
       .where(sql`${schema.offlineEvents.id} = ANY(ARRAY[${sql.join(batch.map(id => sql`${id}`), sql`, `)}])`);
+  }
+}
+
+// === Snapshots ===
+export async function insertCharacterSnapshot(realmId: string, characterId: string, asOfTick: number, summary: any) {
+  await db.insert(schema.characterStateSnapshots).values({
+    realmId,
+    characterId,
+    asOfTick,
+    summary,
+  });
+}
+
+export async function cleanupOldSnapshots(characterId: string, keepLatest: number = 100) {
+  const rows = await db.select().from(schema.characterStateSnapshots)
+    .where(eq(schema.characterStateSnapshots.characterId, characterId))
+    .orderBy(desc(schema.characterStateSnapshots.asOfTick));
+  if (rows.length <= keepLatest) return;
+  const toDelete = rows.slice(keepLatest);
+  for (const r of toDelete) {
+    await db.delete(schema.characterStateSnapshots).where(eq(schema.characterStateSnapshots.id, (r as any).id));
   }
 }

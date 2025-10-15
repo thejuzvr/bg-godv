@@ -237,3 +237,72 @@ Comprehensive TypeScript types in `src/types/`:
 - Configured for Russian language (game text in Russian)
 - SVG-based world map from UESP (Elder Scrolls wiki)
 - Custom middleware for server/client boundary enforcement
+
+## Environment (.env) — перед запуском/проверками
+
+Скопируйте пример и заполните значения, затем перезапустите dev/воркеры.
+
+```env
+# PostgreSQL
+DATABASE_URL=postgres://user:password@localhost:5432/elderidledb
+
+# Redis (BullMQ, кэш, Socket.IO адаптер)
+# Локально:
+REDIS_URL=redis://localhost:6379
+# Managed (пример Upstash/Redis Cloud):
+# REDIS_URL=rediss://default:<password>@<host>:<port>/0
+
+# Фичи
+FEATURE_BULLMQ=true                 # включает очередь тиков (BullMQ)
+NEXT_PUBLIC_FEATURE_WEBSOCKETS=true # включает WebSocket на клиенте
+
+# Воркеры/Realtime
+QUEUE_CONCURRENCY=4            # параллелизм обработки тиков
+DEFAULT_REALM_ID=global        # дефолтный realm
+WS_PORT=5050                   # порт Socket.IO сервера
+WS_URL=http://localhost:5050   # URL для клиента (проброшен через next.config)
+
+# Node/Next
+NODE_ENV=development
+```
+
+Примечания:
+- Формат `REDIS_URL`:
+  - Локально: `redis://localhost:6379`
+  - TLS/managed: `rediss://default:<password>@<host>:<port>/0`
+- Клиент использует `WS_URL` из `next.config.ts` (секция `env`), поэтому значение берётся из `.env` и встраивается в бандл.
+- Включение WebSocket: выставьте `NEXT_PUBLIC_FEATURE_WEBSOCKETS=true`, запустите реалтайм-сервер.
+
+### Запуск в dev
+
+```bash
+# 1) Установить зависимости
+npm install
+
+# 2) Применить схему БД (если нужно)
+npm run db:push
+
+# 3) Запустить Next, воркер и realtime вместе
+npm run dev:all
+
+# (или по отдельности)
+npm run dev       # Next.js
+npm run worker    # BullMQ/legacy worker runner (зависит от FEATURE_BULLMQ)
+npm run realtime  # Socket.IO сервер
+```
+
+### Rollout / проверка фич
+- Включите BullMQ: `FEATURE_BULLMQ=true`
+- Оставьте legacy loop выключенным (runner сам выберет BullMQ)
+- Запустите realtime: `npm run realtime`; в `.env` укажите `WS_URL`
+- Постепенно включайте WebSocket на клиенте: `NEXT_PUBLIC_FEATURE_WEBSOCKETS=true`
+- Мониторинг: следите за метриками
+  - Ошибки воркера (логи)
+  - Задержка очереди (BullMQ UI/статистика)
+  - Разрывы WS (логи realtime)
+  - Кэш-хиты Redis (по логам/метрикам)
+
+### Backfill
+- По данным существующих персонажей проставьте `realm_id = 'global'` (миграции уже добавляют дефолт)
+- Создайте хотя бы один новый realm в `/admin/realms`
+- Проверяйте, что все запросы фильтруются по realm

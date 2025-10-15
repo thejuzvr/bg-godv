@@ -32,21 +32,23 @@ export async function addOfflineEvent(userId: string, event: OfflineEventData): 
 /**
  * Gets all unread offline events for a character
  */
-export async function getUnreadOfflineEvents(userId: string) {
+export async function getUnreadOfflineEvents(userId: string, realmId?: string) {
   if (!userId) {
     console.warn("User not authenticated. Cannot fetch offline events.");
     return [];
   }
 
-  return await storage.getUnreadOfflineEvents(userId);
+  const rows = await storage.getUnreadOfflineEvents(userId);
+  return realmId ? rows.filter((r: any) => (r as any).realmId === realmId) : rows;
 }
 
-export async function getRecentOfflineEvents(userId: string, limit = 40) {
+export async function getRecentOfflineEvents(userId: string, limit = 40, realmId?: string) {
   if (!userId) {
     console.warn("User not authenticated. Cannot fetch recent offline events.");
     return [];
   }
-  return await storage.getRecentOfflineEvents(userId, limit);
+  const rows = await storage.getRecentOfflineEvents(userId, limit);
+  return realmId ? rows.filter((r: any) => (r as any).realmId === realmId) : rows;
 }
 
 /**

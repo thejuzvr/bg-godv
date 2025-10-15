@@ -180,15 +180,16 @@ export async function createCharacter(userId: string, character: Character) {
     // Create welcome message based on backstory
     const welcomeMessage = createWelcomeMessage(character);
     
-    // Add welcome message to chronicle (for chronicle page)
+    // Сначала сохраняем персонажа (FK на chronicle требует существования записи)
+    await saveCharacterToDb(userId, character);
+
+    // Затем пишем событие в летопись
     await addChronicleEntry(userId, { 
       type: 'system', 
       title: 'Начало приключения', 
       description: welcomeMessage, 
       icon: 'Star' 
     });
-    
-    await saveCharacterToDb(userId, character);
     return { success: true, welcomeMessage };
   } catch (error) {
     console.error('Error creating character:', error);

@@ -43,6 +43,13 @@
       "when": 1760534957111,
       "tag": "0005_previous_rocket_racer",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1760558630836,
+      "tag": "0006_clever_master_mold",
+      "breakpoints": true
     }
   ]
 }
