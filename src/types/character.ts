@@ -93,6 +93,9 @@ export interface CombatState {
     };
     onWinQuestId?: string | null;
     fleeAttempted?: boolean;
+    // Shout usage and control effects
+    shoutUsed?: boolean;
+    enemyStunnedRounds?: number; // number of enemy turns to skip
     lastRoll?: {
       actor: 'hero' | 'enemy';
       action: string;

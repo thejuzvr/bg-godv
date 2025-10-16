@@ -11,6 +11,7 @@ export type ActionCategory = Action['type'];
 export interface CatalogEntry {
   id: string;
   category: ActionCategory;
+  tags?: string[];
   cooldownMs?: number;
   // Adapter to brain action
   action: Action;
@@ -22,10 +23,23 @@ export interface CatalogEntry {
 import { idleActions, combatActions, deadActions, exploringActions, wanderAction } from "./brain";
 
 // Placeholder: we will fill this from policy at runtime by scanning brain's action sets if needed.
+const TAG_REGISTRY: Record<string, string[]> = {
+  'Взять задание': ['quest','city'],
+  'Сделать привал': ['rest','travel'],
+  'Переночевать в таверне': ['rest','city'],
+  'Отдохнуть в таверне': ['rest','city'],
+  'Торговать с торговцем': ['trade','city'],
+  'Продать хлам': ['trade','city'],
+  'Найти врага': ['combat','explore'],
+  'Сбежать из боя': ['combat','safety'],
+  'Использовать зелье здоровья': ['safety'],
+};
+
 function toEntries(prefix: string, actions: Action[]): CatalogEntry[] {
   return actions.map((a, idx) => ({
     id: `${prefix}:${a.name || idx}`,
     category: a.type,
+    tags: TAG_REGISTRY[a.name] || undefined,
     action: a,
   }));
 }

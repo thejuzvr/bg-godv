@@ -60,7 +60,7 @@ export class PostgresCharacterRepository implements CharacterRepository {
       actionHistory: charData.actionHistory || [],
       effects: charData.effects || [],
       // Hydrate unlocked achievements from DB field or from preferences fallback
-      unlockedAchievements: charData.unlockedAchievements || ((charData as any).preferences?.unlockedAchievements) || [],
+      unlockedAchievements: (charData as any).unlockedAchievements || ((charData as any).preferences?.unlockedAchievements) || [],
     };
 
     // Ensure gold exists in inventory for backward compatibility

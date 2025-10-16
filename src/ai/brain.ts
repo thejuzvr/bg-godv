@@ -7,6 +7,11 @@
 import type { Character, WorldState, ActiveEffect, ActiveAction, EquipmentSlot, CharacterInventoryItem, ActiveCryptQuest, Weather, CharacterSkills, CharacterAttributes, TimeOfDay, WeatherEffect, TimeOfDayEffect } from "@/types/character";
 import type { LootEntry } from "@/types/enemy";
 import { selectActionSimple } from './policy';
+import { USE_CONFIG_PRIORITY } from './config/constants';
+import { computeActionScores } from './priority-engine';
+import { updateOnAction } from './fatigue';
+import { recordAttempt, recordOutcome } from './learning';
+import { recordDecisionTrace } from './diagnostics';
 import type { GameData } from "@/services/gameDataService";
 import { allSpells } from "@/data/spells";
 import { allPerks } from "@/data/perks";
@@ -407,6 +412,23 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
     // --- Hero's Turn ---
     logMessages.push('--- Ход героя ---');
 
+    // Single-use shout (Fus-Ro-Dah) decision
+    if (updatedChar.combat && !updatedChar.combat.shoutUsed) {
+        try {
+            const { SHOUT_USE_CHANCE } = await import('./config/balance');
+            if (Math.random() < (SHOUT_USE_CHANCE || 0.18)) {
+                const minDmg = 20 + Math.floor(updatedChar.level * 1.1);
+                const maxDmg = 35 + Math.floor(updatedChar.level * 1.6);
+                const dmg = Math.max(5, Math.floor(minDmg + Math.random() * (maxDmg - minDmg + 1)));
+                enemy.health.current = Math.max(0, enemy.health.current - dmg);
+                updatedChar.combat.enemyStunnedRounds = ((updatedChar.combat?.enemyStunnedRounds) || 0) + 1;
+                updatedChar.combat.shoutUsed = true;
+                updatedChar.combat.totalDamageDealt = ((updatedChar.combat?.totalDamageDealt) || 0) + dmg;
+                logMessages.push(`"Фус-Ро-Да!" Герой оглушает ${enemy.name} на 1 ход и наносит ${dmg} урона.`);
+            }
+        } catch {}
+    }
+
     // Check if should use healing potion first (critical health)
     const healthRatio = updatedChar.stats.health.current / updatedChar.stats.health.max;
     if (healthRatio < 0.35) {
@@ -656,6 +678,18 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             winMsg += ` Репутация с ${getFactionName(factionId)} увеличилась на ${reputationGain}.`;
         }
         
+        // Humorous flavor line and chronicle hook
+        try {
+            const { getHumorousVictoryLine } = await import('./game-engine');
+            const humor = (getHumorousVictoryLine as any)?.(enemy.name, updatedChar.location) || '';
+            if (humor) {
+                logMessages.push(humor);
+                if (updatedChar.combat) {
+                    if (!updatedChar.combat.combatLog) updatedChar.combat.combatLog = [];
+                    updatedChar.combat.combatLog.push(`[chronicle] combat_victory|Победа!|${humor}|Swords|enemy=${enemy.name}`);
+                }
+            }
+        } catch {}
         logMessages.push(winMsg);
         // Append round messages to combat log before saving analytics
         if (updatedChar.combat?.combatLog) {
@@ -669,6 +703,12 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
     
     // --- Enemy's Turn ---
     logMessages.push(`--- Ход ${enemy.name} ---`);
+    if (updatedChar.combat && (updatedChar.combat.enemyStunnedRounds || 0) > 0) {
+        updatedChar.combat.enemyStunnedRounds = Math.max(0, (updatedChar.combat.enemyStunnedRounds || 0) - 1);
+        logMessages.push(`${enemy.name} оглушен и пропускает ход.`);
+        updatedChar.combat.enemy = enemy;
+        return updatedChar;
+    }
     const enemyAttackBonus = getAttributeBonus(baseEnemyDef?.level || 1);
     const { roll: enemyRoll, updatedCharacter: charAfterEnemyRoll } = rollD20(updatedChar);
     updatedChar = charAfterEnemyRoll;
@@ -962,7 +1002,7 @@ const exploreCityAction: Action = {
 // Enhanced: Sell low-value items and duplicates to free space or get cash
 const sellJunkAction: Action = {
     name: "Продать хлам",
-    type: "trading",
+    type: "social",
     getWeight: (char, worldState, gameData) => {
         // High priority if overencumbered
         if (worldState.isOverencumbered) return priorityToWeight(Priority.URGENT);
@@ -970,8 +1010,7 @@ const sellJunkAction: Action = {
         // Check for duplicates (more than 5 of same item)
         const hasDuplicates = char.inventory.some(i => 
             i.id !== 'gold' && 
-            i.type !== 'key_item' && 
-            i.type !== 'quest_item' &&
+            i.type !== 'key_item' &&
             i.quantity > 5 && 
             !Object.values(char.equippedItems || {}).includes(i.id)
         );
@@ -989,7 +1028,7 @@ const sellJunkAction: Action = {
         const hasMerchant = gameData.npcs.some(n => (n.location === char.location || n.location === 'on_road') && n.inventory && n.inventory.length > 0);
         if (!hasMerchant) return false;
         // Any sellable item available?
-        return char.inventory.some(i => i.id !== 'gold' && i.type !== 'key_item' && i.type !== 'quest_item' && i.quantity > 0 && !Object.values(char.equippedItems || {}).includes(i.id));
+        return char.inventory.some(i => i.id !== 'gold' && i.type !== 'key_item' && i.quantity > 0 && !Object.values(char.equippedItems || {}).includes(i.id));
     },
     async perform(character, gameData) {
         let updatedChar = structuredClone(character);
@@ -1005,8 +1044,7 @@ const sellJunkAction: Action = {
         // Priority 1: Sell duplicates (30-50% of excess)
         const duplicates = updatedChar.inventory.filter(i => 
             i.id !== 'gold' && 
-            i.type !== 'key_item' && 
-            i.type !== 'quest_item' &&
+            i.type !== 'key_item' &&
             i.quantity > 5 && 
             !equippedSet.has(i.id)
         );
@@ -1029,7 +1067,7 @@ const sellJunkAction: Action = {
         
         // Priority 2: Sell low-value items (junk)
         const sellable = updatedChar.inventory
-            .filter(i => i.id !== 'gold' && i.type !== 'key_item' && i.type !== 'quest_item' && i.quantity > 0 && !equippedSet.has(i.id) && i.type !== 'spell_tome')
+            .filter(i => i.id !== 'gold' && i.type !== 'key_item' && i.quantity > 0 && !equippedSet.has(i.id) && i.type !== 'spell_tome')
             .map(i => ({ item: i, value: computeBaseValue(i as any) }))
             .sort((a, b) => a.value - b.value);
             
@@ -1218,9 +1256,9 @@ const findEnemyAction: Action = {
         // Gear score: best weapon damage + sum armor pieces
         const weapon = char.equippedItems.weapon ? char.inventory.find(i => i.id === char.equippedItems.weapon) : null;
         const bestWeaponDamage = weapon?.damage || 0;
-        const armorSum = ['head','torso','legs','hands','feet']
-            .map(slot => char.equippedItems[slot as any])
-            .map(id => char.inventory.find(i => i.id === id)?.armor || 0)
+        const armorSum = (['head','torso','legs','hands','feet'] as EquipmentSlot[])
+            .map((slot: EquipmentSlot) => char.equippedItems[slot])
+            .map((id) => (id ? (char.inventory.find(i => i.id === id)?.armor || 0) : 0))
             .reduce((a,b)=>a+b,0);
 
         const gearScore = bestWeaponDamage + armorSum * 0.3;
@@ -2126,6 +2164,53 @@ const processCryptStageAction: Action = {
     }
 };
 
+// Lightweight ExploreDungeon action for bleak_falls_barrow (Windy Peak)
+const exploreDungeonAction: Action = {
+    name: 'Исследовать подземелье',
+    type: 'explore',
+    getWeight: (char, world, gameData) => {
+        if (char.location !== 'bleak_falls_barrow') return 0;
+        // Prefer exploring if idle and not recently performed
+        return priorityToWeight(Priority.MEDIUM);
+    },
+    canPerform: (char) => char.status === 'idle' && char.location === 'bleak_falls_barrow',
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        // Small random outcomes: loot, trap, nothing
+        const roll = Math.random();
+        const logs: string[] = [];
+        if (roll < 0.55) {
+            // Loot small gold or misc
+            const goldGain = 10 + Math.floor(Math.random() * 21); // 10-30
+            const goldItem = updatedChar.inventory.find(i => i.id === 'gold');
+            if (goldItem) goldItem.quantity += goldGain; else updatedChar.inventory.push({ id: 'gold', name: 'Золото', weight: 0, type: 'gold', quantity: goldGain } as any);
+            logs.push(`В темных нишах герой находит ${goldGain} золота.`);
+        } else if (roll < 0.75) {
+            // Trap
+            const dmg = 5 + Math.floor(Math.random() * 11); // 5-15
+            updatedChar.stats.health.current = Math.max(0, updatedChar.stats.health.current - dmg);
+            logs.push(`Ловушка! Копья выскакивают из стены, нанося ${dmg} урона.`);
+        } else if (roll < 0.9) {
+            // Minor item (common misc)
+            const misc = gameData.items.find(i => i.type === 'misc' && i.rarity === 'common');
+            if (misc) {
+                const existing = updatedChar.inventory.find(i => i.id === misc.id);
+                if (existing) existing.quantity += 1; else updatedChar.inventory.push({ ...misc, quantity: 1 } as any);
+                logs.push(`Среди праха герой находит: ${misc.name}.`);
+            } else {
+                logs.push('Нашел кое-что… но ничего ценного.');
+            }
+        } else {
+            // Rare discovery → chronicle
+            logs.push('Герой находит древнюю надпись: «Кто с песней пришёл — с песней уйдёт».');
+            // Chronicle effect will be emitted by outer engine if needed, keep log only here
+        }
+        return { character: updatedChar, logMessage: logs.join(' ') };
+    }
+};
+
+// Register explore action
+
 // ==================================
 // NPC Social Actions
 // ==================================
@@ -2319,7 +2404,7 @@ export const idleActions: Action[] = [
 ];
 export const combatActions: Action[] = [fightEnemyAction];
 export const deadActions: Action[] = [takeSovngardeQuestAction, wanderSovngardeAction];
-export const exploringActions: Action[] = [processCryptStageAction];
+export const exploringActions: Action[] = [processCryptStageAction, exploreDungeonAction];
 
 
 /**
@@ -2439,7 +2524,33 @@ async function determineNextAction(character: Character, gameData: GameData): Pr
         }
     }
 
-    // 7. Simplified policy selection (Godville-like): weighted random + variety boost
+    // 7. Selection
+    if (USE_CONFIG_PRIORITY) {
+        // Build lightweight catalog entries to score
+        const entries = possibleActions.map((a, idx) => ({
+            id: `${a.type}:${a.name}`,
+            category: a.type as any,
+            action: a as any,
+        }));
+        const scored = await computeActionScores({ character, actions: entries, profileCode: 'warrior', world: worldState });
+        // record trace for diagnostics UI
+        try {
+            recordDecisionTrace(character.id, scored.map(s => ({
+                actionId: s.actionId,
+                name: s.name,
+                base: s.breakdown.base,
+                ruleBoost: s.breakdown.ruleBoost,
+                profile: s.breakdown.profile,
+                fatigue: s.breakdown.fatigue,
+                modifiers: s.breakdown.modifiers,
+                total: s.breakdown.total,
+            })));
+        } catch {}
+        const top = scored[0];
+        const selected = possibleActions.find(a => `${a.type}:${a.name}` === top?.actionId) || possibleActions[0];
+        return selected ?? wanderAction;
+    }
+    // Fallback: Simplified policy selection (Godville-like)
     const choice = selectActionSimple(possibleActions, { character, gameData });
     return choice ?? wanderAction;
 }
@@ -2478,7 +2589,7 @@ export async function processCharacterTurn(
         finalChar.divineDestinationId = null;
     }
 
-    // Add action to history for fatigue system (circular buffer)
+    // Add action to history for fatigue system (circular buffer) and persist fatigue
     if (!finalChar.actionHistory) {
         finalChar.actionHistory = [];
     }
@@ -2488,6 +2599,14 @@ export async function processCharacterTurn(
     if (finalChar.actionHistory.length > 40) {
         finalChar.actionHistory = finalChar.actionHistory.slice(-40);
     }
+    // Persist fatigue counter for repetition dampening
+    try {
+        const key = `${nextAction.type}:${nextAction.name}`;
+        await updateOnAction(finalChar.id, key);
+        await recordAttempt(finalChar.id, key);
+    } catch {}
+
+    // Outcome-based learning can be recorded on action completion sites (quest/combat)
 
 
     return { ...result, character: finalChar };
@@ -2522,7 +2641,7 @@ const startCureDiseaseAction: Action = {
     name: "Начать лечение болезни",
     type: "quest",
     getWeight: (char, worldState) => (worldState.hasVampirism || worldState.hasLycanthropy) ? priorityToWeight(worldState.isHungry ? Priority.HIGH : Priority.MEDIUM) : priorityToWeight(Priority.DISABLED),
-    canPerform: (char, worldState) => worldState.isIdle && (worldState.hasVampirism || worldState.hasLycanthropy) && !char.currentAction,
+    canPerform: (char, worldState) => Boolean(worldState.isIdle && (worldState.hasVampirism || worldState.hasLycanthropy) && !char.currentAction),
     async perform(character) {
         const updatedChar = structuredClone(character);
         updatedChar.status = 'busy';
@@ -2536,7 +2655,7 @@ const huntForBloodAction: Action = {
     name: "Охота за кровью",
     type: "quest",
     getWeight: (char, worldState) => (worldState.hasVampirism && worldState.isNightTime && worldState.isHungry) ? priorityToWeight(Priority.HIGH) : priorityToWeight(Priority.DISABLED),
-    canPerform: (char, worldState) => worldState.isIdle && worldState.hasVampirism && worldState.isNightTime && !char.currentAction,
+    canPerform: (char, worldState) => Boolean(worldState.isIdle && worldState.hasVampirism && worldState.isNightTime && !char.currentAction),
     async perform(character) {
         const updatedChar = structuredClone(character);
         updatedChar.status = 'busy';
@@ -2550,7 +2669,7 @@ const huntAsBeastAction: Action = {
     name: "Охота на зверя",
     type: "quest",
     getWeight: (char, worldState) => (worldState.hasLycanthropy && worldState.isNightTime && worldState.isHungry) ? priorityToWeight(Priority.HIGH) : priorityToWeight(Priority.DISABLED),
-    canPerform: (char, worldState) => worldState.isIdle && worldState.hasLycanthropy && worldState.isNightTime && !char.currentAction,
+    canPerform: (char, worldState) => Boolean(worldState.isIdle && worldState.hasLycanthropy && worldState.isNightTime && !char.currentAction),
     async perform(character) {
         const updatedChar = structuredClone(character);
         updatedChar.status = 'busy';

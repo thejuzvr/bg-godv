@@ -1,14 +1,30 @@
 
 'use server';
 
-import type { Character, ActiveEffect, Weather, Season } from "@/types/character";
+import type { Character, ActiveEffect, Weather, Season, TimeOfDay, WeatherEffect, TimeOfDayEffect } from "@/types/character";
 import type { GameData } from "@/services/gameDataService";
 import { processCharacterTurn } from '@/ai/brain';
+import { decayTick } from '@/ai/fatigue';
 // Future: wire simple policy here by swapping determineNextAction in brain or calling policy
 import { allDivinities } from "@/data/divinities";
 import { getFallbackThought } from "@/data/thoughts";
+import type { OutboxChronicleEntry } from "@/types/chronicle";
 
-type OutboxChronicle = { type: string; title: string; description: string; icon: string; data?: any };
+type OutboxChronicle = OutboxChronicleEntry;
+
+// Humorous victory line generator
+export function getHumorousVictoryLine(enemyName: string, location?: string): string {
+    const loc = location ? ` в ${location}` : '';
+    const jokes = [
+        `Герой так вежливо победил ${enemyName}, что тот извинился${loc}.`,
+        `Победа над ${enemyName} добыта честно: один удар, два шага стиля${loc}.`,
+        `${enemyName} попытался позвать маму... но получил урок истории${loc}.`,
+        `Герой победил ${enemyName} и забил поиск: 'как отстирать кровь'${loc}.`,
+        `${enemyName} понял, что сегодня — не его день. Герой — понял это раньше${loc}.`,
+        `Легенды говорят, что ${enemyName} исчез. На деле — его спрятала тень славы героя${loc}.`,
+    ];
+    return jokes[Math.floor(Math.random() * jokes.length)];
+}
 
 // Helper functions for faction reputation
 function getFactionForLocation(location: string): string | null {
@@ -158,12 +174,12 @@ function processEffects(character: Character): {char: Character, logs: string[]}
 
             // Temporary attribute application for 'lucky'
             if (effect.id === 'lucky' && !(effect as any).data?.applied) {
-                if (!effect.data) effect.data = {};
+                if (!effect.data) effect.data = {} as any;
                 updatedChar.attributes.strength += 5;
                 updatedChar.attributes.agility += 5;
                 updatedChar.attributes.intelligence += 5;
                 updatedChar.attributes.endurance += 5;
-                effect.data.applied = true as any;
+                (effect as any).data.applied = true;
             }
             activeEffects.push(effect);
         }
@@ -465,6 +481,11 @@ async function processActionCompletion(character: Character, gameData: GameData,
 
                 chronicles.push({ type: 'quest_complete', title: `Задание выполнено: ${quest.title}`, description: quest.description, icon: 'BookCheck', data: { questId: quest.id } });
                 logs.push(logMessage);
+                // Learning: quest success → mark success for 'Взять задание'
+                try {
+                    const { recordOutcome } = await import('./learning');
+                    await recordOutcome(updatedChar.id, 'quest:Взять задание', true);
+                } catch {}
                 // Mark location activity as completed for strict sequencing
                 updatedChar.hasCompletedLocationActivity = true;
             }
@@ -489,12 +510,12 @@ async function processActionCompletion(character: Character, gameData: GameData,
                 // Critical failure: keep disease and double penalties for 2h
                 const eff = updatedChar.effects.find(e => e.id === 'disease_vampirism' || e.id === 'disease_lycanthropy')!;
                 if (!eff.data) eff.data = {} as any;
-                eff.data.penaltyBoostUntil = Date.now() + 2 * 60 * 60 * 1000;
+                (eff.data as any).penaltyBoostUntil = Date.now() + 2 * 60 * 60 * 1000;
                 logs.push('Критическая неудача! Штрафы усилились на 2 часа.');
             } else if (roll === 20) {
                 // Critical success: cure and grant Lucky for 24h
                 updatedChar.effects = updatedChar.effects.filter(e => e.id !== 'disease_vampirism' && e.id !== 'disease_lycanthropy');
-                const lucky: ActiveEffect = { id: 'lucky', name: 'Удачливый', description: 'Все базовые атрибуты повышены на 5.', icon: 'Clover', type: 'buff', expiresAt: Date.now() + 24 * 60 * 60 * 1000, value: 5, data: { applied: false as any } };
+                const lucky: ActiveEffect = { id: 'lucky', name: 'Удачливый', description: 'Все базовые атрибуты повышены на 5.', icon: 'Clover', type: 'buff', expiresAt: Date.now() + 24 * 60 * 60 * 1000, value: 5, data: {} as any };
                 updatedChar.effects.push(lucky);
                 logs.push('Критический успех! Болезнь исцелена, герой чувствует необычайную удачу (+5 к атрибутам на 24 часа).');
             } else if (roll >= 13) {
@@ -509,8 +530,8 @@ async function processActionCompletion(character: Character, gameData: GameData,
             const eff = updatedChar.effects.find(e => e.id === 'disease_vampirism' || e.id === 'disease_lycanthropy');
             if (eff) {
                 if (!eff.data) eff.data = {} as any;
-                eff.data.lastFedAt = Date.now();
-                eff.data.hungerLevel = 0;
+                (eff.data as any).lastFedAt = Date.now();
+                (eff.data as any).hungerLevel = 0;
                 logs.push('Охота завершена. Голод утих.');
             }
             updatedChar.status = 'idle';
@@ -652,14 +673,17 @@ function processTravelEvents(character: Character, gameData: GameData): { char: 
                             }
                         } else {
                             // Weather/time prevented finding the item
-                            const weatherNames = {
+                            const weatherNames: Record<Weather, string> = {
+                                'Clear': 'ясная погода',
+                                'Cloudy': 'облачная погода',
                                 'Rain': 'дождь',
-                                'Snow': 'снег', 
-                                'Fog': 'туман',
-                                'Cloudy': 'облачная погода'
+                                'Snow': 'снег',
+                                'Fog': 'туман'
                             };
-                            const timeNames = {
+                            const timeNames: Record<TimeOfDay, string> = {
                                 'night': 'ночью',
+                                'morning': 'утром',
+                                'day': 'днем',
                                 'evening': 'вечером'
                             };
                             const reason = updatedChar.weather !== 'Clear' ? weatherNames[updatedChar.weather] : timeNames[updatedChar.timeOfDay];
@@ -716,6 +740,39 @@ function processTravelEvents(character: Character, gameData: GameData): { char: 
         }
     }
     
+    return { char: updatedChar, logs };
+}
+
+// Location-bound events (idle or during dungeon exploration)
+function processLocationEvents(character: Character, gameData: GameData): { char: Character, logs: string[] } {
+    const logs: string[] = [];
+    let updatedChar = structuredClone(character);
+
+    if (updatedChar.status !== 'idle' && !(updatedChar.currentAction?.type === 'explore')) {
+        return { char: character, logs };
+    }
+
+    // Filter events that specify locationId as current location
+    const locEvents = (gameData.events as any[]).filter((e: any) => e.locationId === updatedChar.location);
+    if (locEvents.length === 0) return { char: updatedChar, logs };
+
+    const shuffled = [...locEvents].sort(() => Math.random() - 0.5);
+    for (const event of shuffled) {
+        if (Math.random() < (event.chance || 0)) {
+            logs.push(event.description);
+            // Optional dialogues for this location/event
+            try {
+                const { dialogues } = require('@/data/dialogues');
+                const lines = dialogues.find((d: any) => d.locationId === updatedChar.location)?.lines;
+                if (lines && lines.length > 0 && Math.random() < 0.7) {
+                    const line = lines[Math.floor(Math.random() * lines.length)];
+                    logs.push(`Диалог: ${line}`);
+                }
+            } catch {}
+            break;
+        }
+    }
+
     return { char: updatedChar, logs };
 }
 
@@ -970,13 +1027,14 @@ function processMood(character: Character): {char: Character, logs: string[]} {
             if (weatherEffect.moodModifier > 0) {
                 logs.push("Ясная погода поднимает герою настроение.");
             } else if (weatherEffect.moodModifier < 0) {
-                const weatherNames = {
+                const weatherNames: Record<Weather, string> = {
+                    'Clear': 'ясная погода',
                     'Cloudy': 'облачная погода',
                     'Rain': 'дождь',
                     'Snow': 'снег',
                     'Fog': 'туман'
                 };
-                logs.push(`${weatherNames[updatedChar.weather] || 'плохая погода'} портит герою настроение.`);
+                logs.push(`${weatherNames[updatedChar.weather]} портит герою настроение.`);
             }
         }
     }
@@ -1146,10 +1204,15 @@ async function processEpicPhraseGeneration(character: Character, thoughts: Array
             return lastThree.includes(rec.text);
         }
 
-        const candidates = all
+        let candidates = all
             .filter((r: any) => !!r.isEnabled)
             .filter((r: any) => matchesConditions(r))
             .filter((r: any) => !isOnCooldown(r));
+
+        // Hard filter: during combat only battle thoughts
+        if (character.status === 'in-combat') {
+            candidates = candidates.filter((r: any) => r.category === 'in_combat' || r.category === 'battle');
+        }
 
         let chosen: any | null = null;
         if (candidates.length > 0) {
@@ -1215,7 +1278,7 @@ export async function processGameTick(
 }> {
     
     if (!character || !gameData || !character.id) {
-        return { updatedCharacter: character, adventureLog: [], combatLog: [] };
+        return { updatedCharacter: character, adventureLog: [], combatLog: [], chronicleEntries: [] };
     }
 
     let updatedChar: Character = structuredClone(character);
@@ -1229,7 +1292,7 @@ export async function processGameTick(
     const respawnResult = processRespawn(updatedChar);
     if (respawnResult.log) {
         adventureLog.push(respawnResult.log);
-        return { updatedCharacter: respawnResult.char, adventureLog, combatLog };
+        return { updatedCharacter: respawnResult.char, adventureLog, combatLog, chronicleEntries };
     }
     updatedChar = respawnResult.char;
     
@@ -1247,6 +1310,18 @@ export async function processGameTick(
     const effectsResult = processEffects(updatedChar);
     updatedChar = effectsResult.char;
     adventureLog.push(...effectsResult.logs);
+    // Sync AI modifiers from effects (e.g., lucky)
+    try {
+        const lucky = updatedChar.effects.find(e => e.id === 'lucky');
+        if (lucky) {
+            await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ''}/api/ai/modifiers`, {
+                method: 'POST', headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ characterId: updatedChar.id, code: 'luck', label: 'Luck', multiplier: 0.2, ttlMs: Math.max(0, lucky.expiresAt - Date.now()) })
+            });
+        } else {
+            await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ''}/api/ai/modifiers?characterId=${updatedChar.id}&code=luck`, { method: 'DELETE' });
+        }
+    } catch {}
     
     // --- 5. DEATH LOGIC ---
     const deathResult = await processDeath(updatedChar, userId);
@@ -1341,6 +1416,8 @@ export async function processGameTick(
 
     // --- 12. PASSIVE REGENERATION & OTHER IDLE EFFECTS ---
     if (shouldTakeTurn) {
+        // Decay AI repetition fatigue each tick
+        try { await decayTick(updatedChar.id); } catch {}
         const regenResult = processPassiveRegen(updatedChar);
         updatedChar = regenResult.char;
         if(regenResult.log) adventureLog.push(regenResult.log);
@@ -1352,6 +1429,11 @@ export async function processGameTick(
         const moodResult = processMood(updatedChar);
         updatedChar = moodResult.char;
         adventureLog.push(...moodResult.logs);
+
+        // Location sub-events (idle)
+        const locResult = processLocationEvents(updatedChar, gameData);
+        updatedChar = locResult.char;
+        adventureLog.push(...locResult.logs);
     }
    
     // --- 13. ACTION LOGIC (AI Brain) ---

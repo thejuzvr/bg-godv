@@ -2,6 +2,10 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { eq, desc, and, lt, sql } from 'drizzle-orm';
 import pg from 'pg';
 import * as schema from '../shared/schema';
+import { loadEnv } from './load-env';
+
+// Ensure environment is loaded for scripts and worker
+loadEnv();
 
 const { Pool } = pg;
 

@@ -36,7 +36,7 @@ export function middleware(req: NextRequest) {
   // attach request id via header
   const resHeaders = new Headers(req.headers);
   resHeaders.set('x-request-id', reqId);
-  const ip = req.ip || req.headers.get('x-forwarded-for') || 'unknown';
+  const ip = (req as any).ip || req.headers.get('x-forwarded-for') || (req as any).socket?.remoteAddress || 'unknown';
   if (!checkRateLimit(String(ip))) {
     return new NextResponse('Too Many Requests', { status: 429, headers: resHeaders });
   }

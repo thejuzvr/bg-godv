@@ -43,6 +43,6 @@ export async function fetchChronicleEntries(userId: string, realmId?: string): P
         title: entry.title,
         description: entry.description,
         icon: entry.icon,
-        data: entry.data,
+        data: (entry.data == null ? undefined : entry.data) as Record<string, any> | undefined,
       }));
 }

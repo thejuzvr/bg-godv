@@ -7,6 +7,8 @@ export type ChronicleEntryType =
   | 'unique_kill'
   | 'death'
   | 'discovery_city'
+  | 'combat_victory'
+  | 'discovery_dungeon'
   | 'achievement'
   | 'system';
 
@@ -19,3 +21,5 @@ export interface ChronicleEntry {
     icon: string; // Lucide icon name
     data?: Record<string, any>; // e.g., { level: 5 }, { questId: '...' }
 }
+
+export type OutboxChronicleEntry = Omit<ChronicleEntry, 'id' | 'timestamp'>;

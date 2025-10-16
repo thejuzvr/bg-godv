@@ -376,6 +376,35 @@ export const characterStateSnapshots = pgTable('character_state_snapshots', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// === AI CONFIG TABLES ===
+export const aiProfiles = pgTable('ai_profiles', {
+  id: text('id').primaryKey(),
+  code: text('code').notNull(),
+  name: text('name').notNull(),
+  baseMultipliers: jsonb('base_multipliers').notNull().$type<Record<string, number>>(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const characterAiState = pgTable('character_ai_state', {
+  characterId: text('character_id').primaryKey().references(() => characters.id, { onDelete: 'cascade' }),
+  profileId: text('profile_id').references(() => aiProfiles.id, { onDelete: 'set null' }),
+  fatigue: jsonb('fatigue').notNull().$type<Record<string, { count: number; lastUsedAt: number }>>(),
+  learning: jsonb('learning').notNull().$type<Record<string, { attempts: number; successes: number; recent: number[] }>>().default({} as any),
+  experimentGroup: text('experiment_group'),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const aiModifiers = pgTable('ai_modifiers', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  characterId: text('character_id').notNull().references(() => characters.id, { onDelete: 'cascade' }),
+  code: text('code').notNull(),
+  label: text('label'),
+  multiplier: real('multiplier').notNull().default(0),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  source: jsonb('source').$type<Record<string, any>>(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // === TYPE EXPORTS ===
 
 export type User = typeof users.$inferSelect;

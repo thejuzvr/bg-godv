@@ -23,6 +23,7 @@ export function useGameLoop(initialCharacter: Character | null, gameData: GameDa
   type AdventureLogItem = { id: string; timestamp: number; type: string; message: string };
   const [adventureLog, setAdventureLog] = useState<AdventureLogItem[]>([]);
   const [combatLog, setCombatLog] = useState<string[]>([]);
+  const limit = options?.adventureLimit ?? 40;
 
   // Refs to hold the latest state for the interval closure
   const characterRef = useRef(character);
@@ -54,7 +55,6 @@ export function useGameLoop(initialCharacter: Character | null, gameData: GameDa
 
     const loadOfflineEvents = async () => {
       try {
-        const limit = options?.adventureLimit ?? 40;
         const events = await getRecentEvents(initialCharacter.id, limit);
         if (shouldShowWelcomeMessage(initialCharacter)) {
           const welcomeMessage = getWelcomeMessage(initialCharacter);
@@ -86,11 +86,11 @@ export function useGameLoop(initialCharacter: Character | null, gameData: GameDa
               for (const item of adventureItems) byId.set(item.id, item);
               return Array.from(byId.values())
                 .sort((a, b) => b.timestamp - a.timestamp)
-                .slice(0, 50);
+                .slice(0, limit);
             });
           }
           if (combatMessages.length > 0) {
-            setCombatLog(prev => [...combatMessages, ...prev].slice(0, 50));
+            setCombatLog(prev => [...combatMessages, ...prev].slice(0, limit));
           }
           const newestTs = Math.max(...events.map((e: any) => new Date(e.timestamp).getTime()));
           if (Number.isFinite(newestTs)) {
@@ -148,12 +148,16 @@ export function useGameLoop(initialCharacter: Character | null, gameData: GameDa
                 .filter(event => event.type === 'combat')
                 .map(event => event.message);
               if (adventureItems.length > 0) {
-                setAdventureLog(adventureItems
-                  .sort((a, b) => b.timestamp - a.timestamp)
-                  .slice(0, 50));
+                setAdventureLog(prev => {
+                  const byId = new Map<string, AdventureLogItem>(prev.map(e => [e.id, e]));
+                  for (const item of adventureItems) byId.set(item.id, item);
+                  return Array.from(byId.values())
+                    .sort((a, b) => b.timestamp - a.timestamp)
+                    .slice(0, limit);
+                });
               }
               if (combatMessages.length > 0) {
-                setCombatLog(prev => [...combatMessages, ...prev].slice(0, 50));
+                setCombatLog(prev => [...combatMessages, ...prev].slice(0, limit));
               }
             }
           }
@@ -224,12 +228,16 @@ export function useGameLoop(initialCharacter: Character | null, gameData: GameDa
               .filter(event => event.type === 'combat')
               .map(event => event.message);
             if (adventureItems.length > 0) {
-              setAdventureLog(adventureItems
-                .sort((a, b) => b.timestamp - a.timestamp)
-                .slice(0, 50));
+              setAdventureLog(prev => {
+                const byId = new Map<string, AdventureLogItem>(prev.map(e => [e.id, e]));
+                for (const item of adventureItems) byId.set(item.id, item);
+                return Array.from(byId.values())
+                  .sort((a, b) => b.timestamp - a.timestamp)
+                  .slice(0, limit);
+              });
             }
             if (combatMessages.length > 0) {
-              setCombatLog(prev => [...combatMessages, ...prev].slice(0, 50));
+              setCombatLog(prev => [...combatMessages, ...prev].slice(0, limit));
             }
             const newestTimestamp = Math.max(...latestEvents.map(e => new Date(e.timestamp).getTime()));
             if (Number.isFinite(newestTimestamp)) {
@@ -263,12 +271,16 @@ export function useGameLoop(initialCharacter: Character | null, gameData: GameDa
           .filter(event => event.type === 'combat')
           .map(event => event.message);
         if (adventureItems.length > 0) {
-          setAdventureLog(adventureItems
-            .sort((a, b) => b.timestamp - a.timestamp)
-            .slice(0, 50));
+          setAdventureLog(prev => {
+            const byId = new Map<string, AdventureLogItem>(prev.map(e => [e.id, e]));
+            for (const item of adventureItems) byId.set(item.id, item as AdventureLogItem);
+            return Array.from(byId.values())
+              .sort((a, b) => b.timestamp - a.timestamp)
+              .slice(0, limit);
+          });
         }
         if (combatMessages.length > 0) {
-          setCombatLog(prev => [...combatMessages, ...prev].slice(0, 50));
+          setCombatLog(prev => [...combatMessages, ...prev].slice(0, limit));
         }
         const newestTimestamp = Math.max(...latestEvents.map(e => new Date(e.timestamp).getTime()));
         if (Number.isFinite(newestTimestamp)) {

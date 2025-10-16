@@ -2,6 +2,15 @@
 import type { GameEvent } from "@/types/event";
 
 export const initialEvents: GameEvent[] = [
+    // Dungeon Sub-event at Bleak Falls Barrow (Windy Peak)
+    {
+        id: 'bleak_falls_dyatlov_mystery',
+        type: 'narrative',
+        description: "Экстренное событие: Тайна перевала Дятлова. Барды ярлов зачем-то собрались в гробнице в лютый мороз. Это подозрительно и немного смешно.",
+        chance: 0.03,
+        // @ts-ignore extend shape with locationId for engine handler
+        locationId: 'bleak_falls_barrow'
+    },
     // Combat Events (снижены в 10 раз - события проверяются каждые 3 сек во время путешествия)
     {
         id: 'travel_ambush_wolf',

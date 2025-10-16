@@ -3,6 +3,37 @@ import type { GameData } from '@/services/gameDataService';
 import type { Action } from './brain';
 import { idleActions, combatActions, deadActions, exploringActions } from './brain';
 
+export type PriorityBreakdown = {
+  actionId: string;
+  name: string;
+  base: number;
+  ruleBoost: number;
+  profile: number;
+  fatigue: number;
+  modifiers: number;
+  total: number;
+};
+
+export interface DecisionTrace {
+  characterId: string;
+  timestamp: number;
+  entries: PriorityBreakdown[];
+}
+
+let lastTracePerCharacter: Record<string, DecisionTrace> = {};
+
+export function recordDecisionTrace(characterId: string, entries: PriorityBreakdown[]): void {
+  lastTracePerCharacter[characterId] = {
+    characterId,
+    timestamp: Date.now(),
+    entries,
+  };
+}
+
+export function getLastDecisionTrace(characterId: string): DecisionTrace | null {
+  return lastTracePerCharacter[characterId] || null;
+}
+
 function getWeatherModifiers(weather: Weather): WeatherEffect {
     switch (weather) {
         case 'Clear':
@@ -32,15 +63,6 @@ function getWeatherModifiers(weather: Weather): WeatherEffect {
                 moodModifier: -2,
                 regenModifier: { health: 0.95, magicka: 1.0, stamina: 0.9, fatigue: 1.0 }
             };
-        case 'Storm':
-            return {
-                attackModifier: -2,
-                stealthModifier: -2,
-                findChanceModifier: 0.8,
-                fatigueModifier: 0.85,
-                moodModifier: -3,
-                regenModifier: { health: 0.9, magicka: 1.1, stamina: 0.85, fatigue: 1.05 }
-            };
         default:
             return {
                 attackModifier: 0,
@@ -56,11 +78,11 @@ function getWeatherModifiers(weather: Weather): WeatherEffect {
 function getTimeOfDayModifiers(timeOfDay: TimeOfDay): TimeOfDayEffect {
     switch (timeOfDay) {
         case 'day':
-            return { attackModifier: 0, stealthModifier: -1, findChanceModifier: 1.1, regenModifier: { health: 1.0, magicka: 1.0, stamina: 1.0 } };
+            return { stealthModifier: -1, findChanceModifier: 1.1, enemyStrengthModifier: 1.0, fleeChanceModifier: 1.0, regenModifier: { health: 1.0, magicka: 1.0, stamina: 1.0, fatigue: 1.0 }, npcAvailability: true };
         case 'night':
-            return { attackModifier: 0, stealthModifier: 1, findChanceModifier: 0.95, regenModifier: { health: 1.0, magicka: 1.05, stamina: 0.95 } };
+            return { stealthModifier: 1, findChanceModifier: 0.95, enemyStrengthModifier: 1.2, fleeChanceModifier: 1.1, regenModifier: { health: 1.0, magicka: 1.05, stamina: 0.95, fatigue: 0.9 }, npcAvailability: false };
         default:
-            return { attackModifier: 0, stealthModifier: 0, findChanceModifier: 1.0, regenModifier: { health: 1.0, magicka: 1.0, stamina: 1.0 } };
+            return { stealthModifier: 0, findChanceModifier: 1.0, enemyStrengthModifier: 1.0, fleeChanceModifier: 1.0, regenModifier: { health: 1.0, magicka: 1.0, stamina: 1.0, fatigue: 1.0 }, npcAvailability: true };
     }
 }
 

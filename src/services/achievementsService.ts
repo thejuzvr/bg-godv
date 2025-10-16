@@ -46,7 +46,7 @@ export function evaluateAchievements(character: Character, gameData: GameData): 
     slayer: () => sumKilledEnemies(character.analytics) >= 50,
     // Theft/jail themed
     petty_thief: () => (character.actionHistory||[]).some(a => a.type === 'social') && character.effects.some(e => e.id === 'public_shame'),
-    jailbird: () => (character.currentAction?.type === 'jail') || ((character.actionHistory||[]).filter(a => a.type === 'jail').length >= 1),
+    jailbird: () => character.effects.some(e => e.id === 'public_shame'),
     temple_akatosh: () => character.templeCompletedFor === 'akatosh',
     temple_arkay: () => character.templeCompletedFor === 'arkay',
     temple_dibella: () => character.templeCompletedFor === 'dibella',
@@ -80,7 +80,7 @@ export async function persistAchievementUnlocks(userId: string, character: Chara
   // Persist also into preferences to survive DB round-trip without schema changes
   character.preferences = {
     ...(character.preferences || {}),
-    unlockedAchievements: character.unlockedAchievements || [],
+    ...( { unlockedAchievements: character.unlockedAchievements || [] } as any ),
   };
   await saveCharacter(userId, character);
   for (const u of unlocks) {
