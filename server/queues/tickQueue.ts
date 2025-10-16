@@ -8,7 +8,7 @@ export type TickJob = {
   correlationId?: string;
 };
 
-const connection = getRedis();
+const connection = getRedis().duplicate();
 
 export const tickQueue = new Queue<TickJob>('ticks', {
   connection,

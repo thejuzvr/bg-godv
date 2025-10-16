@@ -31,8 +31,10 @@ export function useGameLoop(initialCharacter: Character | null, gameData: GameDa
 
   const { realmId } = useRealm();
   const socketRef = useRef<Socket | null>(null);
+  const [wsConnected, setWsConnected] = useState(false);
   const wsEnabled = String(process.env.NEXT_PUBLIC_FEATURE_WEBSOCKETS || process.env.FEATURE_WEBSOCKETS || '').toLowerCase() === 'true';
-  const wsUrl = (process.env.WS_URL as string) || '';
+  // Use public env so it is available client-side
+  const wsUrl = (process.env.NEXT_PUBLIC_WS_URL as string) || '';
 
   useEffect(() => {
     characterRef.current = character;
@@ -46,7 +48,7 @@ export function useGameLoop(initialCharacter: Character | null, gameData: GameDa
     setCharacter(initialCharacter);
   }, [initialCharacter]);
 
-  // Load recent offline events on mount and when limit changes
+  // Load recent offline events on mount (do not refetch on UI filter change to avoid flicker)
   useEffect(() => {
     if (!initialCharacter) return;
 
@@ -101,11 +103,14 @@ export function useGameLoop(initialCharacter: Character | null, gameData: GameDa
     };
 
     loadOfflineEvents();
-  }, [initialCharacter, options?.adventureLimit]);
+  }, [initialCharacter]);
 
   // WebSocket subscription
   useEffect(() => {
-    if (!wsEnabled || !wsUrl || !initialCharacter) return;
+    if (!wsEnabled || !wsUrl || !initialCharacter) {
+      setWsConnected(false);
+      return;
+    }
 
     try {
       const s = io(wsUrl, {
@@ -113,6 +118,10 @@ export function useGameLoop(initialCharacter: Character | null, gameData: GameDa
         query: { realmId, characterId: initialCharacter.id },
       });
       socketRef.current = s;
+
+      s.on('connect', () => {
+        setWsConnected(true);
+      });
 
       s.on('connected', () => {
         // no-op
@@ -153,19 +162,30 @@ export function useGameLoop(initialCharacter: Character | null, gameData: GameDa
         }
       });
 
+      s.on('disconnect', () => {
+        setWsConnected(false);
+      });
+
+      s.on('connect_error', () => {
+        setWsConnected(false);
+      });
+
       return () => {
         s.disconnect();
         socketRef.current = null;
+        setWsConnected(false);
       };
     } catch (e) {
       console.error('Failed to init WebSocket, will use polling', e);
+      setWsConnected(false);
     }
   }, [wsEnabled, wsUrl, realmId, initialCharacter]);
 
   // The main polling interval - fetch updated character state from server (fallback or alongside WS)
   useEffect(() => {
     if (!gameData || !initialCharacter) return;
-    if (wsEnabled && wsUrl) return; // if WS is on, skip polling
+    // Skip polling only when WS is actually connected
+    if (wsEnabled && wsConnected) return;
 
     const pollInterval = setInterval(async () => {
         const currentCharacter = characterRef.current;
@@ -222,7 +242,43 @@ export function useGameLoop(initialCharacter: Character | null, gameData: GameDa
     }, POLL_INTERVAL);
 
     return () => clearInterval(pollInterval);
-  }, [gameData, initialCharacter, wsEnabled, wsUrl]);
+  }, [gameData, initialCharacter, wsEnabled, wsConnected]);
 
-  return { character, adventureLog, combatLog, setCharacter };
+  // Manual refresh helper for callers (e.g., after an action)
+  const refreshOfflineEvents = async () => {
+    const currentCharacter = characterRef.current;
+    if (!currentCharacter) return;
+    try {
+      const latestEvents = await getOfflineEvents(currentCharacter.id);
+      if (latestEvents && latestEvents.length > 0) {
+        const adventureItems = latestEvents
+          .filter(event => event.type === 'system')
+          .map(event => ({
+            id: event.id,
+            timestamp: new Date(event.timestamp).getTime(),
+            type: event.type,
+            message: event.message,
+          } as { id: string; timestamp: number; type: string; message: string }));
+        const combatMessages = latestEvents
+          .filter(event => event.type === 'combat')
+          .map(event => event.message);
+        if (adventureItems.length > 0) {
+          setAdventureLog(adventureItems
+            .sort((a, b) => b.timestamp - a.timestamp)
+            .slice(0, 50));
+        }
+        if (combatMessages.length > 0) {
+          setCombatLog(prev => [...combatMessages, ...prev].slice(0, 50));
+        }
+        const newestTimestamp = Math.max(...latestEvents.map(e => new Date(e.timestamp).getTime()));
+        if (Number.isFinite(newestTimestamp)) {
+          lastSeenTimestampRef.current = newestTimestamp;
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing offline events:', error);
+    }
+  };
+
+  return { character, adventureLog, combatLog, setCharacter, refreshOfflineEvents };
 }

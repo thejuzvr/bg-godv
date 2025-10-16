@@ -5,8 +5,13 @@ import type { TickJob } from '../queues/tickQueue';
 import * as storage from '../storage';
 import { processGameTick } from '../../src/ai/game-engine';
 import { gameDataService } from '../game-data-service';
-import { getRedis } from '../redis';
 import { insertCharacterSnapshot, cleanupOldSnapshots } from '../storage';
+
+// Import static game data (not yet in DB)
+import { initialQuests } from '../../src/data/quests';
+import { initialEvents } from '../../src/data/events';
+import { initialCityEvents } from '../../src/data/cityEvents';
+import { initialSovngardeQuests } from '../../src/data/sovngarde';
 
 type ProcessResult = {
   ok: true;
@@ -17,7 +22,7 @@ type ProcessResult = {
 // simple in-Redis idempotency key with short TTL to protect against quick retries
 async function withIdempotency<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T | null> {
   const redis = getRedis();
-  const set = await redis.set(key, '1', { NX: true, PX: ttlMs });
+  const set = await redis.set(key, '1', 'PX', ttlMs, 'NX');
   if (set !== 'OK') return null; // already processed recently
   try {
     return await fn();
@@ -37,7 +42,11 @@ async function getGameData() {
     ]);
     cachedGameData = {
       items, enemies, locations, npcs,
-      // static imports remain on the engine side for now
+      // Static imports (not yet migrated to DB)
+      quests: initialQuests,
+      events: initialEvents,
+      cityEvents: initialCityEvents,
+      sovngardeQuests: initialSovngardeQuests,
     };
   }
   return cachedGameData;
@@ -47,6 +56,9 @@ const concurrency = Number(process.env.QUEUE_CONCURRENCY || '4');
 
 export const tickWorker = new Worker<TickJob>('ticks', async (job: Job<TickJob>): Promise<ProcessResult> => {
   const { realmId, characterId, tickAt, correlationId } = job.data;
+  try {
+    console.log(`[TickWorker] processing tick for ${characterId} at ${new Date(tickAt).toISOString()}`);
+  } catch {}
 
   const idemKey = `tick:${realmId}:${characterId}:${tickAt}`;
   const result = await withIdempotency(idemKey, 5 * 60 * 1000, async () => {
@@ -71,11 +83,16 @@ export const tickWorker = new Worker<TickJob>('ticks', async (job: Job<TickJob>)
     } catch {}
 
     // Persist logs as offline events (keeps fixed-size buffer)
+    // Stagger timestamps within a single tick to avoid identical times for thought+event
+    const baseTs = Date.now();
+    let offset = 0;
     for (const message of tickResult.adventureLog) {
-      await storage.addOfflineEvent(characterId, { type: 'system', message });
+      await storage.addOfflineEvent(characterId, { type: 'system', message, timestamp: baseTs + offset });
+      offset += 500; // 0.5s between messages for readability
     }
     for (const message of tickResult.combatLog) {
-      await storage.addOfflineEvent(characterId, { type: 'combat', message });
+      await storage.addOfflineEvent(characterId, { type: 'combat', message, timestamp: baseTs + offset });
+      offset += 500;
     }
 
     // Persist chronicle outbox
@@ -102,7 +119,7 @@ export const tickWorker = new Worker<TickJob>('ticks', async (job: Job<TickJob>)
 
     // Throttled snapshot every 10 minutes per character
     const snapKey = `snap:lock:${realmId}:${characterId}`;
-    const ok = await pub.set(snapKey, '1', 'NX', 'PX', 10 * 60 * 1000);
+    const ok = await pub.set(snapKey, '1', 'PX', 10 * 60 * 1000, 'NX');
     if (ok === 'OK') {
       const c = tickResult.updatedCharacter as any;
       const summary = {
@@ -128,8 +145,16 @@ export const tickWorker = new Worker<TickJob>('ticks', async (job: Job<TickJob>)
   }
   return result;
 }, {
-  connection: getRedis(),
+  connection: getRedis().duplicate(),
   concurrency,
+  prefix: 'bull',
+  autorun: true,
 });
+
+// Local visibility of worker lifecycle (in addition to run-worker.ts)
+try {
+  tickWorker.on('ready', () => console.log('[TickWorker] ready'));
+  tickWorker.on('error', (err) => console.error('[TickWorker] error', err));
+} catch {}
 
 

@@ -124,9 +124,20 @@ export default function DashboardPage() {
   const [dataLoading, setDataLoading] = useState(true);
   const [isIntervening, setIsIntervening] = useState(false);
   const [logLimit, setLogLimit] = useState<number>(10);
+
+  // Load saved log limit from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = typeof window !== 'undefined' ? window.localStorage.getItem('adventureLogLimit') : null;
+      if (saved) {
+        const n = Number(saved);
+        if (n === 5 || n === 10 || n === 40) setLogLimit(n);
+      }
+    } catch {}
+  }, []);
   
   // Custom hook for the game loop
-  const { character, adventureLog, combatLog, setCharacter } = useGameLoop(initialCharacter, gameData, { adventureLimit: logLimit });
+  const { character, adventureLog, combatLog, setCharacter, refreshOfflineEvents } = useGameLoop(initialCharacter, gameData, { adventureLimit: logLimit });
 
   const processedAdventureLog = useMemo(() => {
     if (!adventureLog) return [];
@@ -201,7 +212,9 @@ export default function DashboardPage() {
 
     if (result.success && result.character) {
       setCharacter(result.character);
-       toast({
+      // Immediately refresh logs so the message appears without full page reload
+      refreshOfflineEvents();
+      toast({
         title: "Вмешательство удалось!",
         description: `Герой подумал: "${result.message}"`
       });
@@ -241,7 +254,13 @@ export default function DashboardPage() {
   const characterStatus = statusTranslations[character.status];
 
   const handleLogLimitChange = (value: string) => {
-    setLogLimit(Number(value));
+    const n = Number(value);
+    setLogLimit(n);
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('adventureLogLimit', String(n));
+      }
+    } catch {}
   };
 
   return (

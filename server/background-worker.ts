@@ -5,6 +5,7 @@ import type { Character } from '../src/types/character';
 import type { GameData } from '../src/services/gameDataService';
 import { addOfflineEvent, cleanupOldEvents } from '../src/services/offlineEventsService';
 import { gameDataService } from './game-data-service';
+import { getRedis } from './redis';
 
 // Import static game data (not yet in DB)
 import { initialQuests } from '../src/data/quests';
@@ -75,25 +76,49 @@ async function processCharacter(character: Character, gameData: GameData): Promi
     // Save updated character state
     await storage.saveCharacter(result.updatedCharacter);
     
-    // Log offline events (adventure log)
+    // Log offline events with staggered timestamps to avoid identical times
+    const baseTs = Date.now();
+    let offset = 0;
     for (const message of result.adventureLog) {
       await addOfflineEvent(character.id, {
         type: 'system',
         message,
-      });
+        // @ts-ignore allow timestamp passthrough to storage layer
+        timestamp: baseTs + offset,
+      } as any);
+      offset += 500;
     }
-    
     // Log combat events
     for (const message of result.combatLog) {
       await addOfflineEvent(character.id, {
         type: 'combat',
         message,
-      });
+        // @ts-ignore allow timestamp passthrough to storage layer
+        timestamp: baseTs + offset,
+      } as any);
+      offset += 500;
     }
     
     // Update last processed timestamp
     await storage.updateCharacterLastProcessed(character.id, Date.now());
     
+    // Publish realtime update (legacy mode) so clients receive WS events without BullMQ
+    try {
+      const pub = getRedis();
+      const c: any = result.updatedCharacter as any;
+      await pub.publish('ws:tick', JSON.stringify({
+        realmId: c.realmId || 'global',
+        characterId: character.id,
+        tickAt: Date.now(),
+        updatedAt: Date.now(),
+        summary: {
+          status: c.status,
+          location: c.location,
+          hp: c.stats?.health?.current,
+        },
+      }));
+    } catch {}
+
     // Update tracker with next tick time based on combat status
     const tracker = characterTrackers.get(character.id);
     if (tracker) {

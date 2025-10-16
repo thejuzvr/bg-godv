@@ -7,6 +7,7 @@ import { runBackgroundWorker } from './background-worker';
 import { tickWorker } from './workers/tickWorker';
 import { startTickProducer } from './producers/tickProducer';
 import { pingRedis } from './redis';
+import './queues/queueEvents';
 
 console.log('=== Starting ElderScrollsIdle Worker ===');
 console.log('Feature flags:', {
