@@ -22,9 +22,9 @@ export const initialEnemies: Enemy[] = [
       ],
       rare: [],
       legendary: [],
-      goldChance: 0.3,
-      goldMin: 5,
-      goldMax: 15
+      goldChance: 0.2,
+      goldMin: 3,
+      goldMax: 10
     }
   },
   { 
@@ -41,13 +41,13 @@ export const initialEnemies: Enemy[] = [
         { id: 'ingredient_blue_mountain_flower', quantity: 1, chance: 0.4 }
       ],
       uncommon: [
-        { id: 'ingredient_frost_salts', quantity: 1, chance: 0.3 }
+        { id: 'ingredient_frost_salts', quantity: 1, chance: 0.35 }
       ],
       rare: [],
       legendary: [],
-      goldChance: 0.4,
-      goldMin: 8,
-      goldMax: 20
+      goldChance: 0.35,
+      goldMin: 6,
+      goldMax: 18
     },
     appliesEffect: {
       id: 'weak_poison',
@@ -75,14 +75,16 @@ export const initialEnemies: Enemy[] = [
         { id: 'weapon_dagger_iron', quantity: 1, chance: 0.3 }
       ],
       uncommon: [
-        { id: 'weapon_sword_iron', quantity: 1, chance: 0.2 },
-        { id: 'armor_helmet_iron', quantity: 1, chance: 0.15 }
+        { id: 'weapon_sword_iron', quantity: 1, chance: 0.25 },
+        { id: 'armor_helmet_iron', quantity: 1, chance: 0.2 }
       ],
-      rare: [],
+      rare: [
+        { id: 'misc_gem_garnet', quantity: 1, chance: 0.08 }
+      ],
       legendary: [],
-      goldChance: 0.7,
-      goldMin: 15,
-      goldMax: 35
+      goldChance: 0.75,
+      goldMin: 18,
+      goldMax: 40
     }
   },
   { 
@@ -103,12 +105,12 @@ export const initialEnemies: Enemy[] = [
         { id: 'weapon_sword_iron', quantity: 1, chance: 0.2 }
       ],
       rare: [
-        { id: 'misc_gem_amethyst', quantity: 1, chance: 0.1 }
+        { id: 'misc_gem_amethyst', quantity: 1, chance: 0.15 }
       ],
       legendary: [],
-      goldChance: 0.6,
-      goldMin: 20,
-      goldMax: 45
+      goldChance: 0.7,
+      goldMin: 22,
+      goldMax: 50
     }
   },
   { 
@@ -166,12 +168,12 @@ export const initialEnemies: Enemy[] = [
         { id: 'leather', quantity: 2, chance: 0.3 }
       ],
       rare: [
-        { id: 'misc_gem_ruby', quantity: 1, chance: 0.1 }
+        { id: 'misc_gem_ruby', quantity: 1, chance: 0.15 }
       ],
       legendary: [],
-      goldChance: 0.6,
-      goldMin: 30,
-      goldMax: 65
+      goldChance: 0.55,
+      goldMin: 25,
+      goldMax: 60
     }
   },
   { 
@@ -188,16 +190,16 @@ export const initialEnemies: Enemy[] = [
         { id: 'weapon_sword_iron', quantity: 1, chance: 0.5 }
       ],
       uncommon: [
-        { id: 'weapon_sword_steel', quantity: 1, chance: 0.3 },
-        { id: 'armor_cuirass_iron', quantity: 1, chance: 0.25 }
+        { id: 'weapon_sword_steel', quantity: 1, chance: 0.35 },
+        { id: 'armor_cuirass_iron', quantity: 1, chance: 0.3 }
       ],
       rare: [
-        { id: 'misc_gem_amethyst', quantity: 1, chance: 0.1 }
+        { id: 'misc_gem_amethyst', quantity: 1, chance: 0.15 }
       ],
       legendary: [],
-      goldChance: 0.8,
-      goldMin: 25,
-      goldMax: 50
+      goldChance: 0.85,
+      goldMin: 28,
+      goldMax: 55
     }
   },
   { 

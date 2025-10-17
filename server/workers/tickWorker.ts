@@ -102,6 +102,36 @@ export const tickWorker = new Worker<TickJob>('ticks', async (job: Job<TickJob>)
       }
     }
 
+    // Mini-multiplayer encounters in cities/taverns (single-sided log)
+    try {
+      const currentChar = tickResult.updatedCharacter as any;
+      const locations = (data as any).locations as any[];
+      const here = locations?.find(l => l.id === currentChar.location);
+      if (here && (here.type === 'city' || here.type === 'tavern')) {
+        const redis = getRedis();
+        const others = (await storage.getAllActiveCharacters()).filter((c: any) => (
+          c.id !== currentChar.id &&
+          (c.realmId || realmId) === (currentChar.realmId || realmId) &&
+          c.location === currentChar.location
+        ));
+        if (others.length > 0) {
+          const pick = others[Math.floor(Math.random() * others.length)];
+          const cooldownKey = `mm:seen:${currentChar.id}:${currentChar.location}`;
+          const nx = await redis.set(cooldownKey, '1', 'PX', 10 * 60 * 1000, 'NX');
+          if (nx === 'OK') {
+            const chance = here.type === 'tavern' ? 0.10 : 0.05;
+            if (Math.random() < chance) {
+              const enemyName = (currentChar.analytics?.encounteredEnemies || [])[0];
+              const message = (currentChar.status === 'in-combat' && enemyName)
+                ? `Пока дрался с ${enemyName} увидел как ${pick.name} своровал у него пару монет — чертовски хорош!`
+                : `Видел ${pick.name} в таверне, не ожидал что кто-то может выпить бочонок скумы`;
+              await storage.addOfflineEvent(currentChar.id, { type: 'system' as any, message, timestamp: Date.now() + 250 });
+            }
+          }
+        }
+      }
+    } catch {}
+
     // Publish realtime update
     const pub = getRedis();
     await pub.publish('ws:tick', JSON.stringify({

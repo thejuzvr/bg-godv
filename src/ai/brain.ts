@@ -7,7 +7,10 @@
 import type { Character, WorldState, ActiveEffect, ActiveAction, EquipmentSlot, CharacterInventoryItem, ActiveCryptQuest, Weather, CharacterSkills, CharacterAttributes, TimeOfDay, WeatherEffect, TimeOfDayEffect } from "@/types/character";
 import type { LootEntry } from "@/types/enemy";
 import { selectActionSimple } from './policy';
-import { USE_CONFIG_PRIORITY } from './config/constants';
+import { USE_CONFIG_PRIORITY, AI_BT_ENABLED } from './config/constants';
+import type { ActionLike } from './bt/types';
+import { buildBehaviorTree } from './bt/tree';
+import { getBtSettings } from './config/runtime';
 import { computeActionScores } from './priority-engine';
 import { updateOnAction } from './fatigue';
 import { recordAttempt, recordOutcome } from './learning';
@@ -1354,7 +1357,10 @@ const travelAction: Action = {
             return priorityToWeight(Priority.LOW) * 0.3; // Strong penalty
         }
         
-        // Normal travel is occasional background activity
+        // Prefer traveling after completing one local activity
+        if (char.hasCompletedLocationActivity) {
+            return priorityToWeight(Priority.HIGH);
+        }
         return priorityToWeight(Priority.LOW);
     },
     canPerform: (char, worldState, gameData) =>
@@ -2219,7 +2225,14 @@ const interactWithNPCAction: Action = {
     name: "Пообщаться с NPC",
     type: "social",
     getWeight: (char) => {
-        // SIMPLIFIED: Social interaction is MEDIUM priority in safe locations
+        // Boost on fresh arrival before completing a local activity
+        const now = Date.now();
+        const arrivalTime = char.lastLocationArrival || 0;
+        const timeSinceArrival = now - arrivalTime;
+        const fiveMinutes = 5 * 60 * 1000;
+        if (timeSinceArrival < fiveMinutes && !char.hasCompletedLocationActivity) {
+            return priorityToWeight(Priority.HIGH);
+        }
         return priorityToWeight(Priority.MEDIUM);
     },
     canPerform: (char, worldState, gameData) => {
@@ -2261,6 +2274,8 @@ const interactWithNPCAction: Action = {
             }
             
             updatedChar = addToActionHistory(refreshedChar as Character, 'social');
+            // Mark location activity as completed for strict sequencing
+            updatedChar.hasCompletedLocationActivity = true;
             
             return { 
                 character: updatedChar, 
@@ -2278,9 +2293,18 @@ const tradeWithNPCAction: Action = {
     getWeight: (char, worldState) => {
         if (!worldState.isLocationSafe) return 0;
         
-        // STRICT SEQUENCING: High priority after completing location activity
+        // Boost trading on fresh arrival before completing a local activity
+        const now = Date.now();
+        const arrivalTime = char.lastLocationArrival || 0;
+        const timeSinceArrival = now - arrivalTime;
+        const fiveMinutes = 5 * 60 * 1000;
+        if (timeSinceArrival < fiveMinutes && !char.hasCompletedLocationActivity) {
+            return priorityToWeight(Priority.HIGH);
+        }
+
+        // High priority after completing location activity as follow-up
         if (char.hasCompletedLocationActivity) {
-            return priorityToWeight(Priority.HIGH); // High priority after quest/rest completion
+            return priorityToWeight(Priority.HIGH);
         }
         
         // Check if we need healing potions
@@ -2491,6 +2515,32 @@ async function determineNextAction(character: Character, gameData: GameData): Pr
         }
     }
 
+    // 3b. Behavior Tree arbitration (guarded by flag)
+    if (AI_BT_ENABLED) {
+        // Compose subsets using existing action definitions
+        const toAL = (a: Action): ActionLike => a as unknown as ActionLike;
+        const arrival: ActionLike[] = [takeQuestAction, restAtTavernAction, tradeWithNPCAction, interactWithNPCAction].map(toAL);
+        const night: ActionLike[] = [takeQuestAction, restAtTavernAction, travelAction].map(toAL);
+        const idle: ActionLike[] = idleActions.map(toAL);
+        const combat: ActionLike[] = combatActions.map(toAL);
+        const dead: ActionLike[] = deadActions.map(toAL);
+        const settings = await getBtSettings();
+        const tree = buildBehaviorTree({
+            combatActions: combat,
+            deadActions: dead,
+            arrivalActions: arrival,
+            nightActions: night,
+            idleActions: idle,
+            travelAction: toAL(travelAction),
+            arrivalWindowMs: settings.arrivalWindowMs,
+            stallWindowMs: settings.stallWindowMs,
+        });
+        const bb = { character, worldState, gameData, trace: [] as string[] };
+        const picked = await tree.evaluate(bb);
+        try { (globalThis as any).__bt_last_trace__ = bb.trace; } catch {}
+        if (picked) return picked as unknown as Action;
+    }
+
     // 4. Determine the correct set of actions based on character status
     let actionSet: Action[];
     switch(character.status) {
@@ -2509,12 +2559,30 @@ async function determineNextAction(character: Character, gameData: GameData): Pr
             break;
     }
 
-    // 5. Filter for actions that can be performed and calculate their total weight
-    const possibleActions = actionSet.filter(action => action.canPerform(character, worldState, gameData));
+    // 5. Filter for actions that can be performed (exclude fallback wander from primary selection)
+    let possibleActions = actionSet
+        .filter(action => action.canPerform(character, worldState, gameData))
+        .filter(action => action.name !== wanderAction.name);
 
     if (possibleActions.length === 0) {
         return wanderAction;
     }
+
+    // 5a. Anti-stall shortcut: if we cannot take quests here and NPCs are unavailable now,
+    // and travel is possible, force travel to avoid city idle loops
+    if (!worldState.canTakeQuest && !worldState.timeOfDayEffect.npcAvailability) {
+        const travel = possibleActions.find(a => a.name === 'Путешествовать');
+        if (travel) return travel;
+    }
+    // 5b. If location has no available quests for >2 minutes after arrival, prefer travel
+    try {
+        const nowTs = Date.now();
+        const arrival = character.lastLocationArrival || 0;
+        if (!worldState.canTakeQuest && (nowTs - arrival) > 2 * 60 * 1000) {
+            const travel = possibleActions.find(a => a.name === 'Путешествовать');
+            if (travel) return travel;
+        }
+    } catch {}
     
     // 6. Handle Divine Suggestion (override)
     if (character.divineSuggestion) {

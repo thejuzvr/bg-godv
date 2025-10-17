@@ -21,11 +21,11 @@ import {
   LayoutDashboard,
   LogOut,
   Map,
+  ShieldCheck,
   PanelLeft,
   PanelLeftClose,
   PanelLeftOpen,
   Shield,
-  ShieldCheck,
   User as UserIcon,
   Users,
   LineChart,
@@ -52,6 +52,7 @@ const navItems = [
   { href: '/dashboard/factions', icon: Shield, label: 'Фракции' },
   { href: '/dashboard/society', icon: Users, label: 'Общество' },
   { href: '/dashboard/chronicle', icon: BookMarked, label: 'Летопись' },
+  { href: '/dashboard/arena', icon: ShieldCheck, label: 'Арена' },
 ];
 
 function RealmSelector() {
@@ -175,7 +176,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <RealmSelector />
             </header>
             <main className="flex-1 overflow-auto">
-              {children}
+              <div className="origin-top-left scale-[0.75] min-w-[133.333%]">
+                {children}
+              </div>
             </main>
           </SidebarInset>
         </div>

@@ -151,7 +151,7 @@ export default function CharacterCreationPage() {
       gameDate: now,
       mood: 50,
       unlockedPerks: [],
-      preferences: { autoAssignPoints: false, autoEquip: true },
+      preferences: { autoAssignPoints: true, autoEquip: true },
       analytics: {
         killedEnemies: {},
         diceRolls: { d20: Array(21).fill(0) },

@@ -1,6 +1,12 @@
 // Centralized AI constants and feature flags
 
 export const USE_CONFIG_PRIORITY = true;
+// Feature flag to enable Behavior Tree arbitration
+export const AI_BT_ENABLED: boolean = String(process.env.NEXT_PUBLIC_AI_BT || process.env.AI_BT || '').toLowerCase() === 'true';
+
+// BT gate timings
+export const ARRIVAL_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+export const STALL_WINDOW_MS = 2 * 60 * 1000; // 2 minutes before nudge
 
 // Thresholds
 export const HEALTH_CRITICAL_THRESHOLD = 0.25;

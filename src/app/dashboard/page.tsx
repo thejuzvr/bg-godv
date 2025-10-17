@@ -18,7 +18,7 @@ import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Button } from '@/components/ui/button';
-import { MapPin, Coins, Skull, Zap, Sparkles, CloudRain, Loader2, BookOpen, Smile, Meh, Frown, Star, Gem, HandHelping } from "lucide-react";
+import { MapPin, Coins, Skull, Zap, Sparkles, CloudRain, Loader2, BookOpen, Smile, Meh, Frown, Star, Gem, HandHelping, BrainCircuit, Cloud } from "lucide-react";
 import type { LucideProps } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 
@@ -343,15 +343,42 @@ export default function DashboardPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="flex-1 flex flex-col">
-                    <ScrollArea className="h-72 w-full flex-1" ref={adventureLogRef}> <div className="space-y-4 pr-4"> {processedAdventureLog.map((log: any, index) => (
-                        <div key={index}>
-                            <p className="text-sm text-foreground/90">
-                            <span className="font-mono text-muted-foreground mr-2">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
-                            {log.message}
-                            </p>
-                            { index < adventureLog.length -1 && <Separator className="mt-4" /> }
-                        </div>
-                        ))} </div>
+                    <ScrollArea className="h-72 w-full flex-1" ref={adventureLogRef}>
+                      <div className="space-y-4 pr-4">
+                        {processedAdventureLog.map((log: any, index) => {
+                          const msg: string = String(log.message || "");
+                          const time = new Date(log.timestamp).toLocaleTimeString();
+                          let text = msg;
+                          let icon: React.ReactNode | null = null;
+                          // Thoughts
+                          if (text.startsWith('У героя родилась мысль:')) {
+                            icon = <BrainCircuit className="h-4 w-4" />;
+                            text = text.replace(/^У героя родилась мысль:\s*/u, '').replace(/^"|"$/g, '');
+                          } else if (text.startsWith('🎭 Мысли героя:')) {
+                            icon = <BrainCircuit className="h-4 w-4" />;
+                            text = text.replace(/^🎭 Мысли героя:\s*/u, '').replace(/^"|"$/g, '');
+                          }
+                          // Weather changes/effects
+                          if (text.startsWith('Погода изменилась:')) {
+                            icon = <Cloud className="h-4 w-4" />;
+                            text = text.replace(/^Погода изменилась:\s*/u, '');
+                          } else if (!icon && /\bпогода\b/i.test(text)) {
+                            icon = <Cloud className="h-4 w-4" />;
+                          }
+                          return (
+                            <div key={index} className="space-y-2">
+                              <div className="flex items-start gap-2">
+                                <span className="font-mono text-muted-foreground mt-0.5">[{time}]</span>
+                                {icon ? (
+                                  <div className="mt-0.5 text-primary">{icon}</div>
+                                ) : null}
+                                <p className="text-sm text-foreground/90 flex-1">{text}</p>
+                              </div>
+                              { index < processedAdventureLog.length - 1 && <Separator /> }
+                            </div>
+                          );
+                        })}
+                      </div>
                     </ScrollArea>
                 </CardContent>
             </Card>

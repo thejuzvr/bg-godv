@@ -1,8 +1,8 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest } from 'next/server';
-import { db } from '../../../../server/storage';
-import * as schema from '../../../../shared/schema';
+import { db } from '@/../server/storage';
+import * as schema from '@/../shared/schema';
 import { eq } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {

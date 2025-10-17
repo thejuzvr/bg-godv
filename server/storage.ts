@@ -348,3 +348,33 @@ export async function cleanupOldSnapshots(characterId: string, keepLatest: numbe
     await db.delete(schema.characterStateSnapshots).where(eq(schema.characterStateSnapshots.id, (r as any).id));
   }
 }
+
+// === Shouts helpers ===
+export async function getAllShouts() {
+  return await db.select().from(schema.shouts);
+}
+
+export async function getKnownShouts(characterId: string) {
+  const rows = await db.select()
+    .from(schema.characterShouts)
+    .where(eq(schema.characterShouts.characterId, characterId));
+  if (rows.length === 0) return [] as any[];
+  const shoutIds = rows.map((r: any) => (r as any).shoutId);
+  const all = await db.select().from(schema.shouts);
+  return all.filter((s: any) => shoutIds.includes((s as any).id));
+}
+
+export async function grantShout(characterId: string, shoutId: string) {
+  const [existing] = await db.select()
+    .from(schema.characterShouts)
+    .where(and(eq(schema.characterShouts.characterId, characterId), eq(schema.characterShouts.shoutId, shoutId)))
+    .limit(1);
+  if (existing) return existing;
+  const [row] = await db.insert(schema.characterShouts).values({ characterId, shoutId }).returning();
+  return row;
+}
+
+export async function revokeShout(characterId: string, shoutId: string) {
+  await db.delete(schema.characterShouts).where(and(eq(schema.characterShouts.characterId, characterId), eq(schema.characterShouts.shoutId, shoutId)));
+  return { ok: true };
+}

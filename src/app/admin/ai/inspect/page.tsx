@@ -30,6 +30,8 @@ export default function AIInspectPage() {
   ]);
   const [mods, setMods] = useState<any[]>([]);
   const [newMod, setNewMod] = useState({ code: 'luck', label: 'Luck', multiplier: 0.2, ttlMs: 60_000 });
+  const [btSettings, setBtSettings] = useState<{ enabled: boolean; arrivalWindowMs: number; stallWindowMs: number } | null>(null);
+  const [btLoading, setBtLoading] = useState(false);
 
   async function fetchData() {
     if (!characterId) return;
@@ -42,6 +44,10 @@ export default function AIInspectPage() {
       setProfileCode(prof.code || '');
       const m = await fetch(`/api/ai/modifiers?characterId=${encodeURIComponent(characterId)}`, { cache: 'no-store' }).then(r => r.json());
       setMods(m.modifiers || []);
+      try {
+        const s = await fetch(`/api/ai/settings`, { cache: 'no-store' }).then(r => r.json());
+        setBtSettings(s);
+      } catch {}
     } finally {
       setLoading(false);
     }
@@ -103,6 +109,37 @@ export default function AIInspectPage() {
             </div>
           </div>
         </div>
+      </Card>
+
+      <Card className="p-4 space-y-3">
+        <div className="text-sm font-semibold">AI Behavior Tree Settings</div>
+        {btSettings && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={btSettings.enabled} onChange={e => setBtSettings({ ...btSettings, enabled: e.target.checked })} /> Enable BT
+            </label>
+            <div>
+              <div className="text-xs text-muted-foreground">Arrival window (ms)</div>
+              <Input value={String(btSettings.arrivalWindowMs)} onChange={e => setBtSettings({ ...btSettings, arrivalWindowMs: Number(e.target.value || 0) })} />
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Stall window (ms)</div>
+              <Input value={String(btSettings.stallWindowMs)} onChange={e => setBtSettings({ ...btSettings, stallWindowMs: Number(e.target.value || 0) })} />
+            </div>
+            <div className="flex gap-2">
+              <Button disabled={btLoading || !btSettings} onClick={async () => {
+                setBtLoading(true);
+                try {
+                  await fetch('/api/ai/settings', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(btSettings) });
+                } finally { setBtLoading(false); }
+              }}>{btLoading ? 'Saving…' : 'Save Settings'}</Button>
+              <Button variant="secondary" onClick={async () => {
+                const s = await fetch(`/api/ai/settings`, { cache: 'no-store' }).then(r => r.json());
+                setBtSettings(s);
+              }}>Reload</Button>
+            </div>
+          </div>
+        )}
       </Card>
 
       <Card className="p-0 overflow-auto">

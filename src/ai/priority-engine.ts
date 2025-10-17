@@ -111,7 +111,15 @@ export async function computeActionScores(params: {
     const learn = learning[actionKey];
     const failureRate = !learn || learn.attempts === 0 ? 0 : Math.max(0, (learn.attempts - (learn.successes || 0)) / Math.max(1, learn.attempts));
     const learningMult = Math.min(1.2, Math.max(0.8, 1 - failureRate * 0.2));
-    const total = Math.max(0, (base + ruleBoost) * profileMult * fatigueMult * modifierMultiplier * learningMult);
+    // Incorporate per-action weight if provided (Godville-style getWeight)
+    let actionWeightRaw = 50; // neutral baseline
+    try {
+      if (typeof (entry.action as any).getWeight === 'function') {
+        actionWeightRaw = (entry.action as any).getWeight(params.character, params.world as any, undefined);
+      }
+    } catch {}
+    const actionWeightMult = Math.min(2.0, Math.max(0.5, actionWeightRaw / 50));
+    const total = Math.max(0, (base + ruleBoost) * profileMult * fatigueMult * modifierMultiplier * learningMult * actionWeightMult);
     return {
       actionId: entry.id,
       name: entry.action.name,

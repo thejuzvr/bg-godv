@@ -376,6 +376,22 @@ export const characterStateSnapshots = pgTable('character_state_snapshots', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// === SHOUTS ===
+export const shouts = pgTable('shouts', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description').notNull(),
+  icon: text('icon').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const characterShouts = pgTable('character_shouts', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  characterId: text('character_id').notNull().references(() => characters.id, { onDelete: 'cascade' }),
+  shoutId: text('shout_id').notNull().references(() => shouts.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // === AI CONFIG TABLES ===
 export const aiProfiles = pgTable('ai_profiles', {
   id: text('id').primaryKey(),

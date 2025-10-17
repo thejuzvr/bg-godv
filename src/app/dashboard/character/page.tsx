@@ -71,7 +71,7 @@ export default function CharacterPage() {
                     setTempSkills(char.skills);
                     setAttrPoints(char.points.attribute);
                     setSkillPoints(char.points.skill);
-                    setIsAutoAssignEnabled(char.preferences?.autoAssignPoints ?? false);
+                    setIsAutoAssignEnabled(char.preferences?.autoAssignPoints ?? true);
                 } else {
                     router.push('/create-character');
                 }

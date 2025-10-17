@@ -69,6 +69,10 @@ function getFactionReputationForQuest(quest: any, location: string): number {
 // Helper Functions for the Game Loop
 // ==================================
 
+// === Global synchronized game time ===
+// Import shared timing from lib
+import { getGlobalGameDate } from '@/lib/gameTime';
+
 /**
  * A utility function to add an item to the character's inventory, handling stacking.
  */
@@ -401,6 +405,8 @@ async function processActionCompletion(character: Character, gameData: GameData,
             }
             logs.push(tradeLog);
             updatedChar.status = 'idle';
+            // Mark location activity as completed for strict sequencing
+            updatedChar.hasCompletedLocationActivity = true;
              if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {};
             updatedChar.actionCooldowns['exploreCity'] = Date.now();
             break;
@@ -975,9 +981,8 @@ function processTimeAndSeasons(character: Character): { char: Character, log: st
     let updatedChar = structuredClone(character);
     let logMessage = null;
 
-    // 1 tick = 30 in-game minutes
-    const IN_GAME_MINUTES_PER_TICK = 30;
-    updatedChar.gameDate += IN_GAME_MINUTES_PER_TICK * 60 * 1000;
+    // Synchronized global game time for everyone (1 day in 2 real hours)
+    updatedChar.gameDate = getGlobalGameDate();
 
     const currentInGameDate = new Date(updatedChar.gameDate);
     const month = currentInGameDate.getMonth(); // 0-11
@@ -1022,8 +1027,12 @@ function processMood(character: Character): {char: Character, logs: string[]} {
         updatedChar.mood += weatherEffect.moodModifier;
         moodChanged = true;
         
-        // Log weather mood effects occasionally
-        if (Math.random() < 0.1) {
+        // Log weather mood effects but throttle to avoid spam
+        const now = Date.now();
+        const key = 'weather:mood:log';
+        const lastLogAt = Number((updatedChar.actionCooldowns as any)?.[key] || 0);
+        const canLog = (now - lastLogAt) > 10 * 60 * 1000; // 10 minutes
+        if (canLog && Math.random() < 0.3) {
             if (weatherEffect.moodModifier > 0) {
                 logs.push("Ясная погода поднимает герою настроение.");
             } else if (weatherEffect.moodModifier < 0) {
@@ -1036,6 +1045,8 @@ function processMood(character: Character): {char: Character, logs: string[]} {
                 };
                 logs.push(`${weatherNames[updatedChar.weather]} портит герою настроение.`);
             }
+            if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {} as any;
+            updatedChar.actionCooldowns[key] = now;
         }
     }
 
@@ -1236,8 +1247,7 @@ async function processEpicPhraseGeneration(character: Character, thoughts: Array
                 updatedChar.analytics.epicPhrases.shift();
             }
             
-            const chronicle: OutboxChronicle = { type: 'system', title: 'Мысль героя', description: phrase, icon: 'Brain', data: { thoughtType: 'epic_phrase' } };
-            return { char: updatedChar, log: `У героя родилась мысль: "${phrase}"`, chronicle };
+            return { char: updatedChar, log: `У героя родилась мысль: "${phrase}"`, chronicle: null as any };
         }
     } catch (e) {
         // Fallback silently on any error
@@ -1254,8 +1264,7 @@ async function processEpicPhraseGeneration(character: Character, thoughts: Array
             updatedChar.analytics.epicPhrases.shift();
         }
         
-    const chronicle: OutboxChronicle = { type: 'system', title: 'Мысль героя', description: phrase, icon: 'Brain', data: { thoughtType: 'fallback_thought' } };
-    return { char: updatedChar, log: `У героя родилась мысль: "${phrase}"`, chronicle };
+    return { char: updatedChar, log: `У героя родилась мысль: "${phrase}"`, chronicle: null as any };
     }
     return { char: character, log: null };
 }
@@ -1435,6 +1444,51 @@ export async function processGameTick(
         updatedChar = locResult.char;
         adventureLog.push(...locResult.logs);
     }
+    
+    // --- 12b. IDLE RE-CALCULATION GUARD (5+ minutes of inactivity) ---
+    try {
+        const nowTs = Date.now();
+        const history = Array.isArray(updatedChar.actionHistory) ? updatedChar.actionHistory : [];
+        const lastActionTs = history.length > 0 ? (history[history.length - 1]?.timestamp || 0) : (updatedChar.lastUpdatedAt || updatedChar.createdAt || 0);
+        const idleMs = nowTs - (lastActionTs || 0);
+        if (updatedChar.status === 'idle' && idleMs > 5 * 60 * 1000) {
+            // Expire action cooldowns to widen available choices
+            if (updatedChar.actionCooldowns && typeof updatedChar.actionCooldowns === 'object') {
+                const cooled: Record<string, number> = { ...updatedChar.actionCooldowns } as any;
+                for (const key of Object.keys(cooled)) {
+                    const ts = Number((cooled as any)[key]);
+                    if (!Number.isNaN(ts) && ts > nowTs) {
+                        (cooled as any)[key] = nowTs;
+                    }
+                }
+                updatedChar.actionCooldowns = cooled as any;
+            }
+            // Allow location-bound activities again
+            updatedChar.hasCompletedLocationActivity = false;
+            adventureLog.push('Слишком долгое бездействие. Герой пересмотрел цели.');
+
+            // Gentle nudge: start a small activity to break idle loops
+            try {
+                const locations = (gameData as any).locations as any[];
+                const here = locations?.find(l => l.id === updatedChar.location);
+                if (here && here.type === 'tavern') {
+                    // Short rest to change state
+                    updatedChar.status = 'busy';
+                    updatedChar.currentAction = { type: 'rest', name: 'Короткий отдых', description: 'Герой собирается с мыслями и восстанавливает силы.', startedAt: nowTs, duration: 30 * 1000 } as any;
+                    adventureLog.push('Герой решил сделать короткий перерыв в таверне.');
+                } else if (Array.isArray(locations)) {
+                    const cities = locations.filter(l => l.type === 'city');
+                    if (cities.length > 0) {
+                        const candidates = cities.filter((c: any) => c.id !== updatedChar.location);
+                        const dest = (candidates.length > 0 ? candidates : cities)[Math.floor(Math.random() * (candidates.length > 0 ? candidates.length : cities.length))];
+                        updatedChar.status = 'busy';
+                        updatedChar.currentAction = { type: 'travel', name: `Путешествие в ${dest.name}`, description: 'Пора сменить обстановку и навести движ.', startedAt: nowTs, duration: 90 * 1000, destinationId: dest.id, originalDuration: 90 * 1000 } as any;
+                        adventureLog.push(`Герой решил сменить обстановку и направился в ${dest.name}.`);
+                    }
+                }
+            } catch {}
+        }
+    } catch {}
    
     // --- 13. ACTION LOGIC (AI Brain) ---
     if (shouldTakeTurn) {

@@ -38,9 +38,24 @@ export const allAchievements: Omit<Achievement, 'isUnlocked'>[] = [
         description: 'Победить 50 врагов.',
         icon: 'Sword',
     },
-    { id: 'temple_akatosh', name: 'Храм Времени', description: 'Построить великий храм в честь Акатоша.', icon: 'Timer' },
-    { id: 'temple_arkay', name: 'Храм Жизни и Смерти', description: 'Построить великий храм в честь Аркея.', icon: 'Scale' },
-    { id: 'temple_dibella', name: 'Храм Красоты', description: 'Построить великий храм в честь Дибеллы.', icon: 'Heart' },
+    { 
+        id: 'temple_akatosh', 
+        name: 'Храм Времени', 
+        description: 'Построить великий храм в честь Акатоша.', 
+        icon: 'Timer' 
+    },
+    { 
+        id: 'temple_arkay', 
+        name: 'Храм Жизни и Смерти', 
+        description: 'Построить великий храм в честь Аркея.', 
+        icon: 'Scale' 
+    },
+    { 
+        id: 'temple_dibella', 
+        name: 'Храм Красоты', 
+        description: 'Построить великий храм в честь Дибеллы.', 
+        icon: 'Heart' 
+    },
     { id: 'temple_julianos', name: 'Храм Мудрости', description: 'Построить великий храм в честь Юлианоса.', icon: 'BrainCircuit' },
     { id: 'temple_kynareth', name: 'Храм Ветров', description: 'Построить великий храм в честь Кинарет.', icon: 'Wind' },
     { id: 'temple_mara', name: 'Храм Любви', description: 'Построить великий храм в честь Мары.', icon: 'HandHeart' },
