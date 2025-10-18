@@ -30,6 +30,10 @@ export function generateGoals(character: Character, world: WorldState): Goal[] {
   if (hasWeakGear) {
     goals.push({ id: 'equip', type: 'equip_better', description: 'Улучшить снаряжение', priority: Priority.MEDIUM, createdAt: Date.now() });
   }
+  // Track active generated quest as a high-priority goal to ensure progression
+  if (character.activeGeneratedQuest) {
+    goals.push({ id: character.activeGeneratedQuest.id, type: 'earn_gold', description: 'Завершить сгенерированное задание', priority: Priority.HIGH, createdAt: Date.now() });
+  }
   return goals.sort((a, b) => b.priority - a.priority);
 }
 

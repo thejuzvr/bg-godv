@@ -13,7 +13,7 @@ import type { OutboxChronicleEntry } from "@/types/chronicle";
 type OutboxChronicle = OutboxChronicleEntry;
 
 // Humorous victory line generator
-export function getHumorousVictoryLine(enemyName: string, location?: string): string {
+export async function getHumorousVictoryLine(enemyName: string, location?: string): Promise<string> {
     const loc = location ? ` в ${location}` : '';
     const jokes = [
         `Герой так вежливо победил ${enemyName}, что тот извинился${loc}.`,
@@ -1278,11 +1278,18 @@ async function processEpicPhraseGeneration(character: Character, thoughts: Array
         }
 
         function isOnCooldown(rec: any): boolean {
-            const key = rec.cooldownKey || rec.id;
+            const text = String(rec.text || '');
             const recent = character.analytics?.epicPhrases || [];
-            // Check last 3 thoughts to prevent repetition
-            const lastThree = recent.slice(-3);
-            return lastThree.includes(rec.text);
+            // Stronger filter: last 10 phrases
+            const lastTen = recent.slice(-10);
+            if (lastTen.includes(text)) return true;
+            // Per-phrase cooldown via actionCooldowns (6 hours)
+            try {
+                const key = `thought:cd:${text}`;
+                const ts = Number((character.actionCooldowns as any)?.[key] || 0);
+                if (ts && Date.now() < ts) return true;
+            } catch {}
+            return false;
         }
 
         let candidates = all
@@ -1313,9 +1320,14 @@ async function processEpicPhraseGeneration(character: Character, thoughts: Array
                 updatedChar.analytics.epicPhrases = [];
             }
             updatedChar.analytics.epicPhrases.push(phrase);
-            if (updatedChar.analytics.epicPhrases.length > 20) {
+            while (updatedChar.analytics.epicPhrases.length > 50) {
                 updatedChar.analytics.epicPhrases.shift();
             }
+            // Set per-phrase cooldown (6 hours)
+            try {
+                if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {} as any;
+                (updatedChar.actionCooldowns as any)[`thought:cd:${phrase}`] = Date.now() + 6 * 60 * 60 * 1000;
+            } catch {}
             
             return { char: updatedChar, log: `У героя родилась мысль: "${phrase}"`, chronicle: null as any };
         }
@@ -1330,9 +1342,13 @@ async function processEpicPhraseGeneration(character: Character, thoughts: Array
             updatedChar.analytics.epicPhrases = [];
         }
         updatedChar.analytics.epicPhrases.push(phrase);
-        if (updatedChar.analytics.epicPhrases.length > 20) {
+        while (updatedChar.analytics.epicPhrases.length > 50) {
             updatedChar.analytics.epicPhrases.shift();
         }
+        try {
+            if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {} as any;
+            (updatedChar.actionCooldowns as any)[`thought:cd:${phrase}`] = Date.now() + 6 * 60 * 60 * 1000;
+        } catch {}
         
     return { char: updatedChar, log: `У героя родилась мысль: "${phrase}"`, chronicle: null as any };
     }
@@ -1388,6 +1404,7 @@ export async function processGameTick(
     // --- 4. EFFECT PROCESSING ---
     const effectsResult = processEffects(updatedChar);
     updatedChar = effectsResult.char;
+    // Keep weather/mood/effect logs even в бою (по пожеланию пользователя)
     adventureLog.push(...effectsResult.logs);
     // Sync AI modifiers from effects (e.g., lucky)
     try {
@@ -1525,6 +1542,29 @@ export async function processGameTick(
         const locResult = processLocationEvents(updatedChar, gameData);
         updatedChar = locResult.char;
         adventureLog.push(...locResult.logs);
+
+        // Handle pending user-driven divine messages (Godville-style)
+        try {
+            const { getPendingDivineMessages, markDivineMessageProcessed } = await import('../../server/storage');
+            const pending = await getPendingDivineMessages(updatedChar.id, 3);
+            for (const m of pending as any[]) {
+                const text: string = (m as any).text || '';
+                if (!text) continue;
+                // Hero sarcastic reply
+                const replies = [
+                    'Да-да, о великий голос сверху, я всё понял… наверное.',
+                    'Если это божественный план, то он очень… творческий.',
+                    'Слушаю и повинуюсь. Но сначала — сладкий рулет.',
+                    'Заметил знак. Сделаю вид, что это был мой план.',
+                ];
+                const reply = replies[Math.floor(Math.random() * replies.length)];
+                // Small influence
+                updatedChar.mood = Math.min(100, Math.max(0, updatedChar.mood + (Math.random() < 0.5 ? 3 : -2)));
+                adventureLog.push(`Божественный шёпот: "${text}"`);
+                adventureLog.push(`Ответ героя: "${reply}"`);
+                await markDivineMessageProcessed((m as any).id);
+            }
+        } catch {}
     }
     
     // --- 12b. IDLE RE-CALCULATION GUARD (5+ minutes of inactivity) ---
@@ -1533,7 +1573,8 @@ export async function processGameTick(
         const history = Array.isArray(updatedChar.actionHistory) ? updatedChar.actionHistory : [];
         const lastActionTs = history.length > 0 ? (history[history.length - 1]?.timestamp || 0) : (updatedChar.lastUpdatedAt || updatedChar.createdAt || 0);
         const idleMs = nowTs - (lastActionTs || 0);
-        if (updatedChar.status === 'idle' && idleMs > 5 * 60 * 1000) {
+    const IDLE_RECALC_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
+    if (updatedChar.status === 'idle' && idleMs > IDLE_RECALC_THRESHOLD_MS) {
             // Expire action cooldowns to widen available choices
             if (updatedChar.actionCooldowns && typeof updatedChar.actionCooldowns === 'object') {
                 const cooled: Record<string, number> = { ...updatedChar.actionCooldowns } as any;
@@ -1580,7 +1621,25 @@ export async function processGameTick(
                 updatedChar = result.character;
                 const log = result.logMessage;
                 if (Array.isArray(log)) {
-                    combatLog.push(...log);
+                    // Route special markers to proper channels
+                    for (const entry of log) {
+                        if (typeof entry !== 'string' || !entry) continue;
+                        if (entry.startsWith('[adventure] ')) {
+                            adventureLog.push(entry.replace(/^\[adventure\]\s+/u, ''));
+                        } else if (entry.startsWith('[chronicle] ')) {
+                            try {
+                                const payload = entry.replace(/^\[chronicle\]\s+/u, '');
+                                const parts = payload.split('|');
+                                const type = (parts[0] || 'custom') as any;
+                                const title = parts[1] || '';
+                                const description = parts[2] || '';
+                                const icon = (parts[3] || 'Scroll') as any;
+                                chronicleEntries.push({ type, title, description, icon });
+                            } catch {}
+                        } else {
+                            combatLog.push(entry);
+                        }
+                    }
                 } else if (log) {
                     adventureLog.push(log);
                 }
@@ -1595,18 +1654,37 @@ export async function processGameTick(
     // Check cooldown and reduce chance to prevent spam
     const now = Date.now();
     const lastThoughtTime = updatedChar.lastThoughtTime || 0;
-    const thoughtCooldown = 30 * 1000; // 30 seconds cooldown
-    
-    if (shouldTakeTurn && 
-        (now - lastThoughtTime) > thoughtCooldown && 
-        Math.random() < 0.15) { // Reduced from 30% to 15%
-        
+    const thoughtCooldown = 45 * 1000; // 45 seconds cooldown
+
+    // Lightweight daily quota for thoughts to prevent spam
+    try {
+        if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {} as any;
+        const quotaResetAt = Number((updatedChar.actionCooldowns as any)['thoughts:quota:resetAt'] || 0);
+        const quotaCount = Number((updatedChar.actionCooldowns as any)['thoughts:quota:count'] || 0);
+        const nowDayStart = new Date(); nowDayStart.setHours(0,0,0,0);
+        // Reset quota if past reset or not initialized
+        if (!quotaResetAt || now >= quotaResetAt) {
+            (updatedChar.actionCooldowns as any)['thoughts:quota:resetAt'] = nowDayStart.getTime() + 24 * 60 * 60 * 1000;
+            (updatedChar.actionCooldowns as any)['thoughts:quota:count'] = 0;
+        }
+    } catch {}
+
+    const currentQuota = Number((updatedChar.actionCooldowns as any)?.['thoughts:quota:count'] || 0);
+    const quotaLimit = 8; // max thoughts per real day
+    // Reduce chance during travel to prioritize uniqueness over volume
+    const isTraveling = updatedChar.currentAction?.type === 'travel';
+    const baseChance = 0.12;
+    const chance = isTraveling ? Math.max(0.03, baseChance * 0.4) : baseChance;
+    if (shouldTakeTurn && currentQuota < quotaLimit && (now - lastThoughtTime) > thoughtCooldown && Math.random() < chance) {
         const epicPhraseResult = await processEpicPhraseGeneration(updatedChar, (gameData as any).thoughts || []);
         if (epicPhraseResult.log) {
             updatedChar = epicPhraseResult.char;
             updatedChar.lastThoughtTime = now; // Update last thought time
             adventureLog.push(epicPhraseResult.log);
             if (epicPhraseResult.chronicle) chronicleEntries.push(epicPhraseResult.chronicle);
+            try {
+                (updatedChar.actionCooldowns as any)['thoughts:quota:count'] = Number((updatedChar.actionCooldowns as any)['thoughts:quota:count'] || 0) + 1;
+            } catch {}
         }
     }
 

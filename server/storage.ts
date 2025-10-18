@@ -339,6 +339,29 @@ export async function insertCharacterSnapshot(realmId: string, characterId: stri
   });
 }
 
+// === Divine messages ===
+export async function addDivineMessage(characterId: string, text: string) {
+  const [row] = await db.insert(schema.divineMessages).values({
+    characterId,
+    text,
+    createdAt: Date.now(),
+    processedAt: null,
+  }).returning();
+  return row;
+}
+
+export async function getPendingDivineMessages(characterId: string, limit: number = 5) {
+  return await db.select()
+    .from(schema.divineMessages)
+    .where(and(eq(schema.divineMessages.characterId, characterId), eq(schema.divineMessages.processedAt, null as any)))
+    .orderBy(desc(schema.divineMessages.createdAt))
+    .limit(limit);
+}
+
+export async function markDivineMessageProcessed(id: string) {
+  await db.update(schema.divineMessages).set({ processedAt: Date.now() }).where(eq(schema.divineMessages.id, id));
+}
+
 export async function cleanupOldSnapshots(characterId: string, keepLatest: number = 100) {
   const rows = await db.select().from(schema.characterStateSnapshots)
     .where(eq(schema.characterStateSnapshots.characterId, characterId))

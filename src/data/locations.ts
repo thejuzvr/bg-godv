@@ -8,6 +8,13 @@ export const initialLocations: Location[] = [
   { id: 'markarth', name: 'Маркарт', type: 'city', coords: { x: 18, y: 58 }, isSafe: true },
   { id: 'riften', name: 'Рифтен', type: 'city', coords: { x: 85, y: 80 }, isSafe: true },
 
+  // City outskirts (local activity hubs)
+  { id: 'whiterun_outskirts', name: 'Окрестности Вайтрана', type: 'outskirts', coords: { x: 49, y: 58 }, isSafe: true },
+  { id: 'solitude_outskirts', name: 'Окрестности Солитьюда', type: 'outskirts', coords: { x: 23, y: 24 }, isSafe: true },
+  { id: 'windhelm_outskirts', name: 'Окрестности Виндхельма', type: 'outskirts', coords: { x: 80, y: 42 }, isSafe: true },
+  { id: 'riften_outskirts', name: 'Окрестности Рифтена', type: 'outskirts', coords: { x: 83, y: 84 }, isSafe: true },
+  { id: 'markarth_outskirts', name: 'Окрестности Маркарта', type: 'outskirts', coords: { x: 20, y: 62 }, isSafe: true },
+
   // Minor Cities (represented as towns)
   { id: 'dawnstar', name: 'Данстар', type: 'town', coords: { x: 50, y: 15 }, isSafe: true },
   { id: 'winterhold', name: 'Винтерхолд', type: 'town', coords: { x: 72, y: 22 }, isSafe: true },

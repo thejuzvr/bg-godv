@@ -227,6 +227,18 @@ export default function AdminPage() {
 
                 <Card>
                     <CardHeader>
+                        <CardTitle>AI Симулятор</CardTitle>
+                        <CardDescription>Запуск одиночного тика и пакетной симуляции N тиков.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Button asChild>
+                            <Link href="/admin/ai/simulator">Открыть симулятор</Link>
+                        </Button>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
                         <CardTitle>Исправить состояние героя</CardTitle>
                         <CardDescription>Сбросить статус героя, переместить в Вайтран с полным здоровьем.</CardDescription>
                     </CardHeader>

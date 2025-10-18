@@ -33,7 +33,7 @@ export const AI_ANTIOSC_ENABLED = String(process.env.AI_ANTIOSC_ENABLED || 'true
 export const RECENT_DEST_LRU = Number(process.env.AI_RECENT_DEST_LRU || 5);
 export const TRAVEL_REPEAT_PENALTY = Number(process.env.AI_TRAVEL_REPEAT_PENALTY || 0.5);
 export const CATEGORY_BASE_MULTIPLIERS: Record<string, number> = {
-  travel: Number(process.env.AI_CAT_TRAVEL_MULT || 0.9),
+  travel: Number(process.env.AI_CAT_TRAVEL_MULT || 0.75),
   quest: Number(process.env.AI_CAT_QUEST_MULT || 1.2),
   social: Number(process.env.AI_CAT_SOCIAL_MULT || 1.0),
   trade: Number(process.env.AI_CAT_TRADE_MULT || 1.05),

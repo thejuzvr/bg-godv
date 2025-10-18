@@ -170,6 +170,15 @@ export const characters = pgTable('characters', {
   hasCompletedLocationActivity: boolean('has_completed_location_activity').notNull().default(false),
 });
 
+// === Divine messages (user-driven) ===
+export const divineMessages = pgTable('divine_messages', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  characterId: text('character_id').notNull().references(() => characters.id, { onDelete: 'cascade' }),
+  text: text('text').notNull(),
+  createdAt: bigint('created_at', { mode: 'number' }).notNull().default(Date.now()),
+  processedAt: bigint('processed_at', { mode: 'number' }),
+});
+
 export const chronicle = pgTable('chronicle', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   characterId: text('character_id').notNull().references(() => characters.id, { onDelete: 'cascade' }),

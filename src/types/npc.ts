@@ -18,4 +18,9 @@ export interface NPC {
         combatStyle: 'Воин (ближний бой)' | 'Лучник (дальний бой)' | 'Маг (заклинания)';
         primarySkill: string; // e.g. "Одноручное оружие"
     };
+    // Optional teaching capabilities
+    teaches?: Array<{
+        skill: 'oneHanded' | 'block' | 'heavyArmor' | 'lightArmor' | 'persuasion' | 'alchemy';
+        price: number; // base price per lesson
+    }>;
 }

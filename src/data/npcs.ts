@@ -265,6 +265,40 @@ export const initialNpcs: NPC[] = [
             { itemId: 'armor_iron_helmet', stock: 2, priceModifier: 1.4 }
         ]
     },
+    // === Teachers ===
+    {
+        id: 'teacher_block_whiterun',
+        name: 'Тренер по защите',
+        description: 'Опытный воин, обучающий искусству блока и защиты.',
+        location: 'whiterun',
+        dialogue: [
+            'Щит — это не просто металл. Это уверенность.',
+            'Хорошая защита спасает жизнь чаще, чем хороший меч.',
+        ],
+        teaches: [ { skill: 'block', price: 120 } ],
+    },
+    {
+        id: 'teacher_magic_winterhold',
+        name: 'Преподаватель Коллегии',
+        description: 'Маг Коллегии Винтерхолда, обучающий основам магии.',
+        location: 'winterhold',
+        dialogue: [
+            'Магия — это дисциплина, а не шоу.',
+            'Начнём с основ, а потом перейдём к практике.',
+        ],
+        teaches: [ { skill: 'alchemy', price: 140 } ],
+    },
+    {
+        id: 'teacher_weapon_riften',
+        name: 'Мастер клинка',
+        description: 'Опытный фехтовальщик, обучающий работе одноручным оружием.',
+        location: 'riften',
+        dialogue: [
+            'Рука, клинок, ритм. Повторяй.',
+            'Лишние движения — лишние раны.',
+        ],
+        teaches: [ { skill: 'oneHanded', price: 160 } ],
+    },
     {
         id: 'skooma_dealer',
         name: 'Подозрительный каджит',

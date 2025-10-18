@@ -703,19 +703,16 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             winMsg += ` Репутация с ${getFactionName(factionId)} увеличилась на ${reputationGain}.`;
         }
         
-        // Humorous flavor line and chronicle hook
+        // Humorous flavor line and chronicle hook + route to adventure/chronicle
         try {
             const { getHumorousVictoryLine } = await import('./game-engine');
-            const humor = (getHumorousVictoryLine as any)?.(enemy.name, updatedChar.location) || '';
+            const humor = await getHumorousVictoryLine(enemy.name, updatedChar.location);
             if (humor) {
-                logMessages.push(humor);
-                if (updatedChar.combat) {
-                    if (!updatedChar.combat.combatLog) updatedChar.combat.combatLog = [];
-                    updatedChar.combat.combatLog.push(`[chronicle] combat_victory|Победа!|${humor}|Swords|enemy=${enemy.name}`);
-                }
+                logMessages.push(`[adventure] ${humor}`);
+                logMessages.push(`[chronicle] combat_victory|Победа!|${humor}|Swords`);
             }
         } catch {}
-        logMessages.push(winMsg);
+        logMessages.push(`[adventure] ${winMsg}`);
         // Progress generated quest on combat victory
         try {
             const gq = character.activeGeneratedQuest;
@@ -799,7 +796,30 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
         logMessages.push("Герой ловко уворачивается от атаки!");
     }
 
-    if (updatedChar.stats.health.current > 0) logMessages.push(`У героя осталось ${Math.max(0, updatedChar.stats.health.current)} здоровья.`);
+    if (updatedChar.stats.health.current > 0) {
+        // Log only at thresholds 75/50/25/10/1% to reduce spam
+        try {
+            const hp = Math.max(0, updatedChar.stats.health.current);
+            const max = Math.max(1, updatedChar.stats.health.max);
+            const ratio = hp / max;
+            const thresholds = [0.75, 0.5, 0.25, 0.10, 0.01];
+            let key = 'hp:last:bucket';
+            const last = (updatedChar.actionCooldowns as any)?.[key];
+            let bucket = '';
+            if (ratio <= 0.01) bucket = '1';
+            else if (ratio <= 0.10) bucket = '10';
+            else if (ratio <= 0.25) bucket = '25';
+            else if (ratio <= 0.50) bucket = '50';
+            else if (ratio <= 0.75) bucket = '75';
+            if (bucket && bucket !== last) {
+                logMessages.push(`У героя осталось ${hp} здоровья.`);
+                if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {} as any;
+                (updatedChar.actionCooldowns as any)[key] = bucket;
+            }
+        } catch {
+            logMessages.push(`У героя осталось ${Math.max(0, updatedChar.stats.health.current)} здоровья.`);
+        }
+    }
 
     // Append this round's messages to persistent combat log
     if (updatedChar.combat?.combatLog) {
@@ -1447,6 +1467,10 @@ const findEnemyAction: Action = {
     }
 };
 
+const TRAVEL_DEST_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes cooldown per destination
+const TRAVEL_GLOBAL_COOLDOWN_MS = 3 * 60 * 1000; // 3 minutes global travel cooldown
+const EXPLORATION_CITY_COOLDOWN_MS = 10 * 60 * 1000; // used where applicable
+
 const travelAction: Action = {
     name: "Путешествовать",
     type: "travel",
@@ -1459,10 +1483,24 @@ const travelAction: Action = {
             return priorityToWeight(Priority.HIGH);
         }
 
+        // Global travel cooldown to reduce frequency
+        try {
+            const cd = Number((char.actionCooldowns as any)?.['travel:any'] || 0);
+            if (cd && cd > Date.now()) {
+                return priorityToWeight(Priority.DISABLED);
+            }
+        } catch {}
+
         // Discourage excessive back-to-back travel
         const recentTravelCount = countRecentActions(char, 'travel', 10);
         if (recentTravelCount >= 3) return priorityToWeight(Priority.DISABLED);
         if (recentTravelCount >= 2) return priorityToWeight(Priority.LOW) * 0.5;
+
+        // Penalize returning to very recent destinations heavily
+        const lru = Array.isArray(char.recentDestinations) ? char.recentDestinations.slice(-3) : [];
+        if (lru.includes(char.location)) {
+            return priorityToWeight(Priority.DISABLED);
+        }
 
         // Default: low urge to travel
         return priorityToWeight(Priority.LOW);
@@ -1488,8 +1526,16 @@ const travelAction: Action = {
         if (character.divineDestinationId) {
             destination = locations.find(l => l.id === character.divineDestinationId);
         } else {
+            const now = Date.now();
+            const cooled = updatedChar.actionCooldowns || {} as any;
             const recent = Array.isArray(updatedChar.recentDestinations) ? new Set(updatedChar.recentDestinations) : new Set<string>();
-            const candidates = locations.filter(l => l.id !== updatedChar.location && !recent.has(l.id));
+            const candidates = locations.filter(l => {
+                if (l.id === updatedChar.location) return false;
+                if (recent.has(l.id)) return false; // avoid very recent repeats
+                const cdKey = `travel:${l.id}`;
+                const cd = Number((cooled as any)[cdKey] || 0);
+                return !(cd && cd > now);
+            });
             const pool = candidates.length > 0 ? candidates : locations.filter(l => l.id !== updatedChar.location);
             if (pool.length > 0) {
                 destination = pool[Math.floor(Math.random() * pool.length)];
@@ -1511,6 +1557,10 @@ const travelAction: Action = {
         };
         updatedChar.currentAction.originalDuration = updatedChar.currentAction.duration;
         updatedChar = addToActionHistory(updatedChar, 'travel');
+        // Set per-destination cooldown to reduce repeats
+        if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {} as any;
+        (updatedChar.actionCooldowns as any)[`travel:${destination.id}`] = Date.now() + TRAVEL_DEST_COOLDOWN_MS;
+        (updatedChar.actionCooldowns as any)['travel:any'] = Date.now() + TRAVEL_GLOBAL_COOLDOWN_MS;
         // Update LRU of recent destinations (append destination)
         try {
             const lru = Array.isArray(updatedChar.recentDestinations) ? updatedChar.recentDestinations.slice() : [];
@@ -2570,7 +2620,146 @@ const tradeWithNPCAction: Action = {
 const reflexActions: ReflexAction[] = [fleeFromCombatReflex, useBuffPotionReflex, usePotionReflex];
 export const idleActions: Action[] = [
     makeCampAction,
+    // Urgent cleanup when overencumbered: drop cheap junk immediately
+    {
+        name: "Сбросить хлам",
+        type: "system",
+        getWeight: (char, worldState) => worldState.isOverencumbered ? priorityToWeight(Priority.URGENT) : 0,
+        canPerform: (char, worldState) => {
+            if (!worldState.isOverencumbered) return false;
+            const droppable = (char.inventory || []).some(i => i.id !== 'gold' && i.type !== 'key_item' && !(Object.values(char.equippedItems || {}).includes(i.id)) && (i.type === 'misc' || (computeBaseValue(i as any) < 20)));
+            return droppable;
+        },
+        async perform(character) {
+            let updatedChar = structuredClone(character);
+            const capacity = 150 + (updatedChar.attributes.strength * 5);
+            let currentWeight = updatedChar.inventory.reduce((acc, it) => acc + (it.weight * it.quantity), 0);
+            if (currentWeight <= capacity) {
+                return { character: updatedChar, logMessage: '' };
+            }
+            // Build droppable list: misc first, then low-value non-key non-equipped
+            const isEquipped = (id: string) => Object.values(updatedChar.equippedItems || {}).includes(id);
+            type DropCand = { idx: number; id: string; name: string; weight: number; quantity: number; valuePerWeight: number; type: string };
+            const candidates: DropCand[] = [];
+            for (let idx = 0; idx < updatedChar.inventory.length; idx++) {
+                const it = updatedChar.inventory[idx];
+                if (it.id === 'gold' || it.type === 'key_item' || isEquipped(it.id)) continue;
+                const base = computeBaseValue(it as any);
+                const vpw = (base || 0) / Math.max(1, it.weight);
+                if (it.type === 'misc' || base < 20) {
+                    candidates.push({ idx, id: it.id, name: it.name, weight: it.weight, quantity: it.quantity, valuePerWeight: vpw, type: it.type });
+                }
+            }
+            // Sort by type priority (misc first), then by valuePerWeight asc
+            candidates.sort((a, b) => {
+                const ta = a.type === 'misc' ? 0 : 1;
+                const tb = b.type === 'misc' ? 0 : 1;
+                if (ta !== tb) return ta - tb;
+                return a.valuePerWeight - b.valuePerWeight;
+            });
+            let droppedCount = 0;
+            let droppedWeight = 0;
+            for (const c of candidates) {
+                if (currentWeight <= capacity) break;
+                const invItem = updatedChar.inventory.find(i => i.id === c.id);
+                if (!invItem) continue;
+                // Drop as many as needed of this item
+                const maxDropQty = invItem.quantity;
+                const needWeight = Math.max(0, currentWeight - capacity);
+                const qtyToDrop = Math.min(maxDropQty, Math.ceil(needWeight / Math.max(0.0001, invItem.weight)));
+                if (qtyToDrop <= 0) continue;
+                invItem.quantity -= qtyToDrop;
+                const w = invItem.weight * qtyToDrop;
+                currentWeight -= w;
+                droppedWeight += w;
+                droppedCount += qtyToDrop;
+                if (invItem.quantity <= 0) {
+                    updatedChar.inventory = updatedChar.inventory.filter(i => i.id !== invItem.id);
+                }
+            }
+            updatedChar = addToActionHistory(updatedChar, 'system');
+            const msg = droppedCount > 0 ? `Перегруз! Герой избавился от ${droppedCount} предметов, сбросив ${Math.max(0, Math.round(droppedWeight))} веса.` : '';
+            return { character: updatedChar, logMessage: msg };
+        }
+    },
     autoAssignPointsAction,
+    // Adult actions (18+): wandering, getting drunk, brothel night
+    {
+        name: "Слоняться по городу",
+        type: "explore",
+        getWeight: (char, world) => (world.isLocationSafe ? priorityToWeight(Priority.MEDIUM) : 0),
+        canPerform: (char, world) => world.isLocationSafe,
+        async perform(character) {
+            let updated = structuredClone(character);
+            updated = addToActionHistory(updated, 'explore');
+            // Small chance to stumble into trouble
+            if (Math.random() < 0.15) {
+                updated.mood = Math.max(0, updated.mood - 3);
+                return { character: updated, logMessage: 'Герой слоняется без дела и едва не вляпывается в неприятность.' };
+            }
+            return { character: updated, logMessage: 'Герой бесцельно слоняется по улицам, глядя по сторонам.' };
+        }
+    },
+    {
+        name: "Напиться в таверне",
+        type: "explore",
+        getWeight: (char, world) => (world.isLocationSafe && world.timeOfDay !== 'morning' ? priorityToWeight(Priority.MEDIUM) : 0),
+        canPerform: (char, world) => world.isLocationSafe && (char.inventory.find(i => i.id === 'gold')?.quantity || 0) >= 10,
+        async perform(character) {
+            let updated = structuredClone(character);
+            const gold = updated.inventory.find(i => i.id === 'gold');
+            if (gold) gold.quantity = Math.max(0, gold.quantity - 10);
+            updated.mood = Math.min(100, updated.mood + 6);
+            // 25% chance of bar fight encounter
+            if (Math.random() < 0.25) {
+                updated.status = 'in-combat';
+                updated.combat = { enemyId: 'bar_regular', enemy: { name: 'Завсегдатай таверны', health: { current: 20, max: 20 }, damage: 3, xp: 5, armor: 8, appliesEffect: null }, fleeAttempted: false } as any;
+                return { character: updated, logMessage: 'Неудачно пошутили — началась потасовка с завсегдатаем таверны!' };
+            }
+            // 15% chance to lose a cheap item
+            if (Math.random() < 0.15) {
+                const notEquipped = updated.inventory.filter(it => it.id !== 'gold' && it.type !== 'key_item' && !(Object.values(updated.equippedItems || {}).includes(it.id)));
+                notEquipped.sort((a, b) => (computeBaseValue(a as any) - computeBaseValue(b as any)));
+                const lost = notEquipped[0];
+                if (lost) {
+                    lost.quantity -= 1;
+                    if (lost.quantity <= 0) updated.inventory = updated.inventory.filter(i => i.id !== lost.id);
+                    return { character: updated, logMessage: `Герой напился и потерял: ${lost.name}.` };
+                }
+            }
+            return { character: updated, logMessage: 'Герой хорошенько напился в таверне. Настроение улучшилось.' };
+        }
+    },
+    {
+        name: "Ночь в борделе",
+        type: "explore",
+        getWeight: (char, world) => (world.isLocationSafe && world.timeOfDay !== 'morning' ? priorityToWeight(Priority.LOW) : 0),
+        canPerform: (char, world) => world.isLocationSafe && (char.inventory.find(i => i.id === 'gold')?.quantity || 0) >= 100,
+        async perform(character) {
+            let updated = structuredClone(character);
+            const gold = updated.inventory.find(i => i.id === 'gold');
+            if (!gold || gold.quantity < 100) return { character: updated, logMessage: 'Не хватает золота на ночные утехи.' };
+            gold.quantity -= 100;
+            updated.mood = Math.min(100, updated.mood + 10);
+            // Small buff/debuff window
+            const effect: ActiveEffect = { id: 'well_rested', name: 'Теплая ночь', description: 'Герой расслаблен и доволен жизнью.', icon: 'Heart', type: 'buff', expiresAt: Date.now() + 20 * 60 * 1000 };
+            updated.effects = updated.effects.filter(e => e.id !== effect.id);
+            updated.effects.push(effect);
+            // 10% chance to lose a cheap item
+            if (Math.random() < 0.10) {
+                const notEquipped = updated.inventory.filter(it => it.id !== 'gold' && it.type !== 'key_item' && !(Object.values(updated.equippedItems || {}).includes(it.id)));
+                notEquipped.sort((a, b) => (computeBaseValue(a as any) - computeBaseValue(b as any)));
+                const lost = notEquipped[0];
+                if (lost) {
+                    lost.quantity -= 1;
+                    if (lost.quantity <= 0) updated.inventory = updated.inventory.filter(i => i.id !== lost.id);
+                    return { character: updated, logMessage: `Герой провёл ночь в борделе и лишился: ${lost.name}.` };
+                }
+            }
+            updated = addToActionHistory(updated, 'explore');
+            return { character: updated, logMessage: 'Герой провёл ночь в борделе. Настроение заметно улучшилось.' };
+        }
+    },
     // Auto-assign a perk if available points and requirements met
     {
         name: "Получить перк",
@@ -2609,8 +2798,9 @@ export const idleActions: Action[] = [
         type: "explore",
         getWeight: (char, world) => {
             if (!world.isLocationSafe || !world.canExploreCity) return 0;
-            // Medium baseline; goals/personality will adjust
-            return priorityToWeight(Priority.MEDIUM);
+            // Prefer outskirts quick tasks when present
+            const isOutskirts = /_outskirts$/.test(char.location);
+            return isOutskirts ? priorityToWeight(Priority.HIGH) : priorityToWeight(Priority.MEDIUM);
         },
         canPerform: (char, world, gameData) => {
             if (!world.isLocationSafe) return false;
@@ -2711,7 +2901,7 @@ async function determineNextAction(character: Character, gameData: GameData): Pr
         hasUnreadLearningBook: character.inventory.some(i => i.type === 'learning_book'),
         hasKeyItem: character.inventory.some(i => i.type === 'key_item'),
         isWellRested: character.effects.some(e => e.id === 'well_rested'),
-        canExploreCity: now > (lastCityExploration + 20 * 60 * 1000), // 20 min cooldown
+        canExploreCity: now > (lastCityExploration + EXPLORATION_CITY_COOLDOWN_MS),
         isOverencumbered: inventoryWeight > inventoryCapacity,
         hasPoisonDebuff: character.effects.some(e => e.id === 'weak_poison'),
         hasBuffPotion: character.inventory.some(i => i.type === 'potion' && i.effect?.type === 'buff' && i.effect.id != null && !character.effects.some(e => e.id === i.effect!.id)),
@@ -2999,35 +3189,52 @@ const donateAtTempleAction: Action = {
 const trainingAction: Action = {
     name: "Обучение у тренера",
     type: "learn",
-    getWeight: (char, worldState) => {
-        const gold = char.inventory.find(i => i.id === 'gold');
-        if (!gold || gold.quantity < 100) return 0;
+    getWeight: (char, worldState, gameData) => {
         if (!worldState.isLocationSafe) return 0;
-        // Favor learning if recently idle or just arrived
+        const hereTeachers = (gameData.npcs || []).filter((n: any) => n.location === char.location && Array.isArray(n.teaches) && n.teaches.length > 0);
+        if (hereTeachers.length === 0) return 0;
+        const gold = char.inventory.find(i => i.id === 'gold')?.quantity || 0;
+        if (gold < Math.min(...hereTeachers.flatMap((n: any) => n.teaches.map((t: any) => t.price)))) return 0;
         const now = Date.now();
         const arrival = char.lastLocationArrival || 0;
         const withinArrival = (now - arrival) < 5 * 60 * 1000 && !char.hasCompletedLocationActivity;
         return withinArrival ? priorityToWeight(Priority.HIGH) : priorityToWeight(Priority.MEDIUM);
     },
-    canPerform: (char, worldState) => {
-        const gold = char.inventory.find(i => i.id === 'gold');
-        return !!gold && gold.quantity >= 100 && worldState.isLocationSafe;
+    canPerform: (char, worldState, gameData) => {
+        if (!worldState.isLocationSafe) return false;
+        // Cooldown per location teacher
+        const cd = Number((char.actionCooldowns as any)?.['train:cd'] || 0);
+        if (cd && cd > Date.now()) return false;
+        const gold = char.inventory.find(i => i.id === 'gold')?.quantity || 0;
+        const hereTeachers = (gameData.npcs || []).filter((n: any) => n.location === char.location && Array.isArray(n.teaches) && n.teaches.length > 0);
+        if (hereTeachers.length === 0) return false;
+        const minPrice = Math.min(...hereTeachers.flatMap((n: any) => n.teaches.map((t: any) => t.price)));
+        return gold >= minPrice;
     },
-    async perform(character) {
+    async perform(character, gameData) {
         let updatedChar = structuredClone(character);
-        const gold = updatedChar.inventory.find(i => i.id === 'gold');
-        if (!gold || gold.quantity < 100) {
-            return { character, logMessage: "Недостаточно золота для обучения." };
+        const hereTeachers = (gameData.npcs || []).filter((n: any) => n.location === updatedChar.location && Array.isArray(n.teaches) && n.teaches.length > 0);
+        if (hereTeachers.length === 0) return { character, logMessage: 'Рядом нет учителей.' };
+        // Pick the cheapest available lesson first
+        let pick: { npc: any; lesson: any } | null = null;
+        for (const npc of hereTeachers) {
+            const lessons = Array.isArray((npc as any).teaches) ? (npc as any).teaches : [];
+            for (const lesson of lessons) {
+                if (!pick || lesson.price < pick.lesson.price) pick = { npc, lesson };
+            }
         }
-        gold.quantity -= 100;
-        // Improve lowest skill slightly
-        const skills: (keyof Character['skills'])[] = ['oneHanded', 'block', 'heavyArmor', 'lightArmor', 'persuasion', 'alchemy'];
-        const lowest = skills.reduce((acc, s) => updatedChar.skills[s] < updatedChar.skills[acc] ? s : acc, skills[0]);
-        updatedChar.skills[lowest] += 1;
-        updatedChar.mood = Math.min(100, updatedChar.mood + 1);
+        if (!pick) return { character, logMessage: 'Учитель занят.' };
+        const gold = updatedChar.inventory.find(i => i.id === 'gold');
+        if (!gold || gold.quantity < pick.lesson.price) return { character, logMessage: 'Недостаточно золота для обучения.' };
+        gold.quantity -= pick.lesson.price;
+        // Apply skill up
+        (updatedChar.skills as any)[pick.lesson.skill] = ((updatedChar.skills as any)[pick.lesson.skill] || 0) + 1;
+        updatedChar.mood = Math.min(100, updatedChar.mood + 2);
         updatedChar = addToActionHistory(updatedChar, 'learn');
         updatedChar.hasCompletedLocationActivity = true;
-        return { character: updatedChar, logMessage: `Герой проходит обучение у наставника (+1 к навыку ${lowest}).` };
+        if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {} as any;
+        (updatedChar.actionCooldowns as any)['train:cd'] = Date.now() + 10 * 60 * 1000; // 10 minutes cooldown
+        return { character: updatedChar, logMessage: `Герой обучается у ${pick.npc.name}: +1 к навыку ${pick.lesson.skill}.` };
     }
 };
 
