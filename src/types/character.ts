@@ -47,6 +47,8 @@ export interface Analytics {
     };
     encounteredEnemies: string[]; // List of unique enemy IDs
     epicPhrases: string[];
+    // Optional action category counters for telemetry (non-critical)
+    actionCategoryCounts?: Record<string, number>;
 }
 
 
@@ -94,7 +96,8 @@ export interface CombatState {
     onWinQuestId?: string | null;
     fleeAttempted?: boolean;
     // Shout usage and control effects
-    shoutUsed?: boolean;
+    shoutUsed?: boolean; // legacy single-use flag (kept for compatibility)
+    shoutCooldownRoundsRemaining?: number; // generic cooldown for next shout use
     enemyStunnedRounds?: number; // number of enemy turns to skip
     lastRoll?: {
       actor: 'hero' | 'enemy';
@@ -233,6 +236,7 @@ export interface Character {
   deaths: number;
   effects: ActiveEffect[];
   knownSpells?: string[];
+  knownShouts?: string[];
   currentAction: ActiveAction | null;
   interventionPower: { current: number; max: number };
   divineSuggestion: string | null; // Name of the suggested action
@@ -247,6 +251,7 @@ export interface Character {
   gameDate: number; // In-game time as a timestamp
   mood: number; // 0-100, 50 is neutral
   unlockedPerks?: string[];
+  perkPoints?: number;
   preferences?: {
     autoAssignPoints?: boolean;
     autoEquip?: boolean;
@@ -262,6 +267,20 @@ export interface Character {
   hasSeenWelcomeMessage?: boolean; // Whether character has seen their welcome message
   lastLocationArrival?: number; // Timestamp when character arrived at current location
   hasCompletedLocationActivity?: boolean; // Whether character has completed quest/rest at current location
+  // LRU of recent arrival destinations to prevent oscillation
+  recentDestinations?: string[];
+  // Dynamically generated multi-step quest (lightweight inline shape)
+  activeGeneratedQuest?: {
+    id: string;
+    steps: Array<{
+      type: 'travel' | 'combat' | 'interact' | 'gather';
+      description: string;
+      target?: string;
+      duration?: number;
+    }>;
+    currentStep: number;
+    rewards: { gold?: number; xp?: number; items?: string[] };
+  } | null;
 }
 
 export type WorldState = {

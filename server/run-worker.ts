@@ -23,12 +23,25 @@ async function main() {
       await runBackgroundWorker();
       return;
     }
-    console.log('[Runner] BullMQ mode enabled. Starting tick worker...');
+    console.log('[Runner] BullMQ mode enabled. Starting tick worker and digest worker...');
     // Keep process alive by awaiting worker events
     tickWorker.on('ready', () => console.log('[TickWorker] ready'));
     tickWorker.on('error', (err) => console.error('[TickWorker] error', err));
-    // Fire-and-forget producer loop
+    // Fire-and-forget producer loops
     startTickProducer().catch((e) => console.error('[Runner] tick producer failed', e));
+    try {
+      const { digestWorker } = await import('./workers/digestWorker');
+      digestWorker.on('ready', () => console.log('[DigestWorker] ready (runner)'));
+      const { startDigestProducer } = await import('./producers/digestProducer');
+      startDigestProducer().catch((e) => console.error('[Runner] digest producer failed', e));
+      // Optional Telegram polling (no webhook) if enabled
+      if (String(process.env.TELEGRAM_POLLING || '').toLowerCase() === 'true') {
+        const { startTelegramPoller } = await import('./producers/telegramPoller');
+        startTelegramPoller().catch((e) => console.error('[Runner] telegram poller failed', e));
+      }
+    } catch (e) {
+      console.error('[Runner] failed to start digest worker/producer', e);
+    }
     await new Promise(() => {});
   } else {
     console.log('[Runner] Legacy loop mode. Starting background worker...');

@@ -413,11 +413,35 @@ async function processActionCompletion(character: Character, gameData: GameData,
         case 'travel':
             updatedChar.location = currentAction.destinationId!;
             const destination = gameData.locations.find(l=>l.id === currentAction.destinationId);
-            logs.push(`...После долгого пути, герой наконец прибыл в ${destination?.name || 'новые земли'}.`);
+            // Arrival log dedupe: protect against concurrent workers/rapid replays
+            try {
+                const arrivalKey = `arrival_log:${destination?.id || 'unknown'}`;
+                const last = Number((updatedChar.actionCooldowns as any)?.[arrivalKey] || 0);
+                const canLog = (Date.now() - last) > 10 * 1000; // 10s cooldown
+                if (canLog) {
+                    logs.push(`...После долгого пути, герой наконец прибыл в ${destination?.name || 'новые земли'}.`);
+                    if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {} as any;
+                    (updatedChar.actionCooldowns as any)[arrivalKey] = Date.now();
+                }
+            } catch {
+                logs.push(`...После долгого пути, герой наконец прибыл в ${destination?.name || 'новые земли'}.`);
+            }
             
             // Reset location arrival tracking for strict sequencing
             updatedChar.lastLocationArrival = Date.now();
             updatedChar.hasCompletedLocationActivity = false;
+            // Update recent destinations LRU
+            try {
+                const lru = Array.isArray(updatedChar.recentDestinations) ? updatedChar.recentDestinations.slice() : [];
+                if (destination?.id) {
+                    lru.push(destination.id);
+                    const seen = new Set<string>();
+                    const uniq: string[] = [];
+                    for (const id of lru) { if (!seen.has(id)) { seen.add(id); uniq.push(id); } }
+                    while (uniq.length > 5) uniq.shift();
+                    updatedChar.recentDestinations = uniq;
+                }
+            } catch {}
             
             const hasVisited = updatedChar.visitedLocations?.includes(destination!.id);
             if (destination && destination.type === 'city' && !hasVisited) {
@@ -428,6 +452,29 @@ async function processActionCompletion(character: Character, gameData: GameData,
                 chronicles.push({ type: 'discovery_city', title: `Открыт город: ${destination.name}`, description: `Герой впервые добрался до одного из великих городов Скайрима. Получено 100 опыта.`, icon: 'MapPin' });
             }
             updatedChar.status = 'idle';
+            // Progress generated quest if current step was travel
+            try {
+                const gq = character.activeGeneratedQuest;
+                if (gq && gq.currentStep < gq.steps.length) {
+                    const step = gq.steps[gq.currentStep];
+                    if (step.type === 'travel') {
+                        const next = structuredClone(updatedChar.activeGeneratedQuest!);
+                        next.currentStep = Math.min(next.currentStep + 1, next.steps.length);
+                        updatedChar.activeGeneratedQuest = next;
+                        logs.push('Этап путешествия выполнен.');
+                        if (next.currentStep >= next.steps.length) {
+                            const r = next.rewards || {};
+                            if (r.xp) updatedChar.xp.current += r.xp;
+                            if (r.gold) {
+                                const goldItem = updatedChar.inventory.find(i => i.id === 'gold');
+                                if (goldItem) goldItem.quantity += r.gold; else updatedChar.inventory.push({ id: 'gold', name: 'Золото', weight: 0, type: 'gold', quantity: r.gold } as any);
+                            }
+                            logs.push('Сгенерированное задание завершено.');
+                            updatedChar.activeGeneratedQuest = null;
+                        }
+                    }
+                }
+            } catch {}
             break;
         case 'quest':
             const quest = gameData.quests.find(q => q.id === currentAction.questId);
@@ -496,6 +543,29 @@ async function processActionCompletion(character: Character, gameData: GameData,
                 updatedChar.hasCompletedLocationActivity = true;
             }
             updatedChar.status = 'idle';
+            // Progress generated quest if current step was a local quest action
+            try {
+                const gq = character.activeGeneratedQuest;
+                if (gq && gq.currentStep < gq.steps.length) {
+                    const step = gq.steps[gq.currentStep];
+                    if (step.type === 'gather' || step.type === 'interact') {
+                        const next = structuredClone(updatedChar.activeGeneratedQuest!);
+                        next.currentStep = Math.min(next.currentStep + 1, next.steps.length);
+                        updatedChar.activeGeneratedQuest = next;
+                        logs.push('Этап задания выполнен.');
+                        if (next.currentStep >= next.steps.length) {
+                            const r = next.rewards || {};
+                            if (r.xp) updatedChar.xp.current += r.xp;
+                            if (r.gold) {
+                                const goldItem = updatedChar.inventory.find(i => i.id === 'gold');
+                                if (goldItem) goldItem.quantity += r.gold; else updatedChar.inventory.push({ id: 'gold', name: 'Золото', weight: 0, type: 'gold', quantity: r.gold } as any);
+                            }
+                            logs.push('Сгенерированное задание завершено.');
+                            updatedChar.activeGeneratedQuest = null;
+                        }
+                    }
+                }
+            } catch {}
             break;
         default:
             break;
@@ -1354,6 +1424,13 @@ export async function processGameTick(
         if (templeResult.chronicle) chronicleEntries.push(templeResult.chronicle);
     }
 
+    // --- 6b. DIVINE DESTINATION CLEANUP (same-location) ---
+    // If divine destination equals current location, clear it and continue with normal behavior
+    if (updatedChar.divineDestinationId && updatedChar.divineDestinationId === updatedChar.location) {
+        updatedChar.divineDestinationId = null;
+        adventureLog.push('Уже на месте.');
+    }
+
 
     // --- 7. ACTION COMPLETION ---
     if (updatedChar.currentAction) {
@@ -1399,6 +1476,10 @@ export async function processGameTick(
     
     // --- 10. RESUME INTERRUPTED TRAVEL ---
     if (updatedChar.status === 'idle' && updatedChar.pendingTravel) {
+        // Guard: do not resume travel to current location
+        if (updatedChar.pendingTravel.destinationId === updatedChar.location) {
+            updatedChar.pendingTravel = null;
+        } else {
         const destinationName = gameData.locations.find(l => l.id === updatedChar.pendingTravel!.destinationId)?.name || 'неизвестное место';
         updatedChar.status = 'busy';
         updatedChar.currentAction = { 
@@ -1413,6 +1494,7 @@ export async function processGameTick(
         adventureLog.push(`Восстановив силы, герой продолжает путь в ${destinationName}.`);
         updatedChar.pendingTravel = null;
         shouldTakeTurn = false;
+        }
     }
 
     // --- 11. LEVEL UP CHECK ---

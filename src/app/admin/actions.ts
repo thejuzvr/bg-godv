@@ -115,3 +115,45 @@ export async function deleteCharacter(characterId: string): Promise<{ success: b
         return { success: false, message: "Failed to delete character.", error: error.message };
     }
 }
+
+export type AdminTelegramSubscription = {
+  id: string;
+  userId: string;
+  email?: string;
+  chatId: string;
+  mode: string;
+  locale: string;
+  isActive: boolean;
+  lastSentAt?: number | null;
+  createdAt: string;
+};
+
+export async function fetchTelegramSubscriptions(): Promise<{ success: boolean; subs?: AdminTelegramSubscription[]; error?: string }> {
+  try {
+    const rows = await storage.getAllTelegramSubscriptions();
+    const subs = rows.map((r: any) => ({
+      id: r.id,
+      userId: r.userId,
+      email: r.email,
+      chatId: String(r.chatId),
+      mode: r.mode,
+      locale: r.locale,
+      isActive: !!r.isActive,
+      lastSentAt: r.lastSentAt ?? null,
+      createdAt: String(r.createdAt),
+    }));
+    return { success: true, subs };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Failed to load subscriptions' };
+  }
+}
+
+export async function setTelegramSubscriptionActive(id: string, active: boolean): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (active) await storage.activateTelegramSubscription(id);
+    else await storage.deactivateTelegramSubscription(id);
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Failed to update subscription' };
+  }
+}

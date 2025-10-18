@@ -3,6 +3,7 @@ import { eq, desc, and, lt, sql } from 'drizzle-orm';
 import pg from 'pg';
 import * as schema from '../shared/schema';
 import { loadEnv } from './load-env';
+import { v4 as uuidv4 } from 'uuid';
 
 // Ensure environment is loaded for scripts and worker
 loadEnv();
@@ -377,4 +378,77 @@ export async function grantShout(characterId: string, shoutId: string) {
 export async function revokeShout(characterId: string, shoutId: string) {
   await db.delete(schema.characterShouts).where(and(eq(schema.characterShouts.characterId, characterId), eq(schema.characterShouts.shoutId, shoutId)));
   return { ok: true };
+}
+
+// === Telegram storage ===
+export async function createTelegramLinkToken(userId: string, token: string, expiresAt: number) {
+  const [row] = await db.insert(schema.telegramLinkTokens).values({ userId, token, expiresAt }).returning();
+  return row;
+}
+
+export async function consumeTelegramLinkToken(token: string) {
+  const [row] = await db.select().from(schema.telegramLinkTokens).where(eq(schema.telegramLinkTokens.token, token)).limit(1);
+  if (!row) return null;
+  await db.delete(schema.telegramLinkTokens).where(eq(schema.telegramLinkTokens.token, token));
+  if ((row as any).expiresAt < Date.now()) return null;
+  return row;
+}
+
+export async function upsertTelegramSubscription(userId: string, chatId: string, mode: string = 'daily', locale: string = 'ru') {
+  const existing = await db.select().from(schema.telegramSubscriptions)
+    .where(and(eq(schema.telegramSubscriptions.userId, userId), eq(schema.telegramSubscriptions.chatId, chatId)))
+    .limit(1);
+  if (existing.length > 0) {
+    const [updated] = await db.update(schema.telegramSubscriptions)
+      .set({ isActive: true, mode, locale })
+      .where(eq(schema.telegramSubscriptions.id, (existing[0] as any).id))
+      .returning();
+    return updated;
+  } else {
+    const [row] = await db.insert(schema.telegramSubscriptions).values({ id: uuidv4(), userId, chatId, mode, locale, isActive: true }).returning();
+    return row;
+  }
+}
+
+export async function getActiveTelegramSubscriptions() {
+  return await db.select().from(schema.telegramSubscriptions).where(eq(schema.telegramSubscriptions.isActive, true));
+}
+
+export async function setTelegramLastSentAt(id: string, ts: number) {
+  await db.update(schema.telegramSubscriptions).set({ lastSentAt: ts }).where(eq(schema.telegramSubscriptions.id, id));
+}
+
+export async function deactivateTelegramSubscription(id: string) {
+  await db.update(schema.telegramSubscriptions).set({ isActive: false }).where(eq(schema.telegramSubscriptions.id, id));
+}
+
+export async function activateTelegramSubscription(id: string) {
+  await db.update(schema.telegramSubscriptions).set({ isActive: true }).where(eq(schema.telegramSubscriptions.id, id));
+}
+
+export async function getAllTelegramSubscriptions() {
+  const rows = await db.select({
+    id: schema.telegramSubscriptions.id,
+    userId: schema.telegramSubscriptions.userId,
+    chatId: schema.telegramSubscriptions.chatId,
+    mode: schema.telegramSubscriptions.mode,
+    locale: schema.telegramSubscriptions.locale,
+    lastSentAt: schema.telegramSubscriptions.lastSentAt,
+    isActive: schema.telegramSubscriptions.isActive,
+    createdAt: schema.telegramSubscriptions.createdAt,
+    email: schema.users.email,
+  })
+  .from(schema.telegramSubscriptions)
+  .leftJoin(schema.users, eq(schema.telegramSubscriptions.userId, schema.users.id))
+  .orderBy(desc(schema.telegramSubscriptions.createdAt));
+  return rows as Array<any>;
+}
+
+export async function getUserActiveTelegramSubscription(userId: string) {
+  const rows = await db.select()
+    .from(schema.telegramSubscriptions)
+    .where(and(eq(schema.telegramSubscriptions.userId, userId), eq(schema.telegramSubscriptions.isActive, true)))
+    .orderBy(desc(schema.telegramSubscriptions.createdAt))
+    .limit(1);
+  return rows[0] || null;
 }

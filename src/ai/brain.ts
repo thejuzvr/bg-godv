@@ -7,10 +7,10 @@
 import type { Character, WorldState, ActiveEffect, ActiveAction, EquipmentSlot, CharacterInventoryItem, ActiveCryptQuest, Weather, CharacterSkills, CharacterAttributes, TimeOfDay, WeatherEffect, TimeOfDayEffect } from "@/types/character";
 import type { LootEntry } from "@/types/enemy";
 import { selectActionSimple } from './policy';
-import { USE_CONFIG_PRIORITY, AI_BT_ENABLED } from './config/constants';
-import type { ActionLike } from './bt/types';
-import { buildBehaviorTree } from './bt/tree';
-import { getBtSettings } from './config/runtime';
+import { USE_CONFIG_PRIORITY } from './config/constants';
+import { CATEGORY_BASE_MULTIPLIERS } from './config/constants';
+import { initPersonality, getPersonalityModifier } from '@/ai/personality';
+import { generateGoals, selectTopGoal } from '@/ai/goal-manager';
 import { computeActionScores } from './priority-engine';
 import { updateOnAction } from './fatigue';
 import { recordAttempt, recordOutcome } from './learning';
@@ -53,6 +53,9 @@ import { interactWithNPC, tradeWithNPC } from "@/actions/npc-actions";
 import { computeBaseValue } from "@/services/pricing";
 import { getCharacterById } from "../../server/storage";
 import { saveCombatAnalytics } from "@/services/combatAnalyticsService";
+import { generateDungeonActivities } from '@/ai/generators/dungeon-generator';
+import { generateCityActivities } from '@/ai/generators/activity-generator';
+import { generateMultiStepQuest } from '@/ai/generators/quest-generator';
 
 // Weather and time modifier functions (duplicated from game-engine.ts)
 function getWeatherModifiers(weather: Weather): WeatherEffect {
@@ -204,6 +207,14 @@ function addToActionHistory(character: Character, actionType: 'combat' | 'quest'
         updatedChar.actionHistory = updatedChar.actionHistory.slice(-40);
     }
     
+    // Telemetry: increment category counters (best-effort)
+    try {
+        if (!updatedChar.analytics) (updatedChar as any).analytics = { killedEnemies: {}, diceRolls: { d20: [] }, encounteredEnemies: [], epicPhrases: [] } as any;
+        const counts = ((updatedChar.analytics as any).actionCategoryCounts ||= {} as Record<string, number>);
+        const key = actionType;
+        counts[key] = (counts[key] || 0) + 1;
+    } catch {}
+
     return updatedChar;
 }
 
@@ -214,6 +225,13 @@ function countRecentActions(character: Character, actionType: string, lookBack: 
     if (!character.actionHistory) return 0;
     const recentActions = character.actionHistory.slice(-lookBack);
     return recentActions.filter(a => a.type === actionType).length;
+}
+
+// Exported for tests and diagnostics
+export function computeRepetitionModifier(recentTypeCount: number): number {
+    if (recentTypeCount >= 5) return 0.2;
+    if (recentTypeCount === 4) return 0.5;
+    return 1.0;
 }
 
 /**
@@ -415,21 +433,25 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
     // --- Hero's Turn ---
     logMessages.push('--- Ход героя ---');
 
-    // Single-use shout (Fus-Ro-Dah) decision
-    if (updatedChar.combat && !updatedChar.combat.shoutUsed) {
-        try {
-            const { SHOUT_USE_CHANCE } = await import('./config/balance');
-            if (Math.random() < (SHOUT_USE_CHANCE || 0.18)) {
-                const minDmg = 20 + Math.floor(updatedChar.level * 1.1);
-                const maxDmg = 35 + Math.floor(updatedChar.level * 1.6);
-                const dmg = Math.max(5, Math.floor(minDmg + Math.random() * (maxDmg - minDmg + 1)));
-                enemy.health.current = Math.max(0, enemy.health.current - dmg);
-                updatedChar.combat.enemyStunnedRounds = ((updatedChar.combat?.enemyStunnedRounds) || 0) + 1;
-                updatedChar.combat.shoutUsed = true;
-                updatedChar.combat.totalDamageDealt = ((updatedChar.combat?.totalDamageDealt) || 0) + dmg;
-                logMessages.push(`"Фус-Ро-Да!" Герой оглушает ${enemy.name} на 1 ход и наносит ${dmg} урона.`);
-            }
-        } catch {}
+    // Shout reflex with cooldown (uses knownShouts if present)
+    if (updatedChar.combat) {
+        const cd = updatedChar.combat.shoutCooldownRoundsRemaining || 0;
+        const canShout = cd <= 0;
+        const hasShout = Array.isArray(updatedChar.knownShouts) && updatedChar.knownShouts.length > 0;
+        if (canShout && hasShout) {
+            const { SHOUT_COOLDOWN_ROUNDS } = await import('./config/constants');
+            // Simple shout effect: damage + 1 round stun
+            const minDmg = 18 + Math.floor(updatedChar.level * 1.0);
+            const maxDmg = 34 + Math.floor(updatedChar.level * 1.5);
+            const dmg = Math.max(5, Math.floor(minDmg + Math.random() * (maxDmg - minDmg + 1)));
+            enemy.health.current = Math.max(0, enemy.health.current - dmg);
+            updatedChar.combat.enemyStunnedRounds = ((updatedChar.combat?.enemyStunnedRounds) || 0) + 1;
+            updatedChar.combat.totalDamageDealt = ((updatedChar.combat?.totalDamageDealt) || 0) + dmg;
+            updatedChar.combat.shoutCooldownRoundsRemaining = SHOUT_COOLDOWN_ROUNDS;
+            logMessages.push(`"Крик дракона!" Враг пошатнулся и оглушен на 1 ход. Урон: ${dmg}.`);
+        } else if (cd > 0) {
+            updatedChar.combat.shoutCooldownRoundsRemaining = cd - 1;
+        }
     }
 
     // Check if should use healing potion first (critical health)
@@ -694,6 +716,29 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             }
         } catch {}
         logMessages.push(winMsg);
+        // Progress generated quest on combat victory
+        try {
+            const gq = character.activeGeneratedQuest;
+            if (gq && gq.currentStep < gq.steps.length) {
+                const step = gq.steps[gq.currentStep];
+                if (step.type === 'combat') {
+                    const next = structuredClone(updatedChar.activeGeneratedQuest || gq);
+                    next.currentStep = Math.min(next.currentStep + 1, next.steps.length);
+                    updatedChar.activeGeneratedQuest = next as any;
+                    logMessages.push('Бой завершен. Этап задания выполнен.');
+                    if (next.currentStep >= next.steps.length) {
+                        const r = next.rewards || {} as any;
+                        if (r.xp) updatedChar.xp.current += r.xp;
+                        if (r.gold) {
+                            const goldItem = updatedChar.inventory.find(i => i.id === 'gold');
+                            if (goldItem) goldItem.quantity += r.gold; else updatedChar.inventory.push({ id: 'gold', name: 'Золото', weight: 0, type: 'gold', quantity: r.gold } as any);
+                        }
+                        logMessages.push('Сгенерированное задание завершено.');
+                        updatedChar.activeGeneratedQuest = null as any;
+                    }
+                }
+            }
+        } catch {}
         // Append round messages to combat log before saving analytics
         if (updatedChar.combat?.combatLog) {
             updatedChar.combat.combatLog.push(...logMessages);
@@ -798,7 +843,7 @@ function tryApplyInfection(character: Character, baseEnemyDef: any, logMessages:
 const equipBestGearAction: Action = {
     name: "Оценить снаряжение",
     type: "system",
-    getWeight: (char) => char.preferences?.autoEquip ? 100 : 0,
+    getWeight: (char) => (char.preferences?.autoEquip ?? true) ? 100 : 0,
     canPerform: (char, worldState) => worldState.isIdle && (char.preferences?.autoEquip ?? true),
     async perform(character, gameData) {
         let updatedChar = structuredClone(character);
@@ -847,6 +892,88 @@ const equipBestGearAction: Action = {
         }
 
         return { character: updatedChar, logMessage: logMessages };
+    }
+};
+
+
+// Generate a dynamic multi-step quest when appropriate
+const generateMultiStepQuestAction: Action = {
+    name: "Сгенерировать задание",
+    type: "quest",
+    getWeight: (char, world) => {
+        if (char.activeGeneratedQuest) return 0;
+        // Prefer generation when no static quests are available at location
+        return priorityToWeight(Priority.MEDIUM);
+    },
+    canPerform: (char, worldState, gameData) => {
+        if (char.activeGeneratedQuest) return false;
+        const hasStatic = gameData.quests.some(q => q.location === char.location && q.status === 'available' && q.requiredLevel <= char.level && !(char.completedQuests||[]).includes(q.id));
+        // Allow if no static quests, or occasionally to add variety
+        return worldState.isIdle && (!hasStatic || Math.random() < 0.25);
+    },
+    async perform(character, gameData) {
+        const updated = structuredClone(character);
+        if (updated.activeGeneratedQuest) {
+            return { character: updated, logMessage: "" };
+        }
+        const q = generateMultiStepQuest(updated.level, updated.location);
+        updated.activeGeneratedQuest = q;
+        return { character: updated, logMessage: `Герой находит новое дело: ${q.steps[0].description}` };
+    }
+};
+
+// Progress the dynamic multi-step quest by executing the next step
+const progressGeneratedQuestAction: Action = {
+    name: "Продвинуть сгенерированное задание",
+    type: "quest",
+    getWeight: (char) => char.activeGeneratedQuest ? priorityToWeight(Priority.HIGH) : 0,
+    canPerform: (char, worldState) => !!char.activeGeneratedQuest && worldState.isIdle,
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        const q = updatedChar.activeGeneratedQuest!;
+        if (!q || q.currentStep >= q.steps.length) {
+            return { character: updatedChar, logMessage: "" };
+        }
+        const step = q.steps[q.currentStep];
+        if (step.type === 'travel') {
+            const dest = gameData.locations.find(l => l.id === (step.target || '')) || gameData.locations.find(l => l.id === 'bleak_falls_barrow');
+            if (!dest) return { character: updatedChar, logMessage: "Герой хотел отправиться, но путь не найден." };
+            updatedChar.status = 'busy';
+            updatedChar.currentAction = { type: 'travel', name: `Путешествие в ${dest.name}`, description: step.description, startedAt: Date.now(), duration: step.duration ?? (2 * 60 * 1000), destinationId: dest.id } as any;
+            (updatedChar.currentAction as any).originalDuration = (updatedChar.currentAction as any).duration;
+            updatedChar = addToActionHistory(updatedChar, 'travel');
+            return { character: updatedChar, logMessage: `Герой отправляется: ${step.description}` };
+        }
+        if (step.type === 'gather' || step.type === 'interact') {
+            updatedChar.status = 'busy';
+            updatedChar.currentAction = { type: 'quest', name: step.description, description: step.description, startedAt: Date.now(), duration: step.duration ?? (60 * 1000) } as any;
+            updatedChar = addToActionHistory(updatedChar, 'quest');
+            return { character: updatedChar, logMessage: `Герой занимается делом: ${step.description}` };
+        }
+        if (step.type === 'combat') {
+            const base = gameData.enemies.find(e => e.id === (step.target || ''));
+            if (!base) {
+                // Fallback to a quick quest step
+                updatedChar.status = 'busy';
+                updatedChar.currentAction = { type: 'quest', name: step.description, description: step.description, startedAt: Date.now(), duration: step.duration ?? (45 * 1000) } as any;
+                updatedChar = addToActionHistory(updatedChar, 'quest');
+                return { character: updatedChar, logMessage: `Герой готовится: ${step.description}` };
+            }
+            const levelMultiplier = 1 + (character.level - 1) * 0.15;
+            const finalEnemy = {
+                name: base.name,
+                health: { current: Math.floor(base.health * levelMultiplier), max: Math.floor(base.health * levelMultiplier) },
+                damage: Math.floor(base.damage * levelMultiplier),
+                xp: Math.floor(base.xp * levelMultiplier),
+                armor: Math.max(8, Math.min(25, (base.armor ?? (10 + (base.level || 1))))),
+                appliesEffect: base.appliesEffect || null,
+            };
+            updatedChar.status = 'in-combat';
+            updatedChar.combat = { enemyId: base.id, enemy: finalEnemy, fleeAttempted: false } as any;
+            updatedChar = addToActionHistory(updatedChar, 'combat');
+            return { character: updatedChar, logMessage: `Герой сталкивается с врагом: ${finalEnemy.name}!` };
+        }
+        return { character: updatedChar, logMessage: "" };
     }
 };
 
@@ -1003,7 +1130,7 @@ const exploreCityAction: Action = {
 };
 
 // Enhanced: Sell low-value items and duplicates to free space or get cash
-const sellJunkAction: Action = {
+const sellJunkQuickAction: Action = {
     name: "Продать хлам",
     type: "social",
     getWeight: (char, worldState, gameData) => {
@@ -1324,46 +1451,25 @@ const travelAction: Action = {
     name: "Путешествовать",
     type: "travel",
     getWeight: (char) => {
-        // IMPROVED: Prevent aimless wandering with repetition penalty
+        // Divine command drives travel
         if (char.divineDestinationId) {
-            return priorityToWeight(Priority.HIGH); // Divine command is always high
-        }
-        
-        // STRICT SEQUENCING: Check if character has completed location activity
-        const now = Date.now();
-        const arrivalTime = char.lastLocationArrival || 0;
-        const timeSinceArrival = now - arrivalTime;
-        const fiveMinutes = 5 * 60 * 1000;
-        
-        // If arrived recently and hasn't completed activity, disable travel
-        if (timeSinceArrival < fiveMinutes && !char.hasCompletedLocationActivity) {
-            return priorityToWeight(Priority.DISABLED);
-        }
-        
-        // Check recent travel history - discourage constant travel
-        const recentTravelCount = countRecentActions(char, 'travel', 10);
-        
-        // If traveled recently multiple times, drastically reduce weight
-        if (recentTravelCount >= 3) {
-            // Fallback: if character is stagnating (no progress) allow escape via travel
-            const lastNonWander = [...(char.actionHistory||[])].reverse().find(a => a.type !== 'misc');
-            const stagnantTicks = (char.actionHistory||[]).slice(-8).every(a => a.type === 'misc') ? 8 : 0;
-            if (stagnantTicks >= 5) {
-                return priorityToWeight(Priority.LOW); // temporarily allow travel to escape
+            if (char.divineDestinationId === char.location) {
+                return priorityToWeight(Priority.DISABLED);
             }
-            return priorityToWeight(Priority.DISABLED); // Stop wandering normally
-        }
-        if (recentTravelCount >= 2) {
-            return priorityToWeight(Priority.LOW) * 0.3; // Strong penalty
-        }
-        
-        // Prefer traveling after completing one local activity
-        if (char.hasCompletedLocationActivity) {
             return priorityToWeight(Priority.HIGH);
         }
+
+        // Discourage excessive back-to-back travel
+        const recentTravelCount = countRecentActions(char, 'travel', 10);
+        if (recentTravelCount >= 3) return priorityToWeight(Priority.DISABLED);
+        if (recentTravelCount >= 2) return priorityToWeight(Priority.LOW) * 0.5;
+
+        // Default: low urge to travel
         return priorityToWeight(Priority.LOW);
     },
     canPerform: (char, worldState, gameData) =>
+        // Hard guard: do not allow travel if divine destination equals current location
+        !(char.divineDestinationId && char.divineDestinationId === char.location) &&
         !worldState.isOverencumbered &&
         gameData.locations.length > 1 &&
         char.stats.stamina.current > char.stats.stamina.max * 0.25,
@@ -1372,13 +1478,21 @@ const travelAction: Action = {
         const { locations } = gameData;
         const currentLocationName = locations.find(l => l.id === character.location)?.name || 'неизвестного места';
         
+        // SPECIAL GUARD: If divine destination equals current location, clear and do nothing
+        if (character.divineDestinationId && character.divineDestinationId === character.location) {
+            updatedChar.divineDestinationId = null;
+            return { character: updatedChar, logMessage: "Уже на месте." };
+        }
+        
         let destination = null;
         if (character.divineDestinationId) {
             destination = locations.find(l => l.id === character.divineDestinationId);
         } else {
-            const possibleDestinations = locations.filter(l => l.id !== updatedChar.location);
-            if (possibleDestinations.length > 0) {
-                destination = possibleDestinations[Math.floor(Math.random() * possibleDestinations.length)];
+            const recent = Array.isArray(updatedChar.recentDestinations) ? new Set(updatedChar.recentDestinations) : new Set<string>();
+            const candidates = locations.filter(l => l.id !== updatedChar.location && !recent.has(l.id));
+            const pool = candidates.length > 0 ? candidates : locations.filter(l => l.id !== updatedChar.location);
+            if (pool.length > 0) {
+                destination = pool[Math.floor(Math.random() * pool.length)];
             }
         }
 
@@ -1397,9 +1511,29 @@ const travelAction: Action = {
         };
         updatedChar.currentAction.originalDuration = updatedChar.currentAction.duration;
         updatedChar = addToActionHistory(updatedChar, 'travel');
+        // Update LRU of recent destinations (append destination)
+        try {
+            const lru = Array.isArray(updatedChar.recentDestinations) ? updatedChar.recentDestinations.slice() : [];
+            lru.push(destination.id);
+            // Keep last 5
+            while (lru.length > 5) lru.shift();
+            updatedChar.recentDestinations = lRU_unique(lru);
+        } catch {}
         return { character: updatedChar, logMessage: `Дорога зовет! Герой покинул ${currentLocationName} и держит путь в ${destination.name}.` };
     }
 };
+
+// Helper to ensure uniqueness while preserving order
+function lRU_unique(list: string[]): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const id of list) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+        out.push(id);
+    }
+    return out;
+}
 
 const restAtTavernAction: Action = {
     name: "Отдохнуть в таверне",
@@ -1562,7 +1696,7 @@ const sleepAtTavernAction: Action = {
 const learnSpellAction: Action = {
     name: "Изучить заклинание",
     type: "learn",
-    getWeight: () => 70, // High weight, it's always good to learn spells
+    getWeight: () => priorityToWeight(Priority.HIGH),
     canPerform: (char, worldState) => worldState.hasUnreadTome!,
     async perform(character, gameData) {
         let updatedChar = structuredClone(character);
@@ -1591,7 +1725,7 @@ const learnSpellAction: Action = {
 const readLearningBookAction: Action = {
     name: "Изучить обучающую книгу",
     type: "learn",
-    getWeight: () => 80, // Very high weight, these buffs are great
+    getWeight: () => priorityToWeight(Priority.HIGH),
     canPerform: (char, worldState) => worldState.hasUnreadLearningBook!,
     async perform(character, gameData) {
         let updatedChar = structuredClone(character);
@@ -1632,11 +1766,10 @@ const donateToFactionAction: Action = {
     type: "social",
     getWeight: (char) => {
         const gold = char.inventory.find(i => i.id === 'gold')?.quantity || 0;
-        // Updated weight system based on gold amount
-        if (gold > 2000) return 35; // More frequent when very rich
-        if (gold > 1000) return 20; // Moderate frequency
-        if (gold > 500) return 10;  // Less frequent
-        return 0; // Don't donate when poor
+        if (gold > 2000) return priorityToWeight(Priority.HIGH);
+        if (gold > 1000) return priorityToWeight(Priority.MEDIUM);
+        if (gold > 500) return priorityToWeight(Priority.LOW);
+        return priorityToWeight(Priority.DISABLED);
     },
     canPerform: (char, worldState) => worldState.isLocationSafe! && worldState.hasEnoughGoldForDonation!,
     async perform(character, gameData) {
@@ -1702,7 +1835,7 @@ const donateToFactionAction: Action = {
 const prayAction: Action = {
     name: "Помолиться",
     type: "social",
-    getWeight: (char) => (char.divineFavor || 0) < 90 ? 30 : 0, // Pray if favor is not nearly full
+    getWeight: (char) => (char.divineFavor || 0) < 90 ? priorityToWeight(Priority.MEDIUM) : priorityToWeight(Priority.DISABLED),
     canPerform: (char, worldState) => worldState.isLocationSafe! && !char.effects.some(e => e.id.startsWith('grace_')),
     async perform(character, gameData) {
         let updatedChar = structuredClone(character);
@@ -2182,22 +2315,56 @@ const exploreDungeonAction: Action = {
     canPerform: (char) => char.status === 'idle' && char.location === 'bleak_falls_barrow',
     async perform(character, gameData) {
         let updatedChar = structuredClone(character);
-        // Small random outcomes: loot, trap, nothing
-        const roll = Math.random();
         const logs: string[] = [];
+        // 60%: use dungeon generators; 40%: legacy simple outcomes
+        if (Math.random() < 0.6) {
+            const acts = generateDungeonActivities(updatedChar.location, updatedChar.level);
+            if (acts.length > 0) {
+                const a = acts[Math.floor(Math.random() * acts.length)];
+                logs.push(a.description);
+                if (a.rewards) {
+                    const g = a.rewards.gold || 0;
+                    if (g > 0) {
+                        const goldItem = updatedChar.inventory.find(i => i.id === 'gold');
+                        if (goldItem) goldItem.quantity += g; else updatedChar.inventory.push({ id: 'gold', name: 'Золото', weight: 0, type: 'gold', quantity: g } as any);
+                        logs.push(`Найдено ${g} золота.`);
+                    }
+                    const xp = a.rewards.xp || 0;
+                    if (xp > 0) {
+                        updatedChar.xp.current += xp;
+                        logs.push(`Получено ${xp} опыта.`);
+                    }
+                    if (Array.isArray(a.rewards.items)) {
+                        for (const itemId of a.rewards.items) {
+                            const baseItem = gameData.items.find(i => i.id === itemId);
+                            if (baseItem) {
+                                const existing = updatedChar.inventory.find(i => i.id === baseItem.id);
+                                if (existing) existing.quantity += 1; else updatedChar.inventory.push({ ...baseItem, quantity: 1 } as any);
+                                logs.push(`Найден предмет: ${baseItem.name}.`);
+                            }
+                        }
+                    }
+                }
+                if (a.danger) {
+                    const dmg = a.danger.damageMin + Math.floor(Math.random() * (a.danger.damageMax - a.danger.damageMin + 1));
+                    updatedChar.stats.health.current = Math.max(0, updatedChar.stats.health.current - dmg);
+                    logs.push(`Опасность! Получено ${dmg} урона.`);
+                }
+                return { character: updatedChar, logMessage: logs.join(' ') };
+            }
+        }
+        // fallback simple outcomes
+        const roll = Math.random();
         if (roll < 0.55) {
-            // Loot small gold or misc
-            const goldGain = 10 + Math.floor(Math.random() * 21); // 10-30
+            const goldGain = 10 + Math.floor(Math.random() * 21);
             const goldItem = updatedChar.inventory.find(i => i.id === 'gold');
             if (goldItem) goldItem.quantity += goldGain; else updatedChar.inventory.push({ id: 'gold', name: 'Золото', weight: 0, type: 'gold', quantity: goldGain } as any);
             logs.push(`В темных нишах герой находит ${goldGain} золота.`);
         } else if (roll < 0.75) {
-            // Trap
-            const dmg = 5 + Math.floor(Math.random() * 11); // 5-15
+            const dmg = 5 + Math.floor(Math.random() * 11);
             updatedChar.stats.health.current = Math.max(0, updatedChar.stats.health.current - dmg);
             logs.push(`Ловушка! Копья выскакивают из стены, нанося ${dmg} урона.`);
         } else if (roll < 0.9) {
-            // Minor item (common misc)
             const misc = gameData.items.find(i => i.type === 'misc' && i.rarity === 'common');
             if (misc) {
                 const existing = updatedChar.inventory.find(i => i.id === misc.id);
@@ -2207,9 +2374,7 @@ const exploreDungeonAction: Action = {
                 logs.push('Нашел кое-что… но ничего ценного.');
             }
         } else {
-            // Rare discovery → chronicle
             logs.push('Герой находит древнюю надпись: «Кто с песней пришёл — с песней уйдёт».');
-            // Chronicle effect will be emitted by outer engine if needed, keep log only here
         }
         return { character: updatedChar, logMessage: logs.join(' ') };
     }
@@ -2406,16 +2571,69 @@ const reflexActions: ReflexAction[] = [fleeFromCombatReflex, useBuffPotionReflex
 export const idleActions: Action[] = [
     makeCampAction,
     autoAssignPointsAction,
+    // Auto-assign a perk if available points and requirements met
+    {
+        name: "Получить перк",
+        type: "system",
+        getWeight: (char) => (char.perkPoints && char.perkPoints > 0 ? 80 : 0),
+        canPerform: (char, worldState, gameData) => {
+            if (!char.perkPoints || char.perkPoints <= 0) return false;
+            const taken = new Set(char.unlockedPerks || []);
+            // find any affordable perk by skill requirement
+            const candidate = (((gameData as any).perks) || []).find((p: any) => !taken.has(p.id) && ((char.skills as any)[p.skill] || 0) >= p.requiredSkillLevel);
+            return !!candidate;
+        },
+        async perform(character, gameData) {
+            const updated = structuredClone(character);
+            const taken = new Set(updated.unlockedPerks || []);
+            const available = (((gameData as any).perks) || []).filter((p: any) => !taken.has(p.id) && ((updated.skills as any)[p.skill] || 0) >= p.requiredSkillLevel);
+            if (available.length === 0 || !updated.perkPoints || updated.perkPoints <= 0) {
+                return { character: updated, logMessage: "Нет подходящих перков." };
+            }
+            // Simple heuristic: pick by most relevant current status
+            const pick = available[Math.floor(Math.random() * available.length)];
+            updated.unlockedPerks = Array.from(new Set([...(updated.unlockedPerks || []), pick.id]));
+            updated.perkPoints = Math.max(0, (updated.perkPoints || 0) - 1);
+            return { character: updated, logMessage: `Герой получает перк: ${pick.name}.` };
+        }
+    },
     startCryptExplorationAction,
     travelToCryptAction,
     equipBestGearAction,
+    progressGeneratedQuestAction,
+    generateMultiStepQuestAction,
     takeQuestAction,
+    // Generated city activity action before static city explore to appear explicitly
+    {
+        name: "Сгенерированная городская активность",
+        type: "explore",
+        getWeight: (char, world) => {
+            if (!world.isLocationSafe || !world.canExploreCity) return 0;
+            // Medium baseline; goals/personality will adjust
+            return priorityToWeight(Priority.MEDIUM);
+        },
+        canPerform: (char, world, gameData) => {
+            if (!world.isLocationSafe) return false;
+            const acts = generateCityActivities(char.location, char.level);
+            return acts.length > 0;
+        },
+        async perform(character, gameData) {
+            let updatedChar = structuredClone(character);
+            const acts = generateCityActivities(updatedChar.location, updatedChar.level);
+            if (acts.length === 0) return { character, logMessage: '' };
+            const a = acts[Math.floor(Math.random() * acts.length)];
+            updatedChar.status = 'busy';
+            updatedChar.currentAction = { type: 'explore', name: a.name, description: a.description, startedAt: Date.now(), duration: a.duration } as any;
+            updatedChar = addToActionHistory(updatedChar, 'explore');
+            // No immediate rewards; will be applied by outer resolver when action completes
+            return { character: updatedChar, logMessage: `Герой берется за городское дело: ${a.name}.` };
+        }
+    },
     exploreCityAction,
     findEnemyAction,
     travelAction,
     restAtTavernAction,
     sleepAtTavernAction,
-    sellJunkAction,
     eatFoodAction,
     stealAction,
     learnSpellAction,
@@ -2515,31 +2733,7 @@ async function determineNextAction(character: Character, gameData: GameData): Pr
         }
     }
 
-    // 3b. Behavior Tree arbitration (guarded by flag)
-    if (AI_BT_ENABLED) {
-        // Compose subsets using existing action definitions
-        const toAL = (a: Action): ActionLike => a as unknown as ActionLike;
-        const arrival: ActionLike[] = [takeQuestAction, restAtTavernAction, tradeWithNPCAction, interactWithNPCAction].map(toAL);
-        const night: ActionLike[] = [takeQuestAction, restAtTavernAction, travelAction].map(toAL);
-        const idle: ActionLike[] = idleActions.map(toAL);
-        const combat: ActionLike[] = combatActions.map(toAL);
-        const dead: ActionLike[] = deadActions.map(toAL);
-        const settings = await getBtSettings();
-        const tree = buildBehaviorTree({
-            combatActions: combat,
-            deadActions: dead,
-            arrivalActions: arrival,
-            nightActions: night,
-            idleActions: idle,
-            travelAction: toAL(travelAction),
-            arrivalWindowMs: settings.arrivalWindowMs,
-            stallWindowMs: settings.stallWindowMs,
-        });
-        const bb = { character, worldState, gameData, trace: [] as string[] };
-        const picked = await tree.evaluate(bb);
-        try { (globalThis as any).__bt_last_trace__ = bb.trace; } catch {}
-        if (picked) return picked as unknown as Action;
-    }
+    // 3b. Behavior Tree removed; selection handled by Utility + Goals + Personality
 
     // 4. Determine the correct set of actions based on character status
     let actionSet: Action[];
@@ -2568,21 +2762,7 @@ async function determineNextAction(character: Character, gameData: GameData): Pr
         return wanderAction;
     }
 
-    // 5a. Anti-stall shortcut: if we cannot take quests here and NPCs are unavailable now,
-    // and travel is possible, force travel to avoid city idle loops
-    if (!worldState.canTakeQuest && !worldState.timeOfDayEffect.npcAvailability) {
-        const travel = possibleActions.find(a => a.name === 'Путешествовать');
-        if (travel) return travel;
-    }
-    // 5b. If location has no available quests for >2 minutes after arrival, prefer travel
-    try {
-        const nowTs = Date.now();
-        const arrival = character.lastLocationArrival || 0;
-        if (!worldState.canTakeQuest && (nowTs - arrival) > 2 * 60 * 1000) {
-            const travel = possibleActions.find(a => a.name === 'Путешествовать');
-            if (travel) return travel;
-        }
-    } catch {}
+    // 5a. Anti-stall shortcuts removed; goals will steer travel when needed
     
     // 6. Handle Divine Suggestion (override)
     if (character.divineSuggestion) {
@@ -2593,34 +2773,53 @@ async function determineNextAction(character: Character, gameData: GameData): Pr
     }
 
     // 7. Selection
-    if (USE_CONFIG_PRIORITY) {
-        // Build lightweight catalog entries to score
-        const entries = possibleActions.map((a, idx) => ({
-            id: `${a.type}:${a.name}`,
-            category: a.type as any,
-            action: a as any,
-        }));
-        const scored = await computeActionScores({ character, actions: entries, profileCode: 'warrior', world: worldState });
-        // record trace for diagnostics UI
-        try {
-            recordDecisionTrace(character.id, scored.map(s => ({
-                actionId: s.actionId,
-                name: s.name,
-                base: s.breakdown.base,
-                ruleBoost: s.breakdown.ruleBoost,
-                profile: s.breakdown.profile,
-                fatigue: s.breakdown.fatigue,
-                modifiers: s.breakdown.modifiers,
-                total: s.breakdown.total,
-            })));
-        } catch {}
-        const top = scored[0];
-        const selected = possibleActions.find(a => `${a.type}:${a.name}` === top?.actionId) || possibleActions[0];
-        return selected ?? wanderAction;
+    // 6. Hybrid Utility selection with Goals and Personality
+    const personality = (character as any).personality || initPersonality(character.backstory);
+    const goals = generateGoals(character, worldState);
+    const currentGoal = selectTopGoal(goals);
+
+    const goalBoost = (actionName: string, actionType: string): number => {
+        if (!currentGoal) return 1;
+        switch (currentGoal.type) {
+            case 'earn_gold':
+                if (actionType === 'social' && (/Торговать|Продать|Распрощаться/.test(actionName))) return 2.2;
+                if (actionType === 'quest') return 1.6;
+                if (actionType === 'social' && /Украсть/.test(actionName)) return 1.2;
+                return 1.0;
+            case 'divine_favor':
+                if (actionName.includes('Помолиться') || actionName.includes('Пожертвовать')) return 2.5;
+                return 1.0;
+            case 'heal':
+                if (actionType === 'rest' || actionName.includes('Перекусить')) return 2.2;
+                return 1.0;
+            case 'equip_better':
+                if (actionName.includes('Оценить снаряжение') || actionName.includes('Торговать')) return 1.6;
+                return 1.0;
+            case 'faction_rep':
+                if (actionName.includes('Пожертвовать фракции') || actionName.includes('Пожертвовать в храме')) return 2.0;
+                return 1.0;
+            default:
+                return 1.0;
+        }
+    };
+
+    const weighted = possibleActions.map(a => {
+        const base = Math.max(0, a.getWeight ? a.getWeight(character, worldState, gameData) : 0);
+        const pMod = getPersonalityModifier(personality, a.type);
+        const gMod = goalBoost(a.name, a.type);
+        const catMod = (CATEGORY_BASE_MULTIPLIERS as any)[a.type] ?? 1.0;
+        const recentTypeCount = countRecentActions(character, a.type, 8);
+        const repMod = computeRepetitionModifier(recentTypeCount);
+        return { action: a, weight: base * pMod * gMod * catMod * repMod };
+    }).filter(w => w.weight > 0.1);
+
+    if (weighted.length === 0) return wanderAction;
+    const total = weighted.reduce((s, w) => s + w.weight, 0);
+    let r = Math.random() * total;
+    for (const w of weighted) {
+        if ((r -= w.weight) <= 0) return w.action;
     }
-    // Fallback: Simplified policy selection (Godville-like)
-    const choice = selectActionSimple(possibleActions, { character, gameData });
-    return choice ?? wanderAction;
+    return weighted[0].action;
 }
 
 // Diagnostics helpers (pure, no side-effects)
@@ -2757,4 +2956,150 @@ if (!idleActions.includes(huntAsBeastAction)) {
     idleActions.splice(7, 0, huntAsBeastAction);
 }
 
-    
+// Registration of newly introduced actions moved below definitions to avoid TDZ
+
+// ==================================
+// New Economic/Social Actions
+// ==================================
+
+const donateAtTempleAction: Action = {
+    name: "Пожертвовать в храме",
+    type: "social",
+    getWeight: (char, worldState) => {
+        if (!worldState.isLocationSafe) return 0;
+        const gold = char.inventory.find(i => i.id === 'gold');
+        if (!gold || gold.quantity < 50) return 0;
+        // Slight boost on arrival
+        const now = Date.now();
+        const arrival = char.lastLocationArrival || 0;
+        const withinArrival = (now - arrival) < 5 * 60 * 1000 && !char.hasCompletedLocationActivity;
+        return withinArrival ? priorityToWeight(Priority.MEDIUM) : priorityToWeight(Priority.LOW);
+    },
+    canPerform: (char) => {
+        const gold = char.inventory.find(i => i.id === 'gold');
+        return !!gold && gold.quantity >= 50;
+    },
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        const gold = updatedChar.inventory.find(i => i.id === 'gold');
+        if (!gold || gold.quantity < 50) {
+            return { character, logMessage: "Недостаточно золота для пожертвования." };
+        }
+        const amount = 50;
+        gold.quantity -= amount;
+        updatedChar.divineFavor = Math.min(100, (updatedChar.divineFavor || 0) + 8);
+        updatedChar.mood = Math.min(100, updatedChar.mood + 2);
+        updatedChar = addToActionHistory(updatedChar, 'social');
+        // Mark as completed to unlock travel later
+        updatedChar.hasCompletedLocationActivity = true;
+        return { character: updatedChar, logMessage: `Герой жертвует ${amount} золотых в храме. Божья милость усиливается (+8).` };
+    }
+};
+
+const trainingAction: Action = {
+    name: "Обучение у тренера",
+    type: "learn",
+    getWeight: (char, worldState) => {
+        const gold = char.inventory.find(i => i.id === 'gold');
+        if (!gold || gold.quantity < 100) return 0;
+        if (!worldState.isLocationSafe) return 0;
+        // Favor learning if recently idle or just arrived
+        const now = Date.now();
+        const arrival = char.lastLocationArrival || 0;
+        const withinArrival = (now - arrival) < 5 * 60 * 1000 && !char.hasCompletedLocationActivity;
+        return withinArrival ? priorityToWeight(Priority.HIGH) : priorityToWeight(Priority.MEDIUM);
+    },
+    canPerform: (char, worldState) => {
+        const gold = char.inventory.find(i => i.id === 'gold');
+        return !!gold && gold.quantity >= 100 && worldState.isLocationSafe;
+    },
+    async perform(character) {
+        let updatedChar = structuredClone(character);
+        const gold = updatedChar.inventory.find(i => i.id === 'gold');
+        if (!gold || gold.quantity < 100) {
+            return { character, logMessage: "Недостаточно золота для обучения." };
+        }
+        gold.quantity -= 100;
+        // Improve lowest skill slightly
+        const skills: (keyof Character['skills'])[] = ['oneHanded', 'block', 'heavyArmor', 'lightArmor', 'persuasion', 'alchemy'];
+        const lowest = skills.reduce((acc, s) => updatedChar.skills[s] < updatedChar.skills[acc] ? s : acc, skills[0]);
+        updatedChar.skills[lowest] += 1;
+        updatedChar.mood = Math.min(100, updatedChar.mood + 1);
+        updatedChar = addToActionHistory(updatedChar, 'learn');
+        updatedChar.hasCompletedLocationActivity = true;
+        return { character: updatedChar, logMessage: `Герой проходит обучение у наставника (+1 к навыку ${lowest}).` };
+    }
+};
+
+const tavernRumorsAction: Action = {
+    name: "Слухи в таверне",
+    type: "explore",
+    getWeight: (char, worldState) => {
+        if (!worldState.isLocationSafe) return 0;
+        const now = Date.now();
+        const arrival = char.lastLocationArrival || 0;
+        const withinArrival = (now - arrival) < 5 * 60 * 1000 && !char.hasCompletedLocationActivity;
+        return withinArrival ? priorityToWeight(Priority.HIGH) : priorityToWeight(Priority.MEDIUM);
+    },
+    canPerform: (char, worldState) => worldState.timeOfDayEffect.npcAvailability && worldState.isLocationSafe,
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        const cityEvents = (gameData.cityEvents || []) as any[];
+        const hereEvents = cityEvents.filter((e: any) => !e.locationIds || e.locationIds.includes(updatedChar.location));
+        const picked = hereEvents.length > 0 ? hereEvents[Math.floor(Math.random() * hereEvents.length)] : null;
+        const msg = picked ? picked.description : 'Герой слушает разговоры и узнаёт, что где-то недалеко нужен смельчак для мелкой работы.';
+        updatedChar = addToActionHistory(updatedChar, 'explore');
+        updatedChar.hasCompletedLocationActivity = true;
+        return { character: updatedChar, logMessage: msg };
+    }
+};
+
+const sellJunkAction: Action = {
+    name: "Распрощаться с хламом",
+    type: "social",
+    getWeight: (char, worldState) => {
+        if (!worldState.isLocationSafe) return 0;
+        const junk = (char.inventory || []).filter(i => i.type === 'misc');
+        if (junk.length === 0) return 0;
+        const now = Date.now();
+        const arrival = char.lastLocationArrival || 0;
+        const withinArrival = (now - arrival) < 5 * 60 * 1000 && !char.hasCompletedLocationActivity;
+        return withinArrival ? priorityToWeight(Priority.HIGH) : priorityToWeight(Priority.MEDIUM);
+    },
+    canPerform: (char, worldState, gameData) => {
+        if (!worldState.isLocationSafe) return false;
+        const hasJunk = (char.inventory || []).some(i => i.type === 'misc');
+        const merchants = gameData.npcs.filter((n: any) => (n.location === char.location || n.location === 'on_road') && n.inventory && n.inventory.length > 0);
+        return hasJunk && merchants.length > 0 && worldState.timeOfDayEffect.npcAvailability;
+    },
+    async perform(character, gameData) {
+        let updatedChar = structuredClone(character);
+        const merchants = gameData.npcs.filter((n: any) => (n.location === updatedChar.location || n.location === 'on_road') && n.inventory && n.inventory.length > 0);
+        if (merchants.length === 0) return { character, logMessage: 'Рядом нет торговцев.' };
+        const merchant = merchants[Math.floor(Math.random() * merchants.length)];
+        // Sell all misc for simple price
+        const junk = updatedChar.inventory.filter(i => i.type === 'misc');
+        if (junk.length === 0) return { character, logMessage: 'Хлама для продажи не нашлось.' };
+        const value = Math.floor(junk.reduce((acc, item) => acc + (item.weight * 5 * item.quantity), 0));
+        updatedChar.inventory = updatedChar.inventory.filter(i => i.type !== 'misc');
+        const gold = updatedChar.inventory.find(i => i.id === 'gold');
+        if (gold) gold.quantity += value; else updatedChar.inventory.push({ id: 'gold', name: 'Золото', weight: 0, quantity: value, type: 'gold' } as any);
+        updatedChar = addToActionHistory(updatedChar, 'social');
+        updatedChar.hasCompletedLocationActivity = true;
+        return { character: updatedChar, logMessage: `Герой распродал хлам торговцу ${merchant.name} за ${value} золота.` };
+    }
+};
+
+// Register newly introduced actions after their declarations to avoid TDZ
+try {
+    if (!idleActions.includes((tavernRumorsAction as any))) idleActions.splice(9, 0, tavernRumorsAction);
+} catch {}
+try {
+    if (!idleActions.includes((sellJunkQuickAction as any))) idleActions.splice(10, 0, sellJunkQuickAction);
+} catch {}
+try {
+    if (!idleActions.includes((trainingAction as any))) idleActions.splice(11, 0, trainingAction);
+} catch {}
+try {
+    if (!idleActions.includes((donateAtTempleAction as any))) idleActions.splice(12, 0, donateAtTempleAction);
+} catch {}

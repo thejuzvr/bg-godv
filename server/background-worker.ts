@@ -6,6 +6,8 @@ import type { GameData } from '../src/services/gameDataService';
 import { addOfflineEvent, cleanupOldEvents } from '../src/services/offlineEventsService';
 import { gameDataService } from './game-data-service';
 import { getRedis } from './redis';
+import { buildDailyDigest } from './digest/digestService';
+import { getActiveTelegramSubscriptions, setTelegramLastSentAt } from './storage';
 
 // Import static game data (not yet in DB)
 import { initialQuests } from '../src/data/quests';
@@ -151,6 +153,8 @@ export async function runBackgroundWorker() {
   const RESTOCK_AT_HOUR = 2; // 2:00 local time
   let lastCleanup = Date.now();
   let lastRestockDay: number | null = null;
+  const DIGEST_HOUR_UTC = Number(process.env.DIGEST_HOUR_UTC || '7');
+  let lastDigestDay: number | null = null;
   
   // Main loop
   while (true) {
@@ -227,6 +231,53 @@ export async function runBackgroundWorker() {
           lastRestockDay = dayKey;
         } catch (e) {
           console.error('[Background Worker] Nightly restock failed:', e);
+        }
+      }
+
+      // Daily Telegram digest in legacy mode (UTC hour), once per day
+      const telegramEnabled = String(process.env.TELEGRAM_ENABLED || '').toLowerCase() === 'true';
+      const utc = new Date();
+      const utcDayKey = utc.getUTCFullYear() * 1000 + utc.getUTCMonth() * 50 + utc.getUTCDate();
+      const isDigestHour = utc.getUTCHours() === DIGEST_HOUR_UTC;
+      if (telegramEnabled && isDigestHour && lastDigestDay !== utcDayKey) {
+        try {
+          const subs = await getActiveTelegramSubscriptions();
+          const since = Date.now() - 24 * 60 * 60 * 1000;
+          const token = process.env.TELEGRAM_BOT_TOKEN;
+          const canSend = Boolean(token);
+          let sent = 0;
+          for (const sub of subs as any[]) {
+            const text = await buildDailyDigest((sub as any).userId, since);
+            if (!text) continue;
+            if (!canSend) {
+              console.log('[Telegram] Disabled or missing token; would send digest for', (sub as any).userId);
+              await setTelegramLastSentAt((sub as any).id, Date.now());
+              sent++;
+              continue;
+            }
+            try {
+              const resp = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: (sub as any).chatId, text }),
+              });
+              if (resp.ok) {
+                await setTelegramLastSentAt((sub as any).id, Date.now());
+                sent++;
+              } else {
+                const body = await resp.text();
+                console.error('[Telegram] legacy sendMessage failed', resp.status, body);
+              }
+            } catch (e) {
+              console.error('[Telegram] legacy sendMessage error', e);
+            }
+          }
+          if (sent > 0) {
+            console.log(`[Background Worker] Sent ${sent} daily digests (legacy mode).`);
+          }
+          lastDigestDay = utcDayKey;
+        } catch (e) {
+          console.error('[Background Worker] Daily digest (legacy) failed:', e);
         }
       }
       

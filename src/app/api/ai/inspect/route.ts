@@ -7,16 +7,13 @@ import { ACTION_CATALOG } from '@/ai/action-catalog';
 import { computeActionScores } from '@/ai/priority-engine';
 import { recordDecisionTrace, getLastDecisionTrace } from '@/ai/diagnostics';
 import { fetchGameData } from '@/services/gameDataService';
-import { AI_BT_ENABLED } from '@/ai/config/constants';
-import { buildBehaviorTree } from '@/ai/bt/tree';
-import type { ActionLike } from '@/ai/bt/types';
-import { getBtSettings } from '@/ai/config/runtime';
 import { combatActions, deadActions, idleActions } from '@/ai/brain';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const characterId = searchParams.get('characterId');
   const top = Number(searchParams.get('top') || '10');
+  const coverage = searchParams.get('coverage') === '1';
   if (!characterId) {
     return new Response(JSON.stringify({ error: 'characterId is required' }), { status: 400 });
   }
@@ -47,40 +44,17 @@ export async function GET(req: NextRequest) {
     modifiers: s.breakdown.modifiers,
     total: s.breakdown.total,
   })));
-  let btTrace: string[] = [];
-  try {
-    if (AI_BT_ENABLED) {
-      const toAL = (a: any) => a as ActionLike;
-      const settings = await getBtSettings();
-      const arrival = [
-        idleActions.find(a => a.name === 'Взять задание'),
-        idleActions.find(a => a.name === 'Отдохнуть в таверне'),
-        idleActions.find(a => a.name === 'Торговать с торговцем'),
-        idleActions.find(a => a.name === 'Пообщаться с NPC'),
-      ].filter(Boolean).map(toAL);
-      const night = [
-        idleActions.find(a => a.name === 'Взять задание'),
-        idleActions.find(a => a.name === 'Отдохнуть в таверне'),
-        idleActions.find(a => a.name === 'Путешествовать'),
-      ].filter(Boolean).map(toAL);
-      const travel = idleActions.find(a => a.name === 'Путешествовать') as any;
-      const tree = buildBehaviorTree({
-        combatActions: combatActions.map(toAL),
-        deadActions: deadActions.map(toAL),
-        arrivalActions: arrival,
-        nightActions: night,
-        idleActions: idleActions.map(toAL),
-        travelAction: toAL(travel),
-        arrivalWindowMs: settings.arrivalWindowMs,
-        stallWindowMs: settings.stallWindowMs,
-      });
-      // Minimal world state for inspection: reuse char.status and timeOfDayEffect from brain helper
-      const world = { isIdle: char.status === 'idle', timeOfDayEffect: { npcAvailability: char.timeOfDay !== 'night' } } as any;
-      const bb = { character: char as any, worldState: world, gameData, trace: [] as string[] };
-      await tree.evaluate(bb);
-      btTrace = bb.trace || [];
-    }
-  } catch {}
+  const btTrace: string[] = [];
+  if (coverage) {
+    const coverageReport = {
+      shoutsKnown: Array.isArray((gameData as any).shouts) ? (gameData as any).shouts.length : 0,
+      perksKnown: Array.isArray((gameData as any).perks) ? (gameData as any).perks.length : 0,
+      spellsKnown: Array.isArray((gameData as any).spells) ? (gameData as any).spells.length : 0,
+      actionsTotal: possible.length,
+    };
+    return new Response(JSON.stringify({ characterId, timestamp: Date.now(), btTrace, coverage: coverageReport, entries: scored.slice(0, top) }), { headers: { 'content-type': 'application/json' } });
+  }
+
   return new Response(JSON.stringify({ characterId, timestamp: Date.now(), btTrace, entries: scored.slice(0, top).map(s => s.breakdown ? ({
     actionId: s.actionId,
     name: s.name,

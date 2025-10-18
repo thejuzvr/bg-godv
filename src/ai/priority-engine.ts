@@ -7,6 +7,7 @@ import * as schema from "../../shared/schema";
 import { eq } from "drizzle-orm";
 import { fatigueDampeningFactor, loadFatigue } from "./fatigue";
 import { composeModifierMultiplier, getActiveModifiers } from "./modifiers";
+import { CATEGORY_BASE_MULTIPLIERS } from "./config/constants";
 
 export interface ScoreBreakdown {
   base: number; // from rule priority
@@ -119,7 +120,15 @@ export async function computeActionScores(params: {
       }
     } catch {}
     const actionWeightMult = Math.min(2.0, Math.max(0.5, actionWeightRaw / 50));
-    const total = Math.max(0, (base + ruleBoost) * profileMult * fatigueMult * modifierMultiplier * learningMult * actionWeightMult);
+    const categoryMult = CATEGORY_BASE_MULTIPLIERS[entry.category] ?? 1.0;
+    // Light recent-category bias: avoid repeating the same category too often
+    let recentBias = 1.0;
+    try {
+      const hist = Array.isArray(character.actionHistory) ? character.actionHistory.slice(-6) : [];
+      const recentSame = hist.filter(h => h.type === entry.category).length;
+      if (recentSame >= 4) recentBias = 0.7; else if (recentSame >= 3) recentBias = 0.85;
+    } catch {}
+    const total = Math.max(0, (base + ruleBoost) * profileMult * fatigueMult * modifierMultiplier * learningMult * actionWeightMult * categoryMult * recentBias);
     return {
       actionId: entry.id,
       name: entry.action.name,

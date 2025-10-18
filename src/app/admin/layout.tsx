@@ -21,6 +21,7 @@ import {
   PanelLeftOpen,
   ShieldCheck,
   Database,
+  MessageSquare,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -33,6 +34,7 @@ import { logout } from '@/services/authService';
 const adminNavItems = [
   { href: '/admin', icon: ShieldCheck, label: 'Админ-панель' },
   { href: '/admin/data', icon: Database, label: 'Данные' },
+  { href: '/admin/telegram', icon: MessageSquare, label: 'Telegram' },
   { href: '/dashboard', icon: LayoutDashboard, label: 'Дашборд' },
 ];
 

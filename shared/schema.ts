@@ -376,6 +376,25 @@ export const characterStateSnapshots = pgTable('character_state_snapshots', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// === TELEGRAM INTEGRATION ===
+export const telegramLinkTokens = pgTable('telegram_link_tokens', {
+  token: text('token').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  expiresAt: bigint('expires_at', { mode: 'number' }).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const telegramSubscriptions = pgTable('telegram_subscriptions', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  chatId: text('chat_id').notNull(),
+  mode: text('mode').notNull().default('daily'),
+  locale: text('locale').notNull().default('ru'),
+  lastSentAt: bigint('last_sent_at', { mode: 'number' }),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // === SHOUTS ===
 export const shouts = pgTable('shouts', {
   id: text('id').primaryKey(),

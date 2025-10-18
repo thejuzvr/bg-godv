@@ -23,6 +23,17 @@ const nextConfig: NextConfig = {
     WS_URL: process.env.WS_URL,
   },
   webpack: (config, { isServer }) => {
+    // Enable SVGR to import SVGs as React components
+    config.module.rules.push({
+      test: /\.svg$/i,
+      issuer: { and: [/{js|ts}x?$/] },
+      use: [
+        {
+          loader: require.resolve('@svgr/webpack'),
+          options: { svgo: true },
+        },
+      ],
+    });
     if (!isServer) {
       // Don't resolve server-only modules on the client
       config.resolve.fallback = {
