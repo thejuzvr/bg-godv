@@ -29,6 +29,7 @@ import {
   User as UserIcon,
   Users,
   LineChart,
+  Hammer,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -48,6 +49,7 @@ const navItems = [
   { href: '/dashboard/map', icon: Map, label: 'Карта Мира' },
   { href: '/dashboard/mind', icon: BrainCircuit, label: 'Сознание' },
   { href: '/dashboard/inventory', icon: Backpack, label: 'Инвентарь' },
+  { href: '/dashboard/crafting', icon: Hammer, label: 'Крафт' },
   { href: '/dashboard/quests', icon: BookOpen, label: 'Журнал Заданий' },
   { href: '/dashboard/factions', icon: Shield, label: 'Фракции' },
   { href: '/dashboard/society', icon: Users, label: 'Общество' },
@@ -152,6 +154,7 @@ function MainSidebar() {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { loading } = useAuth(true);
+  const pathname = usePathname();
   
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen">Загрузка...</div>;
@@ -176,9 +179,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <RealmSelector />
             </header>
             <main className="flex-1 overflow-auto">
-              <div className="origin-top-left scale-[0.75] min-w-[133.333%]">
-                {children}
-              </div>
+              {pathname?.startsWith('/dashboard/mind/editor') ? (
+                <div className="min-w-full">
+                  {children}
+                </div>
+              ) : (
+                <div className="origin-top-left scale-[0.75] min-w-[133.333%]">
+                  {children}
+                </div>
+              )}
             </main>
           </SidebarInset>
         </div>

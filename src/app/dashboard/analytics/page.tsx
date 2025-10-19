@@ -252,13 +252,13 @@ export default function AnalyticsPage() {
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                     <h2 className="text-2xl font-headline flex items-center gap-2"><Swords /> Боевые отчеты</h2>
                     <div className="flex items-center gap-2">
-                        <select className="border rounded px-2 py-1" value={period} onChange={(e) => setPeriod(e.target.value as any)}>
+                        <select className="border rounded px-2 py-1 bg-background text-foreground" value={period} onChange={(e) => setPeriod(e.target.value as any)}>
                             <option value="all">За всё время</option>
                             <option value="24h">24 часа</option>
                             <option value="7d">7 дней</option>
                             <option value="30d">30 дней</option>
                         </select>
-                        <select className="border rounded px-2 py-1" value={resultFilter} onChange={(e) => setResultFilter(e.target.value as any)}>
+                        <select className="border rounded px-2 py-1 bg-background text-foreground" value={resultFilter} onChange={(e) => setResultFilter(e.target.value as any)}>
                             <option value="all">Все результаты</option>
                             <option value="victory">Победы</option>
                             <option value="defeat">Поражения</option>

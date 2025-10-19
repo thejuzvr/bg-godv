@@ -449,6 +449,133 @@ export const aiModifiers = pgTable('ai_modifiers', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// === CRAFTING ===
+export const craftingStations = pgTable('crafting_stations', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  discipline: text('discipline').notNull(), // 'alchemy' | 'smithing' | 'enchanting' | 'cooking' | 'tanning' | 'smelting'
+  location: text('location'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const craftingRecipes = pgTable('crafting_recipes', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  discipline: text('discipline').notNull(),
+  station: text('station').notNull(),
+  inputs: jsonb('inputs').notNull().$type<Array<{ id: string; quantity: number }>>(),
+  outputs: jsonb('outputs').notNull().$type<Array<{ id: string; quantity: number }>>(),
+  skillReq: integer('skill_req').notNull().default(0),
+  xp: integer('xp').notNull().default(5),
+  successBase: real('success_base').notNull().default(0.9), // 0..1
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const characterCraftingSkills = pgTable('character_crafting_skills', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  characterId: text('character_id').notNull().references(() => characters.id, { onDelete: 'cascade' }),
+  discipline: text('discipline').notNull(),
+  level: integer('level').notNull().default(1),
+  xp: integer('xp').notNull().default(0),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// === REACTIONS ===
+export const characterInteractions = pgTable('character_interactions', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  characterId: text('character_id').notNull().references(() => characters.id, { onDelete: 'cascade' }),
+  source: text('source').notNull(), // 'profile-view' | 'player-message'
+  payload: jsonb('payload').$type<{ text?: string; fromUserId?: string; ip?: string }>(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// === URGENT EVENTS ===
+export const urgentEvents = pgTable('urgent_events', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  characterId: text('character_id').notNull().references(() => characters.id, { onDelete: 'cascade' }),
+  key: text('key').notNull(),
+  title: text('title').notNull(),
+  description: text('description').notNull(),
+  status: text('status').notNull().default('active'), // 'active' | 'completed' | 'failed'
+  currentStep: integer('current_step').notNull().default(0),
+  expiresAt: bigint('expires_at', { mode: 'number' }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  completedAt: timestamp('completed_at'),
+});
+
+export const urgentEventSteps = pgTable('urgent_event_steps', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  urgentEventId: text('urgent_event_id').notNull().references(() => urgentEvents.id, { onDelete: 'cascade' }),
+  idx: integer('idx').notNull().default(0),
+  type: text('type').notNull(), // 'dialogue' | 'follow' | 'report_d20'
+  data: jsonb('data').$type<Record<string, any>>(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// === AI GRAPH (MODULAR) ===
+export const aiGraphTemplates = pgTable('ai_graph_templates', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text('name').notNull(),
+  description: text('description'),
+  version: integer('version').notNull().default(1),
+  graphJson: jsonb('graph_json').notNull().$type<Record<string, any>>(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const aiGraphInstances = pgTable('ai_graph_instances', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  characterId: text('character_id').notNull().references(() => characters.id, { onDelete: 'cascade' }),
+  templateId: text('template_id').references(() => aiGraphTemplates.id, { onDelete: 'set null' }),
+  version: integer('version').notNull().default(1),
+  graphJson: jsonb('graph_json').notNull().$type<Record<string, any>>(),
+  active: boolean('active').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// === QUESTS ===
+export const quests = pgTable('quests', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  characterId: text('character_id').notNull().references(() => characters.id, { onDelete: 'cascade' }),
+  templateId: text('template_id'), // optional link to static template in src/data/quests.ts
+  title: text('title').notNull(),
+  description: text('description').notNull(),
+  location: text('location').notNull(),
+  type: text('type').notNull(), // 'main' | 'side' | 'bounty' | 'urgent'
+  status: text('status').notNull().default('in-progress'), // 'available' | 'in-progress' | 'completed' | 'failed'
+  rewards: jsonb('rewards').notNull().$type<{
+    gold?: number;
+    xp?: number;
+    items?: Array<{ id: string; quantity: number }>;
+    randomItemRewards?: Array<{ rarity: string; type: string; quantity: number }>;
+  }>(),
+  progress: integer('progress').notNull().default(0), // 0-100
+  metadata: jsonb('metadata').$type<Record<string, any>>(),
+  expiresAt: bigint('expires_at', { mode: 'number' }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  completedAt: timestamp('completed_at'),
+});
+
+export const questTasks = pgTable('quest_tasks', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  questId: text('quest_id').notNull().references(() => quests.id, { onDelete: 'cascade' }),
+  idx: integer('idx').notNull().default(0),
+  title: text('title').notNull(),
+  type: text('type').notNull(), // 'talk' | 'follow' | 'combat' | 'collect' | 'report' | ...
+  status: text('status').notNull().default('pending'), // 'pending' | 'in-progress' | 'completed' | 'failed'
+  progress: integer('progress').notNull().default(0),
+  data: jsonb('data').$type<Record<string, any>>(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  completedAt: timestamp('completed_at'),
+});
+
 // === TYPE EXPORTS ===
 
 export type User = typeof users.$inferSelect;
@@ -492,3 +619,18 @@ export type NewNpcDialogueLine = typeof npcDialogueLines.$inferInsert;
 
 export type CharacterStateSnapshot = typeof characterStateSnapshots.$inferSelect;
 export type NewCharacterStateSnapshot = typeof characterStateSnapshots.$inferInsert;
+
+export type QuestDB = typeof quests.$inferSelect;
+export type NewQuestDB = typeof quests.$inferInsert;
+export type QuestTaskDB = typeof questTasks.$inferSelect;
+export type NewQuestTaskDB = typeof questTasks.$inferInsert;
+
+export type UrgentEventDB = typeof urgentEvents.$inferSelect;
+export type NewUrgentEventDB = typeof urgentEvents.$inferInsert;
+export type UrgentEventStepDB = typeof urgentEventSteps.$inferSelect;
+export type NewUrgentEventStepDB = typeof urgentEventSteps.$inferInsert;
+
+export type AiGraphTemplateDB = typeof aiGraphTemplates.$inferSelect;
+export type NewAiGraphTemplateDB = typeof aiGraphTemplates.$inferInsert;
+export type AiGraphInstanceDB = typeof aiGraphInstances.$inferSelect;
+export type NewAiGraphInstanceDB = typeof aiGraphInstances.$inferInsert;

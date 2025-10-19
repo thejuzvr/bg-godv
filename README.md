@@ -139,6 +139,16 @@ The application uses a repository pattern (`characterService.ts`) that abstracts
 - Runs continuously in separate process (`server/background-worker.ts`)
 - Processes game ticks for ALL active characters every 3 seconds
 - Characters continue to adventure, fight, and level up even when users are offline
+
+#### Debugging engine logs
+
+You can enable concise engine log tags to trace sources of messages (arrival and idle guard) by setting:
+
+```bash
+DEBUG_LOG_TAGS=true
+```
+
+When enabled, certain messages will be prefixed with `[engine:arrival]` or `[engine:idle-guard]` in the adventure log to aid diagnostics.
 - Events are stored in `offline_events` table and shown to users when they log back in
 
 ### Character Thoughts & Reactions

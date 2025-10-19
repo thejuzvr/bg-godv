@@ -12,6 +12,7 @@ import { CATEGORY_BASE_MULTIPLIERS } from './config/constants';
 import { initPersonality, getPersonalityModifier } from '@/ai/personality';
 import { generateGoals, selectTopGoal } from '@/ai/goal-manager';
 import { computeActionScores } from './priority-engine';
+import { getActiveModifiers } from './modifiers';
 import { updateOnAction } from './fatigue';
 import { recordAttempt, recordOutcome } from './learning';
 import { recordDecisionTrace } from './diagnostics';
@@ -54,6 +55,7 @@ import { computeBaseValue } from "@/services/pricing";
 import { getCharacterById } from "../../server/storage";
 import { saveCombatAnalytics } from "@/services/combatAnalyticsService";
 import { generateDungeonActivities } from '@/ai/generators/dungeon-generator';
+import { maybeComputeActionFromGraph } from '@/ai/graph/runtime';
 import { generateCityActivities } from '@/ai/generators/activity-generator';
 import { generateMultiStepQuest } from '@/ai/generators/quest-generator';
 
@@ -1039,24 +1041,19 @@ const takeQuestAction: Action = {
     },
     async perform(character: Character, gameData: GameData) {
         let updatedChar = structuredClone(character);
-        const { enemies, quests } = gameData;
-        
-        const suitableQuests = quests.filter(q => {
-            if (q.location !== updatedChar.location || 
-                q.status !== 'available' || 
-                character.level < q.requiredLevel ||
-                (updatedChar.completedQuests || []).includes(q.id)) {
-                return false;
+        const { enemies } = gameData;
+        // Prefer DB-backed quest instance creation
+        try {
+            const svc = await import('@/services/questService');
+            const { selectQuestTemplatesForCharacter, createQuestFromTemplate } = svc as any;
+            const templates = selectQuestTemplatesForCharacter(updatedChar);
+            if (templates.length === 0) {
+                return { character: updatedChar, logMessage: 'Подходящих заданий нет. Герой решает отдохнуть.' };
             }
-            if (q.requiredFaction) {
-                const currentRep = updatedChar.factions[q.requiredFaction.id]?.reputation || 0;
-                return currentRep >= q.requiredFaction.reputation;
-            }
-            return true;
-        });
-
-        const quest = suitableQuests[Math.floor(Math.random() * suitableQuests.length)];
-        let initialLog = `Задание "${quest.title}"? Звучит как неплохой способ разбогатеть. Герой берется за дело.`;
+            const template = templates[Math.floor(Math.random() * templates.length)];
+            const created = await createQuestFromTemplate(updatedChar, template as any);
+            const quest: any = { id: created?.quest?.id || template.id, title: template.title, type: template.type, narrative: template.narrative, duration: template.duration, targetEnemyId: (template as any).targetEnemyId, combatChance: (template as any).combatChance };
+            let initialLog = `Задание "${quest.title}"? Звучит как неплохой способ разбогатеть. Герой берется за дело.`;
 
         if (quest.type === 'bounty' || (quest.type === 'side' && Math.random() < (quest.combatChance || 0))) {
             const baseEnemy = enemies.find(e => e.id === quest.targetEnemyId) || enemies[Math.floor(Math.random() * enemies.length)];
@@ -1089,6 +1086,54 @@ const takeQuestAction: Action = {
             };
             updatedChar = addToActionHistory(updatedChar, 'quest');
             return { character: updatedChar, logMessage: initialLog + ` Герой приступил к выполнению.` };
+        }
+        } catch {
+            // Fallback to static quests list if service import fails
+            // Fall through to original static behavior below
+        }
+        // Static fallback: use in-memory quests
+        const suitableQuests = (gameData as any).quests?.filter((q: any) => {
+            if (q.location !== updatedChar.location || q.status !== 'available' || character.level < q.requiredLevel || (updatedChar.completedQuests || []).includes(q.id)) {
+                return false;
+            }
+            if (q.requiredFaction) {
+                const currentRep = (updatedChar.factions as any)[q.requiredFaction.id]?.reputation || 0;
+                return currentRep >= q.requiredFaction.reputation;
+            }
+            return true;
+        }) || [];
+        if (suitableQuests.length === 0) {
+            return { character: updatedChar, logMessage: 'Подходящих заданий нет. Герой решает отдохнуть.' };
+        }
+        const quest = suitableQuests[Math.floor(Math.random() * suitableQuests.length)];
+        let initialLog = `Задание "${quest.title}"? Звучит как неплохой способ разбогатеть. Герой берется за дело.`;
+        if (quest.type === 'bounty' || (quest.type === 'side' && Math.random() < (quest.combatChance || 0))) {
+            const baseEnemy = (gameData as any).enemies.find((e: any) => e.id === quest.targetEnemyId) || (gameData as any).enemies[Math.floor(Math.random() * (gameData as any).enemies.length)];
+            const levelMultiplier = 1 + (character.level - 1) * 0.15;
+            const enemy = { 
+                name: baseEnemy.name, 
+                health: { current: Math.floor(baseEnemy.health * levelMultiplier), max: Math.floor(baseEnemy.health * levelMultiplier) }, 
+                damage: Math.floor(baseEnemy.damage * levelMultiplier), 
+                xp: Math.floor(baseEnemy.xp * levelMultiplier),
+                armor: Math.max(8, Math.min(25, (baseEnemy.armor ?? (10 + (baseEnemy.level || 1))))),
+                appliesEffect: baseEnemy.appliesEffect || null,
+            };
+            if (!updatedChar.analytics.encounteredEnemies.includes(baseEnemy.id)) {
+                updatedChar.analytics.encounteredEnemies.push(baseEnemy.id);
+            }
+            updatedChar.status = 'in-combat';
+            updatedChar.combat = { enemyId: baseEnemy.id, enemy, onWinQuestId: quest.id, fleeAttempted: false } as any;
+            updatedChar = addToActionHistory(updatedChar, 'quest');
+            const questLog = `Герой выследил цель по заданию и вступает в бой с ${enemy.name}!`;
+            return { character: updatedChar, logMessage: initialLog + ' ' + questLog };
+        } else {
+            updatedChar.status = 'busy';
+            updatedChar.currentAction = {
+                type: 'quest', name: `Выполнение: ${quest.title}`, description: quest.narrative,
+                startedAt: Date.now(), duration: quest.duration * 60 * 1000, questId: quest.id,
+            };
+            updatedChar = addToActionHistory(updatedChar, 'quest');
+            return { character: updatedChar, logMessage: initialLog + ' Герой приступил к выполнению.' };
         }
     }
 };
@@ -2943,6 +2988,18 @@ async function determineNextAction(character: Character, gameData: GameData): Pr
             break;
     }
 
+    // 4b. Graph override: allow modular AI graph to select an explicit action name
+    try {
+        const selectedByGraph = await maybeComputeActionFromGraph(character, gameData);
+        if (selectedByGraph) {
+            const unionActions = ([] as Action[]).concat(idleActions, combatActions, deadActions, exploringActions);
+            const picked = unionActions.find(a => a.name === selectedByGraph);
+            if (picked) {
+                return picked;
+            }
+        }
+    } catch {}
+
     // 5. Filter for actions that can be performed (exclude fallback wander from primary selection)
     let possibleActions = actionSet
         .filter(action => action.canPerform(character, worldState, gameData))
@@ -2993,6 +3050,16 @@ async function determineNextAction(character: Character, gameData: GameData): Pr
         }
     };
 
+    // Apply simple reaction nudges as a multiplier from active modifiers
+    let reactionMultiplier = 1.0;
+    let socialNudge = 0;
+    try {
+        const mods = await getActiveModifiers(character.id);
+        const curiosity = mods.find(m => m.code === 'curiosity')?.multiplier || 0;
+        socialNudge = mods.find(m => m.code === 'social_focus')?.multiplier || 0;
+        reactionMultiplier = 1 + Math.max(0, curiosity * 0.5);
+    } catch {}
+
     const weighted = possibleActions.map(a => {
         const base = Math.max(0, a.getWeight ? a.getWeight(character, worldState, gameData) : 0);
         const pMod = getPersonalityModifier(personality, a.type);
@@ -3000,7 +3067,8 @@ async function determineNextAction(character: Character, gameData: GameData): Pr
         const catMod = (CATEGORY_BASE_MULTIPLIERS as any)[a.type] ?? 1.0;
         const recentTypeCount = countRecentActions(character, a.type, 8);
         const repMod = computeRepetitionModifier(recentTypeCount);
-        return { action: a, weight: base * pMod * gMod * catMod * repMod };
+        const socialBoost = a.type === 'social' ? (1 + Math.max(0, socialNudge)) : 1.0;
+        return { action: a, weight: base * pMod * gMod * catMod * repMod * reactionMultiplier * socialBoost };
     }).filter(w => w.weight > 0.1);
 
     if (weighted.length === 0) return wanderAction;
@@ -3309,4 +3377,33 @@ try {
 } catch {}
 try {
     if (!idleActions.includes((donateAtTempleAction as any))) idleActions.splice(12, 0, donateAtTempleAction);
+} catch {}
+
+// === Crafting actions ===
+import { listRecipes, performCraft } from '@/services/craftingService';
+
+const craftSomethingAction: Action = {
+    name: 'Скрафтить предмет',
+    type: 'learn',
+    getWeight: (char, world) => {
+        if (!world.isLocationSafe) return 0;
+        const hasMats = char.inventory.some(i => ['herb_', 'ore_', 'animal_pelt', 'salt'].some(p => i.id.includes(p)) && i.quantity > 0);
+        return hasMats ? priorityToWeight(Priority.MEDIUM) : 0;
+    },
+    canPerform: (char, world) => world.isLocationSafe!,
+    async perform(character) {
+        let updatedChar = structuredClone(character);
+        const recipes = await listRecipes();
+        const feasible = (recipes as any[]).filter(r => (r.inputs || []).every((inp: any) => (updatedChar.inventory.find(i => i.id === inp.id)?.quantity || 0) >= inp.quantity));
+        if (feasible.length === 0) return { character, logMessage: 'Нет доступных рецептов по текущим материалам.' };
+        const recipe = feasible[Math.floor(Math.random() * feasible.length)];
+        const result = await performCraft(updatedChar, (recipe as any).id);
+        if ('error' in result) return { character, logMessage: `Крафт не удался: ${result.error}` };
+        updatedChar = result.character as any;
+        return { character: updatedChar, logMessage: result.log };
+    }
+};
+
+try {
+    if (!idleActions.includes((craftSomethingAction as any))) idleActions.splice(13, 0, craftSomethingAction);
 } catch {}

@@ -13,7 +13,6 @@ import { Building2, Castle, Tent, TowerControl, LandPlot, Plus, Minus } from "lu
 import { memo } from "react";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import type { ReactZoomPanPinchRef } from "react-zoom-pan-pinch";
-import WorldMapMini from "@/components/world-map-mini";
 
 type WorldMapProps = {
   currentCity: string;
@@ -118,15 +117,7 @@ export function WorldMap({ currentCity, locations, onLocationClick }: WorldMapPr
               </button>
             </div>
 
-            {/* Mini map */}
-            <WorldMapMini
-              mapWidth={MAP_WIDTH}
-              mapHeight={MAP_HEIGHT}
-              containerWidth={MAP_WIDTH}
-              containerHeight={MAP_HEIGHT}
-              state={s}
-              setTransform={setTransform as ReactZoomPanPinchRef["setTransform"]}
-            />
+            {/* Mini map removed by request */}
 
             <TransformComponent>
               <div className="relative" style={{ width: MAP_WIDTH, height: MAP_HEIGHT }}>

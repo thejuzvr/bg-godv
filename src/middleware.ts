@@ -37,15 +37,25 @@ export function middleware(req: NextRequest) {
   const resHeaders = new Headers(req.headers);
   resHeaders.set('x-request-id', reqId);
   const ip = (req as any).ip || req.headers.get('x-forwarded-for') || (req as any).socket?.remoteAddress || 'unknown';
+
+  // Prepare response early so we can set cookies regardless
+  const res = NextResponse.next({ request: { headers: resHeaders } });
+  res.headers.set('x-request-id', reqId);
+
+  // Ensure CSRF cookie exists (double-submit cookie pattern)
+  const existingCsrf = req.cookies.get('csrf_token')?.value;
+  if (!existingCsrf) {
+    const csrfToken = crypto.randomUUID();
+    res.cookies.set('csrf_token', csrfToken, { httpOnly: false, sameSite: 'lax', path: '/' });
+  }
+
   if (!checkRateLimit(String(ip))) {
     return new NextResponse('Too Many Requests', { status: 429, headers: resHeaders });
   }
   if (!validateCsrf(req)) {
     return new NextResponse('Invalid CSRF token', { status: 403, headers: resHeaders });
   }
-  const next = NextResponse.next({ request: { headers: resHeaders } });
-  next.headers.set('x-request-id', reqId);
-  return next;
+  return res;
 }
 
 export const config = {

@@ -255,6 +255,17 @@ export async function donateToFaction(userId: string, factionId: string, amount:
     }
 
     await storage.saveCharacter(character);
+    // Push realtime tick so UI updates progress bar without manual refresh
+    try {
+      const pub = getRedis();
+      await pub.publish('ws:tick', JSON.stringify({
+        realmId: (character as any).realmId || 'global',
+        characterId: userId,
+        tickAt: Date.now(),
+        updatedAt: Date.now(),
+        summary: { status: character.status, location: character.location, hp: character.stats?.health?.current },
+      }));
+    } catch {}
     return { success: true, message: logMessage };
 
   } catch (e: any) {

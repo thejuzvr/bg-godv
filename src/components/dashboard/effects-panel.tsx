@@ -9,6 +9,7 @@ import type { ActiveEffect } from '@/types/character';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Star } from 'lucide-react';
 
 const Icon = ({ name, ...props }: { name: string } & LucideIcons.LucideProps) => {
@@ -52,24 +53,29 @@ export const EffectsPanel = ({ effects }: { effects: ActiveEffect[] }) => {
                         const remaining = effect.expiresAt - time;
                         if (remaining <= 0) return null;
                         return (
-                             <TooltipProvider key={effect.id}>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <div
-                                            className={cn("flex items-center justify-center p-2 w-12 h-12 aspect-square rounded-lg border-2", 
-                                            effect.type === 'buff' ? 'border-primary bg-primary/20 text-primary' : 'border-destructive bg-destructive/20 text-destructive'
-                                            )}
-                                        >
-                                            <Icon name={effect.icon} className="w-6 h-6" />
-                                        </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        <p className="font-bold">{effect.name}</p>
-                                        <p className="text-sm text-muted-foreground">{effect.description}</p>
-                                        <p className="text-xs">Осталось: {formatDuration(remaining)}</p>
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
+                            <Dialog key={effect.id}>
+                                <DialogTrigger asChild>
+                                    <button
+                                        className={cn("flex items-center justify-center p-2 w-12 h-12 aspect-square rounded-lg border-2", 
+                                        effect.type === 'buff' ? 'border-primary bg-primary/20 text-primary' : 'border-destructive bg-destructive/20 text-destructive')}
+                                        aria-label={effect.name}
+                                    >
+                                        <Icon name={effect.icon} className="w-6 h-6" />
+                                    </button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-md sm:max-w-lg">
+                                    <DialogHeader>
+                                        <DialogTitle>{effect.name}</DialogTitle>
+                                        <DialogDescription>
+                                            <span className="text-sm text-muted-foreground">{effect.type === 'buff' ? 'Положительный эффект' : 'Отрицательный эффект'}</span>
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="space-y-2">
+                                        <p className="text-sm whitespace-pre-wrap break-words">{effect.description}</p>
+                                        <p className="text-xs text-muted-foreground">Осталось: {formatDuration(remaining)}</p>
+                                    </div>
+                                </DialogContent>
+                            </Dialog>
                         )
                     })}
                 </div>

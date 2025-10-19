@@ -11,7 +11,7 @@ import * as LucideIcons from "lucide-react";
 import { BrainCircuit, Star } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 const Icon = ({ name, ...props }: { name: string } & LucideIcons.LucideProps) => {
   const LucideIcon = (LucideIcons as any)[name];
@@ -57,22 +57,28 @@ export const SpellsPanel = ({ character }: { character: Character }) => {
                 <Label className="text-base font-semibold flex items-center gap-2"><BrainCircuit className="w-5 h-5 text-primary"/> Книга заклинаний</Label>
                 <div className="flex flex-wrap gap-2 pt-2">
                     {learnedSpells.map((spell) => (
-                         <TooltipProvider key={spell.id}>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <div
-                                        className="flex items-center justify-center p-2 w-12 h-12 aspect-square rounded-lg border-2 border-primary bg-primary/20 text-primary"
-                                    >
-                                        <Icon name={spell.icon} className="w-6 h-6" />
-                                    </div>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    <p className="font-bold">{spell.name}</p>
-                                    <p className="text-sm text-muted-foreground">{spell.description}</p>
+                        <Dialog key={spell.id}>
+                            <DialogTrigger asChild>
+                                <button
+                                    className="flex items-center justify-center p-2 w-12 h-12 aspect-square rounded-lg border-2 border-primary bg-primary/20 text-primary"
+                                    aria-label={spell.name}
+                                >
+                                    <Icon name={spell.icon} className="w-6 h-6" />
+                                </button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-md sm:max-w-lg">
+                                <DialogHeader>
+                                    <DialogTitle>{spell.name}</DialogTitle>
+                                    <DialogDescription>
+                                        <span className="text-sm text-muted-foreground">Заклинание</span>
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-2">
+                                    <p className="text-sm whitespace-pre-wrap break-words">{spell.description}</p>
                                     <p className="text-xs text-muted-foreground">Затраты маны: {spell.manaCost}</p>
-                                </TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
                     ))}
                 </div>
             </div>
@@ -83,21 +89,27 @@ export const SpellsPanel = ({ character }: { character: Character }) => {
                 <Label className="text-base font-semibold flex items-center gap-2"><BrainCircuit className="w-5 h-5 text-primary"/> Крики</Label>
                 <div className="flex flex-wrap gap-2 pt-2">
                     {learnedShouts.map((shout) => (
-                         <TooltipProvider key={shout.id}>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <div
-                                        className="flex items-center justify-center p-2 w-12 h-12 aspect-square rounded-lg border-2 border-primary bg-primary/10 text-primary"
-                                    >
-                                        <Icon name={shout.icon} className="w-6 h-6" />
-                                    </div>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    <p className="font-bold">{shout.name}</p>
-                                    <p className="text-sm text-muted-foreground">{shout.description}</p>
-                                </TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
+                        <Dialog key={shout.id}>
+                            <DialogTrigger asChild>
+                                <button
+                                    className="flex items-center justify-center p-2 w-12 h-12 aspect-square rounded-lg border-2 border-primary bg-primary/10 text-primary"
+                                    aria-label={shout.name}
+                                >
+                                    <Icon name={shout.icon} className="w-6 h-6" />
+                                </button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-md sm:max-w-lg">
+                                <DialogHeader>
+                                    <DialogTitle>{shout.name}</DialogTitle>
+                                    <DialogDescription>
+                                        <span className="text-sm text-muted-foreground">Крик</span>
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-2">
+                                    <p className="text-sm whitespace-pre-wrap break-words">{shout.description}</p>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
                     ))}
                 </div>
             </div>

@@ -20,8 +20,6 @@ export interface CatalogEntry {
 // Dynamic import to avoid heavy initial load — but here we can import statically.
 // We will import the arrays and map them to entries with stable ids.
 
-import { idleActions, combatActions, deadActions, exploringActions, wanderAction } from "./brain";
-
 // Placeholder: we will fill this from policy at runtime by scanning brain's action sets if needed.
 const TAG_REGISTRY: Record<string, string[]> = {
   'Взять задание': ['quest','city'],
@@ -44,12 +42,22 @@ function toEntries(prefix: string, actions: Action[]): CatalogEntry[] {
   }));
 }
 
-export const ACTION_CATALOG: CatalogEntry[] = [
-  ...toEntries('idle', idleActions),
-  ...toEntries('combat', combatActions),
-  ...toEntries('dead', deadActions),
-  ...toEntries('exploring', exploringActions),
-  { id: 'fallback:wander', category: 'explore', action: wanderAction },
-];
+// Lazy getter to avoid circular import with brain.ts during module initialization
+export async function getActionCatalog(): Promise<CatalogEntry[]> {
+  const brain = await import('./brain');
+  const idleActions = (brain as any).idleActions as Action[];
+  const combatActions = (brain as any).combatActions as Action[];
+  const deadActions = (brain as any).deadActions as Action[];
+  const exploringActions = (brain as any).exploringActions as Action[];
+  const wanderAction = (brain as any).wanderAction as Action;
+  const base: CatalogEntry[] = [
+    ...toEntries('idle', idleActions),
+    ...toEntries('combat', combatActions),
+    ...toEntries('dead', deadActions),
+    ...toEntries('exploring', exploringActions),
+    { id: 'fallback:wander', category: (wanderAction as any).type, action: wanderAction },
+  ];
+  return base;
+}
 
 

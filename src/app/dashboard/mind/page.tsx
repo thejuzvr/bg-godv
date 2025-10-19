@@ -232,6 +232,9 @@ export default function MindPage() {
 
     return (
         <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-6 font-body p-4 md:p-8">
+            <div className="col-span-1 lg:col-span-2 flex justify-end">
+                <a href="/dashboard/mind/editor" className="px-3 py-2 border rounded bg-primary text-primary-foreground">Редактор сознания</a>
+            </div>
             {/* Column 1 */}
             <div className="flex flex-col gap-6">
                 <Card>

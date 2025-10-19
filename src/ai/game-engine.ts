@@ -340,8 +340,11 @@ async function processActionCompletion(character: Character, gameData: GameData,
             logs.push(`Отдых в таверне подошел к концу. Герой чувствует себя посвежевшим.`);
             updatedChar.mood = Math.min(100, updatedChar.mood + 5);
             updatedChar.status = 'idle';
+            updatedChar.currentAction = null as any;
             // Mark location activity as completed for strict sequencing
             updatedChar.hasCompletedLocationActivity = true;
+            // Align last action timestamp to completion moment
+            try { if (Array.isArray(updatedChar.actionHistory) && updatedChar.actionHistory.length > 0) { (updatedChar.actionHistory[updatedChar.actionHistory.length - 1] as any).timestamp = Date.now(); } } catch {}
             break;
         case 'travel_rest':
             logs.push("Привал окончен. Отдых придал герою сил и бодрости. Он чувствует себя готовым к новым свершениям!");
@@ -351,12 +354,16 @@ async function processActionCompletion(character: Character, gameData: GameData,
             updatedChar.mood = Math.min(100, updatedChar.mood + 10);
             // Mark location activity as completed for strict sequencing
             updatedChar.hasCompletedLocationActivity = true;
+            // Align last action timestamp to completion moment
+            try { if (Array.isArray(updatedChar.actionHistory) && updatedChar.actionHistory.length > 0) { (updatedChar.actionHistory[updatedChar.actionHistory.length - 1] as any).timestamp = Date.now(); } } catch {}
             break;
         case 'jail':
             logs.push("Стража выпустила героя из-под стражи. Свобода сладка, даже если немного стыдно.");
             updatedChar.status = 'idle';
             if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {};
             updatedChar.actionCooldowns['exploreCity'] = Date.now();
+            // Align last action timestamp to completion moment
+            try { if (Array.isArray(updatedChar.actionHistory) && updatedChar.actionHistory.length > 0) { (updatedChar.actionHistory[updatedChar.actionHistory.length - 1] as any).timestamp = Date.now(); } } catch {}
             break;
         case 'sovngarde_quest':
             const sovngardeQuest = gameData.sovngardeQuests.find(q => q.id === currentAction.sovngardeQuestId);
@@ -373,12 +380,16 @@ async function processActionCompletion(character: Character, gameData: GameData,
             }
             updatedChar.activeSovngardeQuest = null;
             updatedChar.status = 'dead';
+            // Align last action timestamp to completion moment
+            try { if (Array.isArray(updatedChar.actionHistory) && updatedChar.actionHistory.length > 0) { (updatedChar.actionHistory[updatedChar.actionHistory.length - 1] as any).timestamp = Date.now(); } } catch {}
             break;
         case 'explore':
             logs.push("Закончив прогулку, герой ищет, чем заняться дальше.");
             updatedChar.status = 'idle';
             if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {};
             updatedChar.actionCooldowns['exploreCity'] = Date.now();
+            // Align last action timestamp to completion moment
+            try { if (Array.isArray(updatedChar.actionHistory) && updatedChar.actionHistory.length > 0) { (updatedChar.actionHistory[updatedChar.actionHistory.length - 1] as any).timestamp = Date.now(); } } catch {}
             break;
         case 'trading':
             let tradeLog = 'Закончив с торговлей, герой выходит из лавки. ';
@@ -409,6 +420,8 @@ async function processActionCompletion(character: Character, gameData: GameData,
             updatedChar.hasCompletedLocationActivity = true;
              if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {};
             updatedChar.actionCooldowns['exploreCity'] = Date.now();
+            // Align last action timestamp to completion moment
+            try { if (Array.isArray(updatedChar.actionHistory) && updatedChar.actionHistory.length > 0) { (updatedChar.actionHistory[updatedChar.actionHistory.length - 1] as any).timestamp = Date.now(); } } catch {}
             break;
         case 'travel':
             updatedChar.location = currentAction.destinationId!;
@@ -424,7 +437,15 @@ async function processActionCompletion(character: Character, gameData: GameData,
                     (updatedChar.actionCooldowns as any)[arrivalKey] = Date.now();
                 }
             } catch {
-                logs.push(`...После долгого пути, герой наконец прибыл в ${destination?.name || 'новые земли'}.`);
+                // Only log if we haven't logged recently (same cooldown logic)
+                const arrivalKey = `arrival_log:${destination?.id || 'unknown'}`;
+                const last = Number((updatedChar.actionCooldowns as any)?.[arrivalKey] || 0);
+                const canLog = (Date.now() - last) > 10 * 1000; // 10s cooldown
+                if (canLog) {
+                    logs.push(`...После долгого пути, герой наконец прибыл в ${destination?.name || 'новые земли'}.`);
+                    if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {} as any;
+                    (updatedChar.actionCooldowns as any)[arrivalKey] = Date.now();
+                }
             }
             
             // Reset location arrival tracking for strict sequencing
@@ -452,6 +473,8 @@ async function processActionCompletion(character: Character, gameData: GameData,
                 chronicles.push({ type: 'discovery_city', title: `Открыт город: ${destination.name}`, description: `Герой впервые добрался до одного из великих городов Скайрима. Получено 100 опыта.`, icon: 'MapPin' });
             }
             updatedChar.status = 'idle';
+            // Align last action timestamp to completion moment
+            try { if (Array.isArray(updatedChar.actionHistory) && updatedChar.actionHistory.length > 0) { (updatedChar.actionHistory[updatedChar.actionHistory.length - 1] as any).timestamp = Date.now(); } } catch {}
             // Progress generated quest if current step was travel
             try {
                 const gq = character.activeGeneratedQuest;
@@ -477,8 +500,39 @@ async function processActionCompletion(character: Character, gameData: GameData,
             } catch {}
             break;
         case 'quest':
-            const quest = gameData.quests.find(q => q.id === currentAction.questId);
-            if (quest) {
+            // Try to load from DB first, fallback to static quests
+            let quest: any = null;
+            let questFromDb = false;
+            try {
+                const { getQuest, completeQuest, applyRewardsToCharacter } = await import('@/services/questService');
+                const dbQuest = await getQuest(currentAction.questId!);
+                if (dbQuest && dbQuest.quest) {
+                    questFromDb = true;
+                    // Complete the quest in DB
+                    await completeQuest(dbQuest.quest.id);
+                    // Apply rewards from DB quest
+                    const result = await applyRewardsToCharacter(updatedChar, dbQuest.quest.rewards);
+                    updatedChar = result.character;
+                    logs.push(result.log);
+                    updatedChar.mood = Math.min(100, updatedChar.mood + 15);
+                    logs.push('Настроение героя улучшилось.');
+                    // Add to completed quests if it has a templateId
+                    if (dbQuest.quest.templateId) {
+                        if (!updatedChar.completedQuests) updatedChar.completedQuests = [];
+                        if (!updatedChar.completedQuests.includes(dbQuest.quest.templateId)) {
+                            updatedChar.completedQuests.push(dbQuest.quest.templateId);
+                        }
+                    }
+                    quest = dbQuest.quest; // For analytics below
+                }
+            } catch (err) {
+                console.log('[game-engine] Quest service unavailable, trying static quests:', err);
+            }
+            // Fallback to static quests
+            if (!questFromDb) {
+                quest = gameData.quests.find(q => q.id === currentAction.questId);
+            }
+            if (quest && !questFromDb) {
                 let logMessage = `Герой достиг успеха в задании "${quest.title}"! Получено ${quest.reward.xp} опыта.`;
                 updatedChar.xp.current += quest.reward.xp;
                 updatedChar.mood = Math.min(100, updatedChar.mood + 15);
@@ -543,6 +597,8 @@ async function processActionCompletion(character: Character, gameData: GameData,
                 updatedChar.hasCompletedLocationActivity = true;
             }
             updatedChar.status = 'idle';
+            // Align last action timestamp to completion moment
+            try { if (Array.isArray(updatedChar.actionHistory) && updatedChar.actionHistory.length > 0) { (updatedChar.actionHistory[updatedChar.actionHistory.length - 1] as any).timestamp = Date.now(); } } catch {}
             // Progress generated quest if current step was a local quest action
             try {
                 const gq = character.activeGeneratedQuest;
@@ -1567,14 +1623,21 @@ export async function processGameTick(
         } catch {}
     }
     
-    // --- 12b. IDLE RE-CALCULATION GUARD (5+ minutes of inactivity) ---
+    // --- 12b. IDLE RE-CALCULATION GUARD (2+ minutes of inactivity) ---
     try {
         const nowTs = Date.now();
         const history = Array.isArray(updatedChar.actionHistory) ? updatedChar.actionHistory : [];
-        const lastActionTs = history.length > 0 ? (history[history.length - 1]?.timestamp || 0) : (updatedChar.lastUpdatedAt || updatedChar.createdAt || 0);
-        const idleMs = nowTs - (lastActionTs || 0);
+        const lastHistTs = history.length > 0 ? (history[history.length - 1]?.timestamp || 0) : 0;
+        const lastActivityTs = Math.max(
+            lastHistTs || 0,
+            updatedChar.lastLocationArrival || 0,
+            updatedChar.lastUpdatedAt || 0,
+            updatedChar.createdAt || 0,
+        );
+        const idleMs = nowTs - (lastActivityTs || 0);
     const IDLE_RECALC_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
-    if (updatedChar.status === 'idle' && idleMs > IDLE_RECALC_THRESHOLD_MS) {
+        const justArrived = Boolean(updatedChar.lastLocationArrival) && (nowTs - (updatedChar.lastLocationArrival || 0)) < 60 * 1000;
+        if (updatedChar.status === 'idle' && !justArrived && idleMs > IDLE_RECALC_THRESHOLD_MS) {
             // Expire action cooldowns to widen available choices
             if (updatedChar.actionCooldowns && typeof updatedChar.actionCooldowns === 'object') {
                 const cooled: Record<string, number> = { ...updatedChar.actionCooldowns } as any;

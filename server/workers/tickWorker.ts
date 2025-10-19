@@ -13,6 +13,15 @@ import { initialEvents } from '../../src/data/events';
 import { initialCityEvents } from '../../src/data/cityEvents';
 import { initialSovngardeQuests } from '../../src/data/sovngarde';
 
+// Debug flag (opt-in via env). Safe, no-op when disabled
+const DEBUG_TICKWORKER = String(process.env.DEBUG_TICKWORKER || '').toLowerCase() === 'true';
+function dbg(...args: any[]) {
+  if (!DEBUG_TICKWORKER) return;
+  try {
+    console.log('[TickWorker:debug]', ...args);
+  } catch {}
+}
+
 type ProcessResult = {
   ok: true;
 } | {
@@ -70,7 +79,39 @@ export const tickWorker = new Worker<TickJob>('ticks', async (job: Job<TickJob>)
 
     const data = await getGameData();
     const thoughts = await gameDataService.getAllThoughts();
-    const tickResult = await processGameTick(character as any, { ...data, thoughts });
+    dbg('Loaded character snapshot', {
+      id: characterId,
+      status: (character as any)?.status,
+      location: (character as any)?.location,
+      currentAction: (character as any)?.currentAction?.type,
+    });
+    // Fallback to static thoughts if DB returns none (allow analytics to proceed)
+    let t = thoughts;
+    try {
+      if (!Array.isArray(thoughts) || thoughts.length === 0) {
+        // Static fallback: derive from getFallbackThought by sampling generic sets
+        const mod = await import('../../src/data/thoughts');
+        const fallbackList: string[] = [];
+        try {
+          // build a small pool from a few categories to avoid empty DB
+          const anyMod: any = mod as any;
+          const pool = ([] as string[])
+            .concat(anyMod?.default?.generic_neutral || [])
+            .concat(anyMod?.default?.generic_happy || [])
+            .concat(anyMod?.default?.generic_sad || []);
+          fallbackList.push(...pool.slice(0, 50));
+        } catch {}
+        t = fallbackList.length > 0 ? fallbackList.map((text) => ({ id: text, text, tags: [], conditions: null, weight: 1, locale: 'ru', isEnabled: true })) : [];
+      }
+    } catch {}
+    const tickResult = await processGameTick(character as any, { ...data, thoughts: t });
+    dbg('Tick result summary', {
+      advCount: tickResult.adventureLog.length,
+      combatCount: tickResult.combatLog.length,
+      chronicleCount: (tickResult.chronicleEntries || []).length,
+      nextStatus: (tickResult.updatedCharacter as any)?.status,
+      nextLocation: (tickResult.updatedCharacter as any)?.location,
+    });
 
     // Persist updated character atomically where possible
     await storage.saveCharacter(tickResult.updatedCharacter);
@@ -86,6 +127,14 @@ export const tickWorker = new Worker<TickJob>('ticks', async (job: Job<TickJob>)
     // Stagger timestamps within a single tick to avoid identical times for thought+event
     const baseTs = Date.now();
     let offset = 0;
+    if (DEBUG_TICKWORKER) {
+      try {
+        dbg('Persisting logs', {
+          advSample: tickResult.adventureLog.slice(0, 3),
+          combatSample: tickResult.combatLog.slice(0, 3),
+        });
+      } catch {}
+    }
     for (const message of tickResult.adventureLog) {
       await storage.addOfflineEvent(characterId, { type: 'system', message, timestamp: baseTs + offset });
       offset += 500; // 0.5s between messages for readability
@@ -94,6 +143,7 @@ export const tickWorker = new Worker<TickJob>('ticks', async (job: Job<TickJob>)
       await storage.addOfflineEvent(characterId, { type: 'combat', message, timestamp: baseTs + offset });
       offset += 500;
     }
+    dbg('Persisted offline events', { total: (tickResult.adventureLog.length + tickResult.combatLog.length) });
 
     // Persist chronicle outbox
     if (tickResult.chronicleEntries && tickResult.chronicleEntries.length > 0) {
