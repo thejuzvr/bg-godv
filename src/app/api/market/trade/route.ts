@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
-import * as storage from '@/server/storage';
-import { db } from '@/server/storage';
-import * as schema from '@/shared/schema';
+import * as storage from '@/../server/storage';
+import { db } from '@/../server/storage';
+import * as schema from '@/../shared/schema';
 import { eq } from 'drizzle-orm';
 
 // Basic anti-exploit guards (in-memory, per-instance)

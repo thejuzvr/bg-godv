@@ -1,5 +1,5 @@
-import { db } from '@/server/storage';
-import * as schema from '@/shared/schema';
+import { db } from '@/../server/storage';
+import * as schema from '@/../shared/schema';
 import { eq } from 'drizzle-orm';
 
 export interface Trade { itemId: string; qty: number; side: 'buy'|'sell'; actorId: string; }

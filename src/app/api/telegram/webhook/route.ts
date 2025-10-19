@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import * as storage from '../../../../server/storage';
+import * as storage from '@/../server/storage';
 
 async function reply(chatId: string, text: string) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
       const subs = await storage.getActiveTelegramSubscriptions();
       const me = (subs as any[]).find(s => String((s as any).chatId) === chatId);
       if (me) {
-        const { buildDailyDigest } = await import('../../../../server/digest/digestService');
+        const { buildDailyDigest } = await import('@/../server/digest/digestService');
         const since = Date.now() - 24 * 60 * 60 * 1000;
         const text = await buildDailyDigest((me as any).userId, since) || 'Сегодня герой вёл себя тихо. Проверка связи Газеты Тамриэля.';
         await reply(chatId, text);

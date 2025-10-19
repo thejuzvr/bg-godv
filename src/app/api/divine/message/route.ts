@@ -1,8 +1,8 @@
 'use server';
 
 import { NextRequest } from 'next/server';
-import { db } from '@/server/storage';
-import * as schema from '@/shared/schema';
+import { db } from '@/../server/storage';
+import * as schema from '@/../shared/schema';
 
 export async function POST(req: NextRequest) {
   try {

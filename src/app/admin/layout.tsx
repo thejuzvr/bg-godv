@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   Database,
   MessageSquare,
+  Shield,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -35,7 +36,8 @@ const adminNavItems = [
   { href: '/admin', icon: ShieldCheck, label: 'Админ-панель' },
   { href: '/admin/data', icon: Database, label: 'Данные' },
   { href: '/admin/telegram', icon: MessageSquare, label: 'Telegram' },
-  { href: '/dashboard', icon: LayoutDashboard, label: 'Дашборд' },
+  { href: '/admin/realms', icon: Shield, label: 'Реалмы' },
+
 ];
 
 function AdminSidebar() {

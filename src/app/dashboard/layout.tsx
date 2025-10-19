@@ -30,6 +30,10 @@ import {
   Users,
   LineChart,
   Hammer,
+  Axe,
+  Pickaxe,
+  Swords,
+  Store,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -50,11 +54,13 @@ const navItems = [
   { href: '/dashboard/analytics', icon: LineChart, label: 'Аналитика' },
   { href: '/dashboard/map', icon: Map, label: 'Карта Мира' },
   { href: '/dashboard/crafting', icon: Hammer, label: 'Крафт' },
+  { href: '/dashboard/gathering', icon: Pickaxe, label: 'Добыча' },
   { href: '/dashboard/quests', icon: BookOpen, label: 'Журнал Заданий' },
   { href: '/dashboard/factions', icon: Shield, label: 'Фракции' },
   { href: '/dashboard/society', icon: Users, label: 'Общество' },
+  { href: '/dashboard/market', icon: Store, label: 'Ларьки' },
   { href: '/dashboard/chronicle', icon: BookMarked, label: 'Летопись' },
-  { href: '/dashboard/arena', icon: ShieldCheck, label: 'Арена' },
+  { href: '/dashboard/arena', icon: Swords, label: 'Арена' },
 ];
 
 function RealmSelector() {

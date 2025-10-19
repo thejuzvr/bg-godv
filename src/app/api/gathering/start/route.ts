@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import * as storage from '@/server/storage';
+import * as storage from '@/../server/storage';
 import { getNodesAtLocation } from '@/data/resourceNodes';
 
 export async function POST(req: NextRequest) {
