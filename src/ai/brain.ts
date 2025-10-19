@@ -417,7 +417,69 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
         return Math.floor(equippedArmorSum / 5);
     };
     
-    // Compute disease-based damage modifiers for hero
+    // Perk helpers
+    const hasPerk = (perkId: string) => Array.isArray(updatedChar.unlockedPerks) && updatedChar.unlockedPerks.includes(perkId);
+    const applyArmorPerkBonus = (acFromGear: number): number => {
+        // +20% from heavy/light armor first-tier perks if present
+        let bonus = 0;
+        if (hasPerk('heavyArmor_juggernaut_1')) bonus = Math.max(bonus, Math.floor(acFromGear * 0.2));
+        if (hasPerk('lightArmor_agile_defender_1')) bonus = Math.max(bonus, Math.floor(acFromGear * 0.2));
+        return acFromGear + bonus;
+    };
+
+    // Advantage state helpers
+    const combineAdv = (states: Array<'adv' | 'dis' | 'none'>): 'adv' | 'dis' | 'none' => {
+        let score = 0;
+        for (const s of states) score += s === 'adv' ? 1 : s === 'dis' ? -1 : 0;
+        return score > 0 ? 'adv' : score < 0 ? 'dis' : 'none';
+    };
+    const getHeroAdvantage = (): 'adv' | 'dis' | 'none' => {
+        const sp = updatedChar.stats.stamina.current;
+        const spMax = Math.max(1, updatedChar.stats.stamina.max);
+        const lowSp = sp / spMax < 0.15 ? 'dis' : 'none';
+        // Weather: Rain/Fog помеха для атак ближнего боя
+        const weatherState = (updatedChar.weather === 'Rain' || updatedChar.weather === 'Fog') ? 'dis' : 'none';
+        // Effects: Ликантроп ночью — преимущество; Вампиризм днём — помеха
+        const effLycan = hasLycanthropy && updatedChar.timeOfDay === 'night' ? 'adv' : 'none';
+        const effVamp = hasVampirism && updatedChar.timeOfDay === 'day' ? 'dis' : 'none';
+        return combineAdv([lowSp, weatherState, effLycan, effVamp]);
+    };
+    const getEnemyAdvantage = (): 'adv' | 'dis' | 'none' => {
+        const baseEnemy = baseEnemyDef as any;
+        const nocturnal = Array.isArray(baseEnemy?.traits) && baseEnemy.traits.includes('nocturnal');
+        const nightBoost = nocturnal && updatedChar.timeOfDay === 'night' ? 'adv' : 'none';
+        return combineAdv([nightBoost]);
+    };
+
+    // D20 roll with (dis)advantage and analytics
+    const rollD20AdvLocal = (character: Character, adv: 'adv' | 'dis' | 'none'): { roll: number, updatedCharacter: Character } => {
+        const a = Math.floor(Math.random() * 20) + 1;
+        const b = Math.floor(Math.random() * 20) + 1;
+        const chosen = adv === 'adv' ? Math.max(a, b) : adv === 'dis' ? Math.min(a, b) : a;
+        const updated = structuredClone(character);
+        if (!updated.analytics) {
+            updated.analytics = { killedEnemies: {}, diceRolls: { d20: Array(21).fill(0) }, encounteredEnemies: [], epicPhrases: [] } as any;
+        }
+        // Record only the chosen outcome for telemetry compactness
+        (updated.analytics.diceRolls.d20[chosen] ||= 0);
+        updated.analytics.diceRolls.d20[chosen]++;
+        try {
+            if (!updated.analytics.diceRollsRaw) updated.analytics.diceRollsRaw = [];
+            updated.analytics.diceRollsRaw.push(adv === 'none' ? [a] : [a, b]);
+        } catch {}
+        return { roll: chosen, updatedCharacter: updated };
+    };
+
+    // Damage dice mapping for legacy numeric weapon damage
+    const mapLegacyDamageToDie = (legacy: number): string => {
+        if (legacy <= 2) return '1d4';
+        if (legacy <= 4) return '1d6';
+        if (legacy <= 6) return '1d8';
+        if (legacy <= 8) return '1d10';
+        return '1d12';
+    };
+
+    // Compute damage/resource modifiers from effects and perks
     const hasVampirism = updatedChar.effects.some(e => e.id === 'disease_vampirism');
     const hasLycanthropy = updatedChar.effects.some(e => e.id === 'disease_lycanthropy');
     let heroDamageMultiplier = 1;
@@ -431,9 +493,32 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
     if (hasLycanthropy && updatedChar.timeOfDay === 'night') {
         heroDamageMultiplier *= 1.2; // Night bonus
     }
+    // Faction perk: Companions' Valor — +10% damage when below 50% HP
+    try {
+        const hpRatio = updatedChar.stats.health.current / Math.max(1, updatedChar.stats.health.max);
+        if (hpRatio < 0.5 && hasPerk('perk_companions_valor')) heroDamageMultiplier *= 1.1;
+        if (hasPerk('oneHanded_armsman_2')) heroDamageMultiplier *= 1.125; // mild extra beyond 20%
+    } catch {}
 
-    // --- Hero's Turn ---
-    logMessages.push('--- Ход героя ---');
+    // Initiative each round
+    const heroIniRoll = Math.floor(Math.random() * 20) + 1;
+    const enemyIniRoll = Math.floor(Math.random() * 20) + 1;
+    const heroInitiative = heroIniRoll + getAttributeBonus(updatedChar.attributes.agility);
+    const enemyInitiative = enemyIniRoll + getAttributeBonus(baseEnemyDef?.level || 1);
+    const heroActsFirst = heroInitiative >= enemyInitiative;
+    updatedChar.combat.initiative = { hero: heroInitiative, enemy: enemyInitiative, acting: heroActsFirst ? 'hero' : 'enemy' };
+    logMessages.push(`Инициатива — Герой: ${heroInitiative}, ${enemy.name}: ${enemyInitiative}. Первый ход: ${heroActsFirst ? 'герой' : enemy.name}.`);
+
+    // Advantage state snapshot
+    const heroAdv = getHeroAdvantage();
+    const enemyAdv = getEnemyAdvantage();
+    updatedChar.combat.adv = { hero: heroAdv, enemy: enemyAdv };
+
+    // --- Turn blocks ---
+    let currentHeroAction: 'attack' | 'defend' | 'cast' | 'flee' = 'attack';
+    const doHeroTurn = async (): Promise<Character> => {
+        let c = updatedChar;
+        logMessages.push('--- Ход героя ---');
 
     // Shout reflex with cooldown (uses knownShouts if present)
     if (updatedChar.combat) {
@@ -470,13 +555,15 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             logMessages.push(`⚗️ Критическое состояние! Герой быстро выпивает ${healingPotion.name}, восстанавливая ${healAmount} здоровья.`);
             
             // Update combat enemy state before returning.
-            updatedChar.combat.enemy = enemy;
+            if (updatedChar.combat) {
+                updatedChar.combat.enemy = enemy;
+            }
             // Don't perform attack this turn, just use potion
             // Continue to enemy turn
         }
     }
     // Decide action: attack, defend, cast spell, or flee.
-    let heroAction: 'attack' | 'defend' | 'cast' | 'flee' = 'attack';
+    currentHeroAction = 'attack';
     const canCast = (updatedChar.knownSpells || []).some(id => (allSpells.find(s => s.id === id)?.manaCost || Infinity) <= updatedChar.stats.magicka.current);
     
     // Consider fleeing if very low health and no potions.
@@ -486,31 +573,32 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
     if (healthRatio < 0.25 && !updatedChar.combat!.fleeAttempted) {
         const hasHealingPotion = updatedChar.inventory.some(i => i.type === 'potion' && i.effect?.type === 'heal');
         if (!hasHealingPotion && !canCast) {
-            heroAction = 'flee'; // Try to flee if critically injured
+            currentHeroAction = 'flee'; // Try to flee if critically injured
         }
     }
     
-    if (heroAction !== 'flee') {
+    if (currentHeroAction !== 'flee') {
         if (canCast && updatedChar.stats.health.current < updatedChar.stats.health.max * 0.6) {
-            heroAction = 'cast'; // Prioritize healing
+            currentHeroAction = 'cast'; // Prioritize healing
         } else if (canCast && Math.random() < 0.3) {
-            heroAction = 'cast';
+            currentHeroAction = 'cast';
         } else if (updatedChar.stats.stamina.current > 20 && Math.random() < 0.25) {
-            heroAction = 'defend';
+            currentHeroAction = 'defend';
         }
     }
 
     // Perform action
-    if (heroAction === 'flee') {
+        if (currentHeroAction === 'flee') {
         updatedChar.combat!.fleeAttempted = true;
         
         // Apply weather and time modifiers to flee chance
         const weatherEffect = getWeatherModifiers(updatedChar.weather);
         const timeOfDayEffect = getTimeOfDayModifiers(updatedChar.timeOfDay);
         const fleeModifier = weatherEffect.stealthModifier + timeOfDayEffect.fleeChanceModifier;
-        const fleeDC = Math.max(5, 10 - Math.floor(fleeModifier)); // Lower DC is better
+            let fleeDC = Math.max(5, 10 - Math.floor(fleeModifier)); // Lower DC is better
+            if (hasPerk('perk_thieves_shadow')) fleeDC = Math.max(5, fleeDC - 2);
         
-        const { roll, updatedCharacter: charWithRoll } = rollD20(updatedChar);
+            const { roll, updatedCharacter: charWithRoll } = rollD20(updatedChar);
         updatedChar = charWithRoll;
         const fleeSuccess = roll >= fleeDC;
         
@@ -529,7 +617,11 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             logMessages.push(`🏃 Герой пытается сбежать, но ${enemy.name} преграждает путь! (бросок: ${roll}, цель: ${fleeDC})`);
             // Fleeing failed, enemy gets a free attack
         }
-    } else if (heroAction === 'attack') {
+        } else if (currentHeroAction === 'attack') {
+            // Stamina cost for attack
+            let attackCost = 5;
+            if (hasPerk('oneHanded_fighting_stance')) attackCost = Math.ceil(attackCost * 0.75);
+            updatedChar.stats.stamina.current = Math.max(0, updatedChar.stats.stamina.current - attackCost);
         const strengthBonus = getAttributeBonus(updatedChar.attributes.strength);
         const skillBonus = Math.floor(updatedChar.skills.oneHanded / 5);
         const totalBonus = strengthBonus + skillBonus;
@@ -539,24 +631,34 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
         const weatherModifier = weatherEffect.attackModifier;
         const weatherBonusText = weatherModifier !== 0 ? ` (погода: ${weatherModifier > 0 ? '+' : ''}${weatherModifier})` : '';
 
-        const { roll, updatedCharacter: charWithRoll } = rollD20(updatedChar);
-        updatedChar = charWithRoll;
-        const totalRoll = roll + totalBonus + weatherModifier;
+            const { roll, updatedCharacter: charWithRoll } = rollD20AdvLocal(updatedChar, heroAdv);
+            updatedChar = charWithRoll;
+            const totalRoll = roll + totalBonus + weatherModifier;
 
-        const success = totalRoll >= enemy.armor;
-        updatedChar.combat!.lastRoll = { actor: 'hero', action: 'Атака', roll, bonus: totalBonus + weatherModifier, total: totalRoll, target: enemy.armor, success };
-        logMessages.push(`Бросок атаки: ${roll} + ${strengthBonus} (сила) + ${skillBonus} (навык)${weatherBonusText} = ${totalRoll} (цель: ${enemy.armor})`);
+            const enemyArmorTarget = (enemy.armor + (baseEnemyDef?.defenseBonus || 0));
+            const success = totalRoll >= enemyArmorTarget;
+            updatedChar.combat!.lastRoll = { actor: 'hero', action: 'Атака', roll, bonus: totalBonus + weatherModifier, total: totalRoll, target: enemyArmorTarget, success };
+            logMessages.push(`Бросок атаки: ${roll}${heroAdv !== 'none' ? ` (${heroAdv === 'adv' ? 'преимущество' : 'помеха'})` : ''} + ${strengthBonus} (сила) + ${skillBonus} (навык)${weatherBonusText} = ${totalRoll} (цель: ${enemyArmorTarget})`);
 
-        if (roll === 20) {
-            const weaponId = updatedChar.equippedItems.weapon;
-            const weapon = weaponId ? updatedChar.inventory.find((i: CharacterInventoryItem) => i.id === weaponId) : null;
-            const baseDamage = 1 + getAttributeBonus(updatedChar.attributes.strength);
-            let heroDamage = Math.max(1, Math.floor(((weapon ? weapon.damage || 1 : 1) + baseDamage) * 2 * heroDamageMultiplier)); // Double damage with mods
-            enemy.health.current -= heroDamage;
-            updatedChar.combat!.totalDamageDealt = (updatedChar.combat!.totalDamageDealt || 0) + heroDamage;
-            const msg = `🎲 Критический успех! Герой наносит сокрушительный удар на ${heroDamage} урона!`;
-            logMessages.push(msg);
-        } else if (roll === 1) {
+            if (roll === 20) {
+                const weaponId = updatedChar.equippedItems.weapon;
+                const weapon = weaponId ? updatedChar.inventory.find((i: CharacterInventoryItem) => i.id === weaponId) : null;
+                const baseDamage = getAttributeBonus(updatedChar.attributes.strength);
+                const dieStr = (weapon && weapon.damageDice) ? weapon.damageDice : mapLegacyDamageToDie(weapon ? (weapon.damage || 1) : 1);
+                const sides = parseInt(dieStr.split('d')[1], 10);
+                const critRoll1 = Math.floor(Math.random() * sides) + 1;
+                const critRoll2 = Math.floor(Math.random() * sides) + 1;
+                let heroDamage = critRoll1 + critRoll2 + baseDamage; // roll dice twice on crit
+                // Perk: Armsman +20%
+                if (hasPerk('oneHanded_armsman_1')) heroDamage = Math.floor(heroDamage * 1.2);
+                // Low stamina penalty
+                if (heroAdv === 'dis') heroDamage = Math.floor(heroDamage * 0.75);
+                heroDamage = Math.max(1, Math.floor(heroDamage * heroDamageMultiplier));
+                enemy.health.current -= heroDamage;
+                updatedChar.combat!.totalDamageDealt = (updatedChar.combat!.totalDamageDealt || 0) + heroDamage;
+                const msg = `🎲 Критический успех! Герой наносит сокрушительный удар на ${heroDamage} урона!`;
+                logMessages.push(msg);
+            } else if (roll === 1) {
             const fumblePhrases = [
                 "Герой спотыкается о собственный ботинок и роняет оружие. Какой позор!",
                 "Замахнувшись, герой случайно бьет себя по колену. -2 здоровья.",
@@ -567,35 +669,45 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
                 updatedChar.stats.health.current -= 2;
                 updatedChar.combat!.totalDamageTaken = (updatedChar.combat!.totalDamageTaken || 0) + 2;
             }
-        } else if (success) {
-            const weaponId = updatedChar.equippedItems.weapon;
-            const weapon = weaponId ? updatedChar.inventory.find((i: CharacterInventoryItem) => i.id === weaponId) : null;
-            const baseDamage = 1 + getAttributeBonus(updatedChar.attributes.strength);
-            let heroDamage = Math.max(1, Math.floor(((weapon ? weapon.damage || 1 : 1) + baseDamage) * heroDamageMultiplier));
-            enemy.health.current -= heroDamage;
-            logMessages.push(`Попадание! Герой наносит ${heroDamage} урона.`);
-            updatedChar.combat!.totalDamageDealt = (updatedChar.combat!.totalDamageDealt || 0) + heroDamage;
-        } else {
-            logMessages.push("Промах! Враг увернулся от удара.");
-        }
+            } else if (success) {
+                const weaponId = updatedChar.equippedItems.weapon;
+                const weapon = weaponId ? updatedChar.inventory.find((i: CharacterInventoryItem) => i.id === weaponId) : null;
+                const baseDamage = getAttributeBonus(updatedChar.attributes.strength);
+                const dieStr = (weapon && weapon.damageDice) ? weapon.damageDice : mapLegacyDamageToDie(weapon ? (weapon.damage || 1) : 1);
+                const dieSides = parseInt(dieStr.split('d')[1], 10);
+                const rollDmg = Math.floor(Math.random() * dieSides) + 1;
+                let heroDamage = rollDmg + baseDamage;
+                if (hasPerk('oneHanded_armsman_1')) heroDamage = Math.floor(heroDamage * 1.2);
+                if (heroAdv === 'dis') heroDamage = Math.floor(heroDamage * 0.75);
+                heroDamage = Math.max(1, Math.floor(heroDamage * heroDamageMultiplier));
+                enemy.health.current -= heroDamage;
+                logMessages.push(`Попадание! Герой наносит ${heroDamage} урона.`);
+                updatedChar.combat!.totalDamageDealt = (updatedChar.combat!.totalDamageDealt || 0) + heroDamage;
+            } else {
+                logMessages.push("Промах! Враг увернулся от удара.");
+            }
 
-    } else if (heroAction === 'defend') {
-        updatedChar.stats.stamina.current -= 10;
-        logMessages.push(`Герой готовится к защите, тратя 10 выносливости.`);
-        // The effect of defending will be applied on the enemy's turn.
-    } else if (heroAction === 'cast') {
+        } else if (currentHeroAction === 'defend') {
+            let defendCost = 10;
+            if (hasPerk('heavyArmor_conditioning')) defendCost = Math.ceil(defendCost * 0.8);
+            updatedChar.stats.stamina.current = Math.max(0, updatedChar.stats.stamina.current - defendCost);
+            logMessages.push(`Герой готовится к защите, тратя 10 выносливости.`);
+            // The effect of defending will be applied on the enemy's turn.
+        } else if (currentHeroAction === 'cast') {
         const knownSpells = (updatedChar.knownSpells || []).map(id => allSpells.find(s => s.id === id)).filter(Boolean) as Spell[];
         const spellToCast = knownSpells.find(s => s.manaCost <= updatedChar.stats.magicka.current);
 
-        if (spellToCast) {
-            updatedChar.stats.magicka.current -= spellToCast.manaCost;
+            if (spellToCast) {
+                let manaCost = spellToCast.manaCost;
+                if (hasPerk('perk_mages_attunement')) manaCost = Math.ceil(manaCost * 0.9);
+                updatedChar.stats.magicka.current = Math.max(0, updatedChar.stats.magicka.current - manaCost);
             const castBonus = getAttributeBonus(updatedChar.attributes.intelligence);
-            const { roll, updatedCharacter: charWithRoll } = rollD20(updatedChar);
+                const { roll, updatedCharacter: charWithRoll } = rollD20(updatedChar);
             updatedChar = charWithRoll;
             const totalRoll = roll + castBonus;
             const success = totalRoll >= 10; // Simple magic success check.
             updatedChar.combat!.lastRoll = { actor: 'hero', action: `Колдует: ${spellToCast.name}`, roll, bonus: castBonus, total: totalRoll, target: 10, success };
-            logMessages.push(`Бросок магии: ${roll} + ${castBonus} (бонус) = ${totalRoll} (цель: 10)`);
+                logMessages.push(`Бросок магии: ${roll} + ${castBonus} (бонус) = ${totalRoll} (цель: 10)`);
             
             if (success) {
                 switch(spellToCast.type) {
@@ -613,12 +725,88 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             } else {
                 logMessages.push("Заклинание рассеялось в воздухе, не достигнув цели.");
             }
+            } else {
+                logMessages.push("Герой пытается колдовать, но не хватает магии.");
+            }
+        }
+
+        updatedChar.combat!.enemy = enemy; // Persist enemy state changes
+        return updatedChar;
+    };
+
+    const doEnemyTurn = async (): Promise<Character> => {
+        let c = updatedChar;
+        // --- Enemy's Turn ---
+        logMessages.push(`--- Ход ${enemy.name} ---`);
+        if (updatedChar.combat && (updatedChar.combat.enemyStunnedRounds || 0) > 0) {
+            updatedChar.combat.enemyStunnedRounds = Math.max(0, (updatedChar.combat.enemyStunnedRounds || 0) - 1);
+            logMessages.push(`${enemy.name} оглушен и пропускает ход.`);
+            updatedChar.combat.enemy = enemy;
+            return updatedChar;
+        }
+        const enemyAttackBonus = getAttributeBonus(baseEnemyDef?.level || 1) + (baseEnemyDef?.attackBonus || 0);
+        // Apply Shield Wall perk: disadvantage to enemy when hero defends and acted first
+        let enemyTurnAdv = enemyAdv;
+        const defendApplies = heroActsFirst && currentHeroAction === 'defend';
+        if (defendApplies && hasPerk('block_shield_wall_1')) {
+            enemyTurnAdv = enemyTurnAdv === 'adv' ? 'none' : enemyTurnAdv === 'none' ? 'dis' : 'dis';
+        }
+        const { roll: enemyRoll, updatedCharacter: charAfterEnemyRoll } = rollD20AdvLocal(updatedChar, enemyTurnAdv);
+        updatedChar = charAfterEnemyRoll;
+        let enemyTotalRoll = enemyRoll + enemyAttackBonus;
+        
+        // Calculate hero armor class (defense target)
+        const equipmentACBase = computeEquipmentArmorClass(updatedChar);
+        const equipmentAC = applyArmorPerkBonus(equipmentACBase);
+        const MAX_AC = 25; // Avoid unreachable targets (no 30+ AC)
+        let heroDefenseTarget = 10 + getAttributeBonus(updatedChar.attributes.agility) + equipmentAC;
+        if (defendApplies) {
+            heroDefenseTarget += 5 + getAttributeBonus(updatedChar.attributes.strength);
+        }
+        heroDefenseTarget = Math.max(8, Math.min(MAX_AC, heroDefenseTarget));
+
+        const enemySuccess = enemyTotalRoll >= heroDefenseTarget;
+        updatedChar.combat!.lastRoll = { actor: 'enemy', action: 'Атака', roll: enemyRoll, bonus: enemyAttackBonus, total: enemyTotalRoll, target: heroDefenseTarget, success: enemySuccess };
+        logMessages.push(`Бросок атаки врага: ${enemyRoll}${enemyTurnAdv !== 'none' ? ` (${enemyTurnAdv === 'adv' ? 'преимущество' : 'помеха'})` : ''} + ${enemyAttackBonus} (бонус) = ${enemyTotalRoll} (цель: ${heroDefenseTarget})`);
+
+        if (enemyRoll === 20) {
+            let damageTaken = Math.max(1, Math.floor((baseEnemyDef!.damage + (baseEnemyDef?.damageBonus || 0)) * 1.5));
+            updatedChar.stats.health.current -= damageTaken;
+            updatedChar.combat!.totalDamageTaken = (updatedChar.combat!.totalDamageTaken || 0) + damageTaken;
+            logMessages.push(`🎲 Критический удар! ${enemy.name} наносит ${damageTaken} урона.`);
+            // Attempt to infect on critical hit as well
+            updatedChar = tryApplyInfection(updatedChar, baseEnemyDef, logMessages);
+        } else if (enemyRoll === 1) {
+            logMessages.push(`🎲 Критический провал! ${enemy.name} спотыкается и падает, не нанося урона.`);
+        } else if (enemySuccess) {
+            let damageTaken = Math.max(1, (baseEnemyDef!.damage + (baseEnemyDef?.damageBonus || 0)));
+            if (defendApplies) {
+                damageTaken = Math.floor(damageTaken / 2);
+                logMessages.push("Герой успешно блокирует, получив лишь половину урона!");
+            }
+            updatedChar.stats.health.current -= damageTaken;
+            updatedChar.combat!.totalDamageTaken = (updatedChar.combat!.totalDamageTaken || 0) + damageTaken;
+            logMessages.push(`${enemy.name} попадает, нанося ${damageTaken} урона.`);
+            // Attempt to infect on successful hit
+            updatedChar = tryApplyInfection(updatedChar, baseEnemyDef, logMessages);
         } else {
-             logMessages.push("Герой пытается колдовать, но не хватает магии.");
+            logMessages.push("Герой ловко уворачивается от атаки!");
+        }
+        return updatedChar;
+    };
+
+    // Execute turns in initiative order
+    if (heroActsFirst) {
+        updatedChar = await doHeroTurn();
+        if (updatedChar.combat && updatedChar.combat.enemy.health.current > 0 && updatedChar.stats.health.current > 0) {
+            updatedChar = await doEnemyTurn();
+        }
+    } else {
+        updatedChar = await doEnemyTurn();
+        if (updatedChar.combat && updatedChar.combat.enemy.health.current > 0 && updatedChar.stats.health.current > 0) {
+            updatedChar = await doHeroTurn();
         }
     }
-
-    updatedChar.combat!.enemy = enemy; // Persist enemy state changes
 
     if (enemy.health.current <= 0) {
         let winMsg = `Герой победил ${enemy.name}.`;
@@ -748,56 +936,6 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
         return updatedChar;
     }
     
-    // --- Enemy's Turn ---
-    logMessages.push(`--- Ход ${enemy.name} ---`);
-    if (updatedChar.combat && (updatedChar.combat.enemyStunnedRounds || 0) > 0) {
-        updatedChar.combat.enemyStunnedRounds = Math.max(0, (updatedChar.combat.enemyStunnedRounds || 0) - 1);
-        logMessages.push(`${enemy.name} оглушен и пропускает ход.`);
-        updatedChar.combat.enemy = enemy;
-        return updatedChar;
-    }
-    const enemyAttackBonus = getAttributeBonus(baseEnemyDef?.level || 1);
-    const { roll: enemyRoll, updatedCharacter: charAfterEnemyRoll } = rollD20(updatedChar);
-    updatedChar = charAfterEnemyRoll;
-    let enemyTotalRoll = enemyRoll + enemyAttackBonus;
-    
-    // Calculate hero armor class (defense target)
-    const equipmentAC = computeEquipmentArmorClass(updatedChar);
-    const MAX_AC = 25; // Avoid unreachable targets (no 30+ AC)
-    let heroDefenseTarget = 10 + getAttributeBonus(updatedChar.attributes.agility) + equipmentAC;
-    if (heroAction === 'defend') {
-        heroDefenseTarget += 5 + getAttributeBonus(updatedChar.attributes.strength);
-    }
-    heroDefenseTarget = Math.max(8, Math.min(MAX_AC, heroDefenseTarget));
-
-    const enemySuccess = enemyTotalRoll >= heroDefenseTarget;
-    updatedChar.combat!.lastRoll = { actor: 'enemy', action: 'Атака', roll: enemyRoll, bonus: enemyAttackBonus, total: enemyTotalRoll, target: heroDefenseTarget, success: enemySuccess };
-    logMessages.push(`Бросок атаки врага: ${enemyRoll} + ${enemyAttackBonus} (бонус) = ${enemyTotalRoll} (цель: ${heroDefenseTarget})`);
-
-    if (enemyRoll === 20) {
-        let damageTaken = Math.max(1, Math.floor(baseEnemyDef!.damage * 1.5));
-        updatedChar.stats.health.current -= damageTaken;
-        updatedChar.combat!.totalDamageTaken = (updatedChar.combat!.totalDamageTaken || 0) + damageTaken;
-        logMessages.push(`🎲 Критический удар! ${enemy.name} наносит ${damageTaken} урона.`);
-        // Attempt to infect on critical hit as well
-        updatedChar = tryApplyInfection(updatedChar, baseEnemyDef, logMessages);
-    } else if (enemyRoll === 1) {
-        logMessages.push(`🎲 Критический провал! ${enemy.name} спотыкается и падает, не нанося урона.`);
-    } else if (enemySuccess) {
-        let damageTaken = Math.max(1, baseEnemyDef!.damage);
-        if (heroAction === 'defend') {
-            damageTaken = Math.floor(damageTaken / 2);
-            logMessages.push("Герой успешно блокирует, получив лишь половину урона!");
-        }
-        updatedChar.stats.health.current -= damageTaken;
-        updatedChar.combat!.totalDamageTaken = (updatedChar.combat!.totalDamageTaken || 0) + damageTaken;
-        logMessages.push(`${enemy.name} попадает, нанося ${damageTaken} урона.`);
-        // Attempt to infect on successful hit
-        updatedChar = tryApplyInfection(updatedChar, baseEnemyDef, logMessages);
-    } else {
-        logMessages.push("Герой ловко уворачивается от атаки!");
-    }
-
     if (updatedChar.stats.health.current > 0) {
         // Log only at thresholds 75/50/25/10/1% to reduce spam
         try {
@@ -822,6 +960,25 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             logMessages.push(`У героя осталось ${Math.max(0, updatedChar.stats.health.current)} здоровья.`);
         }
     }
+
+    // In-combat regeneration (small), influenced by weather/time of day and perks
+    try {
+        const w = getWeatherModifiers(updatedChar.weather);
+        const t = getTimeOfDayModifiers(updatedChar.timeOfDay);
+        const regenMultH = Math.max(0, w.regenModifier.health * t.regenModifier.health);
+        const regenMultM = Math.max(0, w.regenModifier.magicka * t.regenModifier.magicka);
+        const regenMultS = Math.max(0, w.regenModifier.stamina * t.regenModifier.stamina);
+        const baseH = 0, baseM = 1, baseS = 2;
+        let addH = Math.floor(baseH * regenMultH);
+        let addM = Math.max(0, Math.floor(baseM * regenMultM));
+        let addS = Math.max(0, Math.floor(baseS * regenMultS));
+        if (hasPerk('lightArmor_windwalker')) addS += 1;
+        updatedChar.stats.magicka.current = Math.min(updatedChar.stats.magicka.max, updatedChar.stats.magicka.current + addM);
+        updatedChar.stats.stamina.current = Math.min(updatedChar.stats.stamina.max, updatedChar.stats.stamina.current + addS);
+        if (addH > 0) {
+            updatedChar.stats.health.current = Math.min(updatedChar.stats.health.max, updatedChar.stats.health.current + addH);
+        }
+    } catch {}
 
     // Append this round's messages to persistent combat log
     if (updatedChar.combat?.combatLog) {
@@ -3068,7 +3225,14 @@ async function determineNextAction(character: Character, gameData: GameData): Pr
         const recentTypeCount = countRecentActions(character, a.type, 8);
         const repMod = computeRepetitionModifier(recentTypeCount);
         const socialBoost = a.type === 'social' ? (1 + Math.max(0, socialNudge)) : 1.0;
-        return { action: a, weight: base * pMod * gMod * catMod * repMod * reactionMultiplier * socialBoost };
+        // Explicit Trader weighting: boost actions that look like trading/selling/buying when greed is high
+        let tradeBoost = 1.0;
+        try {
+            const greed = Math.max(0, Math.min(100, (personality as any).traits?.greed ?? 50));
+            const isTradeLike = /торгов|продать|купить|market|sell|buy/i.test(a.name);
+            if (isTradeLike) tradeBoost = 1 + (greed / 100) * 0.4; // up to +40%
+        } catch {}
+        return { action: a, weight: base * pMod * gMod * catMod * repMod * reactionMultiplier * socialBoost * tradeBoost };
     }).filter(w => w.weight > 0.1);
 
     if (weighted.length === 0) return wanderAction;
@@ -3382,6 +3546,38 @@ try {
 // === Crafting actions ===
 import { listRecipes, performCraft } from '@/services/craftingService';
 
+// === Gathering action (resource mining) ===
+const gatherResourceAction: Action = {
+    name: 'Добывать руду',
+    type: 'explore',
+    getWeight: (char, world) => {
+        const atOutskirts = String(char.location || '').endsWith('_outskirts');
+        const staminaOk = (char.stats?.stamina?.current || 0) >= 10;
+        if (!world.isLocationSafe || !atOutskirts || !staminaOk) return 0;
+        const hasOre = (char.inventory || []).some(i => i.id.startsWith('ore_') && i.quantity > 3);
+        // Prefer gathering if low on ore or goal is earning gold (heuristic)
+        const base = hasOre ? Priority.LOW : Priority.MEDIUM;
+        return priorityToWeight(base);
+    },
+    canPerform: (char, world) => {
+        const atOutskirts = String(char.location || '').endsWith('_outskirts');
+        return world.isLocationSafe && atOutskirts && (char.stats?.stamina?.current || 0) >= 10;
+    },
+    async perform(character) {
+        let updated = structuredClone(character);
+        const staminaCost = 10;
+        const qty = 1 + Math.floor(Math.random() * 2); // 1-2
+        // Prefer iron as baseline near most outskirts
+        const oreId = 'ore_iron';
+        const inv = updated.inventory;
+        const it = inv.find(i => i.id === oreId);
+        if (it) it.quantity += qty; else inv.push({ id: oreId, name: 'Железная руда', weight: 1, type: 'misc', quantity: qty } as any);
+        updated.stats.stamina.current = Math.max(0, updated.stats.stamina.current - staminaCost);
+        updated = addToActionHistory(updated, 'explore');
+        return { character: updated, logMessage: `Герой добыл железную руду x${qty}.` };
+    }
+};
+
 const craftSomethingAction: Action = {
     name: 'Скрафтить предмет',
     type: 'learn',
@@ -3404,6 +3600,9 @@ const craftSomethingAction: Action = {
     }
 };
 
+try {
+    if (!idleActions.includes((gatherResourceAction as any))) idleActions.splice(13, 0, gatherResourceAction);
+} catch {}
 try {
     if (!idleActions.includes((craftSomethingAction as any))) idleActions.splice(13, 0, craftSomethingAction);
 } catch {}

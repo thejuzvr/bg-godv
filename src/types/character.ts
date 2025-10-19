@@ -45,6 +45,8 @@ export interface Analytics {
     diceRolls: {
         d20: number[]; // Array of size 21, index corresponds to roll result (1-20)
     };
+    // Optional raw d20 pairs for advantage/disadvantage telemetry
+    diceRollsRaw?: number[][];
     encounteredEnemies: string[]; // List of unique enemy IDs
     epicPhrases: string[];
     // Optional action category counters for telemetry (non-critical)
@@ -99,6 +101,9 @@ export interface CombatState {
     shoutUsed?: boolean; // legacy single-use flag (kept for compatibility)
     shoutCooldownRoundsRemaining?: number; // generic cooldown for next shout use
     enemyStunnedRounds?: number; // number of enemy turns to skip
+    // Initiative and advantage/disadvantage context
+    initiative?: { hero: number; enemy: number; acting: 'hero' | 'enemy' };
+    adv?: { hero: 'adv' | 'dis' | 'none'; enemy: 'adv' | 'dis' | 'none' };
     lastRoll?: {
       actor: 'hero' | 'enemy';
       action: string;
@@ -136,6 +141,7 @@ export interface CharacterInventoryItem {
     rarity?: Rarity;
     equipmentSlot?: EquipmentSlot;
     damage?: number;
+    damageDice?: string; // e.g., "1d8"
     armor?: number;
     effect?: {
         id?: string; // Unique ID for the effect, used to check if it's already active

@@ -1,10 +1,19 @@
 import { NextRequest } from 'next/server';
 import { listRecipes } from '@/services/craftingService';
-import { gameDataService } from '@/../server/game-data-service';
+import * as storage from '../../../../../server/storage';
+import { gameDataService } from '../../../../../server/game-data-service';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const d = searchParams.get('discipline') as any;
+  const characterId = searchParams.get('characterId');
+  let unlocked: Set<string> | null = null;
+  if (characterId) {
+    try {
+      const c: any = await storage.getCharacterById(String(characterId));
+      if (c && Array.isArray(c.unlockedRecipes)) unlocked = new Set(c.unlockedRecipes);
+    } catch {}
+  }
   const rows = await listRecipes(d || undefined);
   // Attach Russian names to inputs/outputs using items table
   let items: any[] = [];
@@ -31,6 +40,7 @@ export async function GET(req: NextRequest) {
   };
   const recipes = (rows as any[]).map((r) => ({
     ...r,
+    locked: unlocked ? !unlocked.has(String((r as any).id)) : false,
     inputs: (r.inputs || []).map((i: any) => {
       const alias = ALIASES[i.id];
       const item = map.get(i.id) || (alias?.id ? map.get(alias.id) : null);

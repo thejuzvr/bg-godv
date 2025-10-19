@@ -79,13 +79,13 @@ export const initialItems: BaseItem[] = [
   
   // === WEAPONS ===
   // Iron
-  { id: 'weapon_dagger_iron', name: 'Железный кинжал', weight: 2, type: 'weapon', rarity: 'common', damage: 4, equipmentSlot: 'weapon' },
-  { id: 'weapon_sword_iron', name: 'Железный меч', weight: 9, type: 'weapon', rarity: 'common', damage: 7, equipmentSlot: 'weapon' },
-  { id: 'weapon_axe_iron', name: 'Железный топор', weight: 11, type: 'weapon', rarity: 'common', damage: 8, equipmentSlot: 'weapon' },
+  { id: 'weapon_dagger_iron', name: 'Железный кинжал', weight: 2, type: 'weapon', rarity: 'common', damage: 4, damageDice: '1d4', equipmentSlot: 'weapon' },
+  { id: 'weapon_sword_iron', name: 'Железный меч', weight: 9, type: 'weapon', rarity: 'common', damage: 7, damageDice: '1d8', equipmentSlot: 'weapon' },
+  { id: 'weapon_axe_iron', name: 'Железный топор', weight: 11, type: 'weapon', rarity: 'common', damage: 8, damageDice: '1d8', equipmentSlot: 'weapon' },
   { id: 'weapon_mace_iron', name: 'Железная булава', weight: 13, type: 'weapon', rarity: 'common', damage: 9, equipmentSlot: 'weapon' },
   // Steel
   { id: 'weapon_dagger_steel', name: 'Стальной кинжал', weight: 2.5, type: 'weapon', rarity: 'uncommon', damage: 5, equipmentSlot: 'weapon' },
-  { id: 'weapon_sword_steel', name: 'Стальной меч', weight: 10, type: 'weapon', rarity: 'uncommon', damage: 8, equipmentSlot: 'weapon' },
+  { id: 'weapon_sword_steel', name: 'Стальной меч', weight: 10, type: 'weapon', rarity: 'uncommon', damage: 8, damageDice: '1d8', equipmentSlot: 'weapon' },
   { id: 'weapon_axe_steel', name: 'Стальной боевой топор', weight: 12, type: 'weapon', rarity: 'uncommon', damage: 9, equipmentSlot: 'weapon' },
   { id: 'weapon_mace_steel', name: 'Стальная булава', weight: 14, type: 'weapon', rarity: 'uncommon', damage: 10, equipmentSlot: 'weapon' },
   // Orcish

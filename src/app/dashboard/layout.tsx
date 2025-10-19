@@ -45,10 +45,10 @@ import { Input } from '@/components/ui/input';
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Дашборд' },
   { href: '/dashboard/character', icon: UserIcon, label: 'Персонаж' },
+  { href: '/dashboard/inventory', icon: Backpack, label: 'Инвентарь' },
+  { href: '/dashboard/mind', icon: BrainCircuit, label: 'Сознание' },
   { href: '/dashboard/analytics', icon: LineChart, label: 'Аналитика' },
   { href: '/dashboard/map', icon: Map, label: 'Карта Мира' },
-  { href: '/dashboard/mind', icon: BrainCircuit, label: 'Сознание' },
-  { href: '/dashboard/inventory', icon: Backpack, label: 'Инвентарь' },
   { href: '/dashboard/crafting', icon: Hammer, label: 'Крафт' },
   { href: '/dashboard/quests', icon: BookOpen, label: 'Журнал Заданий' },
   { href: '/dashboard/factions', icon: Shield, label: 'Фракции' },

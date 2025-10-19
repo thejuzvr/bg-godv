@@ -139,6 +139,12 @@ export const characters = pgTable('characters', {
   // Game time and mood
   gameDate: bigint('game_date', { mode: 'number' }).notNull(),
   mood: real('mood').notNull().default(50),
+
+  // Crafting progression and unlocks (lightweight v1)
+  craftingLevel: integer('crafting_level').notNull().default(1),
+  craftingXp: integer('crafting_xp').notNull().default(0),
+  craftingPoints: integer('crafting_points').notNull().default(0),
+  unlockedRecipes: jsonb('unlocked_recipes').$type<string[]>(),
   
   // Perks and preferences
   unlockedPerks: jsonb('unlocked_perks').$type<string[]>(),
@@ -480,6 +486,15 @@ export const characterCraftingSkills = pgTable('character_crafting_skills', {
   level: integer('level').notNull().default(1),
   xp: integer('xp').notNull().default(0),
   createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// === ECONOMY (GLOBAL MARKET v1) ===
+export const globalMarket = pgTable('global_market', {
+  itemId: text('item_id').primaryKey(),
+  price: real('price').notNull(),
+  supply: bigint('supply', { mode: 'number' }).notNull().default(0),
+  demand: bigint('demand', { mode: 'number' }).notNull().default(0),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 

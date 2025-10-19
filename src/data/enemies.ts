@@ -122,6 +122,8 @@ export const initialEnemies: Enemy[] = [
     level: 10,
     armor: 16,
     isUnique: true,
+    traits: ['ancient'],
+    defenseBonus: 2,
     guaranteedDrop: [{ id: 'item_key_dragon_claw', quantity: 1 }],
   },
   { 
@@ -263,6 +265,8 @@ export const initialEnemies: Enemy[] = [
     xp: 80,
     level: 5,
     armor: 12,
+    traits: ['nocturnal'],
+    attackBonus: 1,
     lootTable: {
       common: [ { id: 'misc_lockpicks', quantity: 1, chance: 0.6 } ],
       uncommon: [ { id: 'potion_health_weak', quantity: 1, chance: 0.25 } ],
@@ -291,6 +295,9 @@ export const initialEnemies: Enemy[] = [
     level: 10,
     armor: 15,
     isUnique: false,
+    traits: ['nocturnal'],
+    attackBonus: 2,
+    defenseBonus: 1,
     lootTable: {
       common: [ { id: 'misc_lockpicks', quantity: 2, chance: 0.7 } ],
       uncommon: [ { id: 'potion_health_weak', quantity: 1, chance: 0.35 } ],
@@ -318,6 +325,8 @@ export const initialEnemies: Enemy[] = [
     xp: 180,
     level: 9,
     armor: 14,
+    traits: ['nocturnal'],
+    damageBonus: 2,
     lootTable: {
       common: [ { id: 'wolf_pelt', quantity: 2, chance: 0.9 } ],
       uncommon: [ { id: 'leather', quantity: 2, chance: 0.4 } ],
@@ -346,6 +355,9 @@ export const initialEnemies: Enemy[] = [
     level: 12,
     armor: 16,
     isUnique: false,
+    traits: ['nocturnal'],
+    attackBonus: 2,
+    damageBonus: 3,
     lootTable: {
       common: [ { id: 'wolf_pelt', quantity: 3, chance: 0.95 } ],
       uncommon: [ { id: 'leather', quantity: 3, chance: 0.5 } ],

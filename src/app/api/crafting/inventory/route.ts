@@ -16,7 +16,10 @@ export async function GET(req: NextRequest) {
   const list = inventory.map((i: any) => ({ id: i.id, name: map.get(i.id)?.name || i.name || i.id, quantity: i.quantity || 0 }));
   const byId: Record<string, { id: string; name: string; quantity: number }> = {};
   for (const it of list) byId[it.id] = it;
-  return new Response(JSON.stringify({ success: true, list, byId }), { headers: { 'content-type': 'application/json' } });
+  const craftingPoints = (character as any).craftingPoints || 0;
+  const craftingLevel = (character as any).craftingLevel || 1;
+  const craftingXp = (character as any).craftingXp || 0;
+  return new Response(JSON.stringify({ success: true, list, byId, craftingPoints, craftingLevel, craftingXp }), { headers: { 'content-type': 'application/json' } });
 }
 
 

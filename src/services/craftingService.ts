@@ -35,6 +35,13 @@ export async function performCraft(character: any, recipeId: string): Promise<{ 
   const [recipe] = await db.select().from(schema.craftingRecipes).where(eq(schema.craftingRecipes.id, recipeId)).limit(1);
   if (!recipe) return { error: 'Recipe not found' };
   let updated = structuredClone(character);
+  // Check unlock if gating enabled
+  const unlocked: string[] | undefined = (updated as any).unlockedRecipes || (updated as any).unlocked_recipes;
+  if (Array.isArray(unlocked) && unlocked.length > 0) {
+    if (!unlocked.includes(String((recipe as any).id))) {
+      return { error: 'Рецепт не изучен' };
+    }
+  }
   // Validate inputs
   for (const inp of (recipe as any).inputs) {
     const it = updated.inventory.find((i: any) => i.id === inp.id);
@@ -54,7 +61,27 @@ export async function performCraft(character: any, recipeId: string): Promise<{ 
   const ok = Math.random() < successChance;
   if (ok) {
     for (const out of (recipe as any).outputs) addItem(updated, out.id, out.quantity);
-    updated.xp.current += Math.max(0, (recipe as any).xp || 5);
+    const gain = Math.max(0, (recipe as any).xp || 5);
+    updated.xp.current += gain;
+    // crafting progression
+    try {
+      const prevXp = Number(updated.craftingXp || 0);
+      const prevLvl = Number(updated.craftingLevel || 1);
+      const nextXp = prevXp + gain;
+      updated.craftingXp = nextXp;
+      // Simple: level up each 100 XP, award 1 point on each level up
+      let levelsGained = Math.floor(nextXp / 100) - Math.floor(prevXp / 100);
+      if (levelsGained > 0) {
+        updated.craftingLevel = prevLvl + levelsGained;
+        updated.craftingPoints = Number(updated.craftingPoints || 0) + levelsGained;
+      }
+    } catch {}
+    // award crafting point from large crafts also
+    try {
+      const prev = Number(updated.craftingPoints || 0);
+      const award = Math.floor(gain / 100);
+      updated.craftingPoints = prev + award;
+    } catch {}
     return { character: updated, log: `Успех! Скрафтено по рецепту ${(recipe as any).name}.` };
   } else {
     return { character: updated, log: `Провал. Материалы потрачены.` };

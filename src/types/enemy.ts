@@ -26,6 +26,11 @@ export interface Enemy {
     isUnique?: boolean; // For quest bosses
     level?: number;
     armor?: number; // Armor class for defense rolls
+    // Optional combat modifiers
+    traits?: string[]; // e.g., ['nocturnal', 'brutal', 'ancient']
+    attackBonus?: number; // flat bonus to attack rolls
+    defenseBonus?: number; // flat bonus to defense/AC
+    damageBonus?: number; // flat bonus to damage on hit
     guaranteedDrop?: { id: string, quantity: number }[];
     lootTable?: LootTable; // New loot system
     appliesEffect?: {

@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RecipeCard } from './RecipeCard';
 
-export function RecipeList(props: { recipes: any[]; loading?: boolean; query: string; onQuery: (q: string) => void; onCraft: (id: string) => void; disabledIds?: Set<string>; inventoryById?: Record<string, { id: string; name: string; quantity: number }> }) {
+export function RecipeList(props: { recipes: any[]; loading?: boolean; query: string; onQuery: (q: string) => void; onCraft: (id: string) => void; disabledIds?: Set<string>; inventoryById?: Record<string, { id: string; name: string; quantity: number }>; characterId?: string }) {
   return (
     <div className="flex flex-col gap-3">
       <Input placeholder="Поиск рецептов..." value={props.query} onChange={(e) => props.onQuery(e.target.value)} />
@@ -19,7 +19,7 @@ export function RecipeList(props: { recipes: any[]; loading?: boolean; query: st
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {props.recipes.map((r) => (
-            <RecipeCard key={r.id} recipe={r} onCraft={() => props.onCraft(r.id)} disabled={props.disabledIds?.has(r.id)} inventoryById={props.inventoryById} />
+            <RecipeCard key={r.id} recipe={r} onCraft={() => props.onCraft(r.id)} disabled={props.disabledIds?.has(r.id)} inventoryById={props.inventoryById} characterId={props.characterId} />
           ))}
         </div>
       )}

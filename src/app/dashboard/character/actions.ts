@@ -88,3 +88,5 @@ export async function updateAutoAssignPreference(
         return { success: false, message: error.message || "Не удалось обновить настройку." };
     }
 }
+
+// Perks now unlock automatically when skill thresholds are met in updateStats

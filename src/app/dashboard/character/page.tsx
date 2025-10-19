@@ -279,25 +279,29 @@ export default function CharacterPage() {
                             <TabsContent key={skillKey} value={skillKey}>
                                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                                     {perks.map((perk) => {
-                                        const isUnlocked = character.unlockedPerks?.includes(perk.id) ?? false;
+                                        const isUnlocked = (character.unlockedPerks?.includes(perk.id) ?? false) || ((character.skills as any)[perk.skill] >= perk.requiredSkillLevel);
                                         return (
                                             <TooltipProvider key={perk.id}>
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
-                                                        <div className={`flex items-center gap-4 p-3 rounded-lg border-2 ${isUnlocked ? 'border-primary/80 bg-primary/10' : 'border-dashed border-muted-foreground/30 opacity-60'}`}>
+                                                        <div className={`flex items-center justify-between gap-4 p-3 rounded-lg border-2 ${isUnlocked ? 'border-primary/80 bg-primary/10' : 'border-dashed border-muted-foreground/30'}`}>
                                                             <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md ${isUnlocked ? 'bg-primary/20 text-primary' : 'bg-muted/50'}`}>
                                                                 <Icon name={perk.icon as keyof typeof LucideIcons} className="h-6 w-6" />
                                                             </div>
-                                                            <div>
+                                                            <div className="flex-1">
                                                                 <p className="font-semibold">{perk.name}</p>
-                                                                <p className="text-xs text-muted-foreground">Требуется: {skillInfo[perk.skill as keyof CharacterSkills].name} {perk.requiredSkillLevel}</p>
+                                                                {isUnlocked ? (
+                                                                    <p className="text-xs text-emerald-500">Открыт</p>
+                                                                ) : (
+                                                                    <p className="text-xs text-muted-foreground">Требуется: {skillInfo[perk.skill as keyof CharacterSkills].name} {perk.requiredSkillLevel}</p>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </TooltipTrigger>
                                                     <TooltipContent>
                                                         <p className="font-bold">{perk.name}</p>
                                                         <p>{perk.description}</p>
-                                                        {!isUnlocked && <p className="text-destructive text-xs mt-1">(Заблокировано)</p>}
+                                                        {!isUnlocked && <p className="text-destructive text-xs mt-1">(Заблокировано по требованию навыка)</p>}
                                                     </TooltipContent>
                                                 </Tooltip>
                                             </TooltipProvider>

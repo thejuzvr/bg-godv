@@ -17,7 +17,7 @@ export function useCrafting(userId: string | null | undefined) {
   const [recipes, setRecipes] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
-  const [inventory, setInventory] = useState<{ list: Array<{ id: string; name: string; quantity: number }>; byId: Record<string, { id: string; name: string; quantity: number }> }>({ list: [], byId: {} });
+  const [inventory, setInventory] = useState<{ list: Array<{ id: string; name: string; quantity: number }>; byId: Record<string, { id: string; name: string; quantity: number }>; craftingPoints?: number; craftingLevel?: number; craftingXp?: number }>({ list: [], byId: {}, craftingPoints: 0, craftingLevel: 1, craftingXp: 0 });
 
   useEffect(() => {
     if (typeof window !== 'undefined') window.localStorage.setItem('craft:last', discipline);
@@ -26,7 +26,7 @@ export function useCrafting(userId: string | null | undefined) {
   async function fetchRecipes(d?: Discipline) {
     setLoading(true);
     try {
-      const resp = await fetch(`/api/crafting/recipes?discipline=${encodeURIComponent(d || discipline)}`);
+      const resp = await fetch(`/api/crafting/recipes?discipline=${encodeURIComponent(d || discipline)}${userId ? `&characterId=${encodeURIComponent(userId)}` : ''}`);
       const data = await resp.json();
       if (!data.success) throw new Error(data.error || 'Failed to load recipes');
       setRecipes(data.recipes || []);
@@ -45,7 +45,7 @@ export function useCrafting(userId: string | null | undefined) {
       const resp = await fetch(`/api/crafting/inventory?characterId=${encodeURIComponent(userId)}`, { cache: 'no-store' });
       const data = await resp.json();
       if (!data.success) return;
-      setInventory({ list: data.list || [], byId: data.byId || {} });
+      setInventory({ list: data.list || [], byId: data.byId || {}, craftingPoints: data.craftingPoints || 0, craftingLevel: data.craftingLevel || 1, craftingXp: data.craftingXp || 0 });
     } catch {}
   }
 
