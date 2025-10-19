@@ -34,6 +34,10 @@ import {
   Pickaxe,
   Swords,
   Store,
+  Brain,
+  ChartNetwork,
+  Speech,
+  ShieldBanIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -50,14 +54,14 @@ const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Дашборд' },
   { href: '/dashboard/character', icon: UserIcon, label: 'Персонаж' },
   { href: '/dashboard/inventory', icon: Backpack, label: 'Инвентарь' },
-  { href: '/dashboard/mind', icon: BrainCircuit, label: 'Сознание' },
-  { href: '/dashboard/analytics', icon: LineChart, label: 'Аналитика' },
+  { href: '/dashboard/mind', icon: Brain, label: 'Сознание' },
+  { href: '/dashboard/analytics', icon: ChartNetwork, label: 'Аналитика' },
   { href: '/dashboard/map', icon: Map, label: 'Карта Мира' },
   { href: '/dashboard/crafting', icon: Hammer, label: 'Крафт' },
   { href: '/dashboard/gathering', icon: Pickaxe, label: 'Добыча' },
   { href: '/dashboard/quests', icon: BookOpen, label: 'Журнал Заданий' },
   { href: '/dashboard/factions', icon: Shield, label: 'Фракции' },
-  { href: '/dashboard/society', icon: Users, label: 'Общество' },
+  { href: '/dashboard/society', icon: Speech, label: 'Общество' },
   { href: '/dashboard/market', icon: Store, label: 'Ларьки' },
   { href: '/dashboard/chronicle', icon: BookMarked, label: 'Летопись' },
   { href: '/dashboard/arena', icon: Swords, label: 'Арена' },
@@ -136,7 +140,7 @@ function MainSidebar() {
             <div className="flex justify-around items-center group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-2">
                  {user?.isAdmin && (
                     <SidebarMenuButton size="sm" asChild tooltip={{ children: 'Админ-панель' }} isActive={pathname.startsWith('/admin')}>
-                        <Link href="/admin"><ShieldCheck /></Link>
+                        <Link href="/admin"><ShieldBanIcon /></Link>
                     </SidebarMenuButton>
                 )}
                 <SidebarMenuButton size="sm" asChild tooltip={{ children: 'Профиль' }} isActive={pathname.startsWith('/profile')}>

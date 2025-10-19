@@ -6,7 +6,7 @@ export const initialEvents: GameEvent[] = [
     {
         id: 'bleak_falls_dyatlov_mystery',
         type: 'narrative',
-        description: "Экстренное событие: Тайна перевала Дятлова. Барды ярлов зачем-то собрались в гробнице в лютый мороз. Это подозрительно и немного смешно.",
+        description: "Я встретил то, чего встретить не мог. Я вижу админа! Но кто такой такой этот админ и откуда я знаю это слово...",
         chance: 0.03,
         // @ts-ignore extend shape with locationId for engine handler
         locationId: 'bleak_falls_barrow'
