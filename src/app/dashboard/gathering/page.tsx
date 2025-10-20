@@ -41,6 +41,14 @@ export default function GatheringPage() {
     }
   }
 
+  async function prioritizeGathering(durationMs: number = 5 * 60 * 1000) {
+    if (!character) return;
+    try {
+      const csrf = typeof document !== 'undefined' ? (document.cookie.split('; ').find(x => x.startsWith('csrf_token='))?.split('=')[1] || '') : '';
+      await fetch('/api/ai/priority', { method: 'POST', headers: { 'content-type': 'application/json', 'x-csrf-token': csrf }, body: JSON.stringify({ characterId: character.id, actionType: 'gather_resources', priorityBoost: 3, durationMs }) });
+    } catch {}
+  }
+
   if (loading || !character) return <div className="p-6">Загрузка...</div>;
 
   const canGatherHere = character.location.endsWith('_outskirts');
@@ -51,12 +59,17 @@ export default function GatheringPage() {
       <Card>
         <CardHeader>
           <CardTitle className="font-headline">Местность: {character.location}</CardTitle>
-          <CardDescription>Ищите жилы руды на окраинах городов.</CardDescription>
+          <CardDescription>Ищите жилы руды на окраинах городов. Кнопка "Отправить героя" повышает приоритет добычи на несколько минут.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Button onClick={gather} disabled={!canGatherHere || busy || character.status === 'in-combat'}>
-            {busy ? 'Добыча...' : 'Добыть руду'}
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={gather} disabled={!canGatherHere || busy || character.status === 'in-combat'}>
+              {busy ? 'Добыча...' : 'Добыть руду'}
+            </Button>
+            <Button variant="secondary" onClick={() => prioritizeGathering()} disabled={!canGatherHere || character.status === 'in-combat'}>
+              Отправить героя
+            </Button>
+          </div>
           {!canGatherHere && <p className="text-sm text-muted-foreground">Добыча доступна на окраинах городов.</p>}
         </CardContent>
       </Card>

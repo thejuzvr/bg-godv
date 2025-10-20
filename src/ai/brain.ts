@@ -388,16 +388,25 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
         updatedChar.combat.combatLog.push('[Предупреждение] Бой длится 20 раундов — возможна патовая ситуация.');
     }
 
-    // Cap total rounds to avoid endless fights (auto-escape)
-    const MAX_COMBAT_ROUNDS = 30;
-    if (updatedChar.combat.rounds >= MAX_COMBAT_ROUNDS) {
-        if (!updatedChar.combat.combatLog) updatedChar.combat.combatLog = [];
-        updatedChar.combat.combatLog.push(`Бой автоматически завершен после ${MAX_COMBAT_ROUNDS} раундов. Герой отступает.`);
-        await saveCombatToAnalytics(updatedChar, false, true);
-        updatedChar.status = 'idle';
-        updatedChar.combat = null;
-        return updatedChar;
-    }
+    // Stalemate detection: auto-escape if minimal progress over several rounds
+    try {
+        const heroHpMax = Math.max(1, updatedChar.stats.health.max);
+        const enemyHpMax = Math.max(1, updatedChar.combat.enemy.health.max);
+        const rounds = updatedChar.combat.rounds || 0;
+        const dealt = updatedChar.combat.totalDamageDealt || 0;
+        const taken = updatedChar.combat.totalDamageTaken || 0;
+        if (rounds >= 5) {
+            const tinyProgress = (dealt < enemyHpMax * 0.05) && (taken < heroHpMax * 0.05);
+            if (tinyProgress) {
+                if (!updatedChar.combat.combatLog) updatedChar.combat.combatLog = [];
+                updatedChar.combat.combatLog.push('Патовая ситуация: прогресс в бою минимален. Герой отступает.');
+                await saveCombatToAnalytics(updatedChar, false, true);
+                updatedChar.status = 'idle';
+                updatedChar.combat = null;
+                return updatedChar;
+            }
+        }
+    } catch {}
     
     // Add round header to combat log
     if (!updatedChar.combat.combatLog) updatedChar.combat.combatLog = [];
@@ -598,20 +607,44 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             let fleeDC = Math.max(5, 10 - Math.floor(fleeModifier)); // Lower DC is better
             if (hasPerk('perk_thieves_shadow')) fleeDC = Math.max(5, fleeDC - 2);
         
+            // Heuristic: boost flee when fight seems unwinnable
+            const heroHP = Math.max(1, updatedChar.stats.health.current);
+            const heroHPMax = Math.max(1, updatedChar.stats.health.max);
+            const enemyHP = Math.max(1, enemy.health.current);
+            const enemyHPMax = Math.max(1, enemy.health.max);
+            const heroDpsEst = Math.max(1, Math.floor((updatedChar.attributes.strength + updatedChar.level) * 0.6));
+            const enemyDpsEst = Math.max(1, Math.floor((enemy.damage + (baseEnemyDef?.level || 1)) * 0.5));
+            const winChance = (heroHP / heroHPMax) * (heroDpsEst / enemyDpsEst) * 100;
+            const hopeless = winChance < 20 && (heroHP / heroHPMax) < 0.4;
+
             const { roll, updatedCharacter: charWithRoll } = rollD20(updatedChar);
         updatedChar = charWithRoll;
-        const fleeSuccess = roll >= fleeDC;
+        const fleeSuccess = (roll + (hopeless ? 2 : 0)) >= fleeDC;
         
         if (fleeSuccess) {
-            logMessages.push(`🏃 Герой пытается сбежать... и успешно отступает! (бросок: ${roll}, цель: ${fleeDC})`);
+            logMessages.push(`🏃 Герой пытается сбежать... и успешно отступает! (бросок: ${roll}${hopeless ? ' +2 (безнадежный бой)' : ''}, цель: ${fleeDC})`);
             // Append round messages to combat log before saving analytics
             if (updatedChar.combat?.combatLog) {
                 updatedChar.combat.combatLog.push(...logMessages);
             }
             await saveCombatToAnalytics(updatedChar, false, true);
+            // Quest failure on flee if elimination objective
+            try {
+                if (updatedChar.combat?.onWinQuestId) {
+                    const questId = String(updatedChar.combat.onWinQuestId);
+                    if (!updatedChar.failedQuests) updatedChar.failedQuests = [];
+                    updatedChar.failedQuests.push({ questId, failedAt: Date.now(), reason: 'flee' });
+                    if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {} as any;
+                    // 24 hours of in-game time cooldown
+                    const ONE_DAY_INGAME_MS = 24 * 60 * 60 * 1000;
+                    (updatedChar.actionCooldowns as any)[`quest:${questId}:cooldown`] = (updatedChar.gameDate || Date.now()) + ONE_DAY_INGAME_MS;
+                    try { logMessages.push(`[adventure] ❌ Задание провалено из-за побега из боя. Повторное взятие будет доступно через сутки игрового времени.`); } catch {}
+                }
+            } catch {}
             updatedChar.status = 'idle';
             updatedChar.combat = null;
             updatedChar.mood = Math.max(0, updatedChar.mood - 10);
+            try { logMessages.push('[adventure] 🏃 Герой сбежал из боя! Иногда отступление — лучшая стратегия.'); } catch {}
             return updatedChar;
         } else {
             logMessages.push(`🏃 Герой пытается сбежать, но ${enemy.name} преграждает путь! (бросок: ${roll}, цель: ${fleeDC})`);
@@ -903,6 +936,36 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             }
         } catch {}
         logMessages.push(`[adventure] ${winMsg}`);
+        // Progress DB-backed elimination quest if this combat was tied to a quest
+        try {
+            const questId = updatedChar.combat?.onWinQuestId;
+            if (questId) {
+                const svc = await import('@/services/questService');
+                const { getQuest, setTaskStatus, updateQuestProgress, completeQuest, applyRewardsToCharacter } = svc as any;
+                const data = await getQuest(questId);
+                if (data && data.tasks && data.tasks.length > 0) {
+                    const total = data.tasks.length;
+                    let completed = 0;
+                    for (const t of data.tasks) if (t.status === 'completed') completed++;
+                    const combatTask = data.tasks.find((t: any) => t.type === 'combat' && t.status !== 'completed');
+                    if (combatTask) {
+                        await setTaskStatus(combatTask.id, 'completed', 100);
+                        completed += 1;
+                        logMessages.push('[adventure] Этап квеста выполнен: Победить врага.');
+                    }
+                    const progressPct = Math.floor((completed / total) * 100);
+                    await updateQuestProgress(data.quest.id, progressPct);
+                    // Auto-complete quest if all tasks done and pay out rewards
+                    if (completed >= total) {
+                        await completeQuest(data.quest.id);
+                        // Apply rewards and log
+                        const result = await applyRewardsToCharacter(updatedChar, data.quest.rewards);
+                        updatedChar = result.character;
+                        logMessages.push(`[adventure] Задание завершено: ${data.quest.title}. ${result.log}`);
+                    }
+                }
+            }
+        } catch {}
         // Progress generated quest on combat victory
         try {
             const gq = character.activeGeneratedQuest;
@@ -1192,9 +1255,23 @@ const takeQuestAction: Action = {
         if (!worldState.canTakeQuest) {
             return false;
         }
-        // Check if the character is on a cooldown from fleeing a quest combat
-        const questCooldown = char.actionCooldowns?.['takeQuest'] || 0;
-        return Date.now() >= questCooldown;
+        // Legacy generic cooldown
+        const legacyCd = char.actionCooldowns?.['takeQuest'] || 0;
+        if (Date.now() < legacyCd) return false;
+        // Block taking the same quest template if its specific cooldown (in-game time) is active
+        try {
+            const nowGame = char.gameDate || Date.now();
+            for (const [key, val] of Object.entries(char.actionCooldowns || {})) {
+                if (key.startsWith('quest:') && key.endsWith(':cooldown')) {
+                    const until = Number(val || 0);
+                    if (nowGame < until) {
+                        // Not globally blocking, but selection later will avoid locked quests
+                        break;
+                    }
+                }
+            }
+        } catch {}
+        return true;
     },
     async perform(character: Character, gameData: GameData) {
         let updatedChar = structuredClone(character);
@@ -3557,7 +3634,13 @@ const gatherResourceAction: Action = {
         const hasOre = (char.inventory || []).some(i => i.id.startsWith('ore_') && i.quantity > 3);
         // Prefer gathering if low on ore or goal is earning gold (heuristic)
         const base = hasOre ? Priority.LOW : Priority.MEDIUM;
-        return priorityToWeight(base);
+        let weight = priorityToWeight(base);
+        try {
+            const { getPriorityBoost } = require('@/app/api/ai/priority/route');
+            const boost = Number(getPriorityBoost(char.id, 'gather_resources') || 1);
+            weight = Math.floor(weight * Math.max(1, Math.min(5, boost)));
+        } catch {}
+        return weight;
     },
     canPerform: (char, world) => {
         const atOutskirts = String(char.location || '').endsWith('_outskirts');

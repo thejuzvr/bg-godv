@@ -58,9 +58,16 @@ export const initialNpcs: NPC[] = [
             "Ищу что-нибудь особенное?"
         ],
         inventory: [
-            { itemId: 'potion_health_weak', stock: 10, priceModifier: 1.5 },
-            { itemId: 'misc_lockpicks', stock: 20, priceModifier: 1.2 },
-            { itemId: 'weapon_dagger_iron', stock: 1 },
+            { itemId: 'potion_health_weak', stock: 15, priceModifier: 1.3 },
+            { itemId: 'potion_magicka_weak', stock: 10, priceModifier: 1.3 },
+            { itemId: 'potion_stamina_weak', stock: 10, priceModifier: 1.3 },
+            { itemId: 'misc_lockpicks', stock: 30, priceModifier: 1.2 },
+            { itemId: 'weapon_dagger_iron', stock: 2, priceModifier: 1.0 },
+            { itemId: 'weapon_sword_iron', stock: 1, priceModifier: 1.0 },
+            { itemId: 'armor_leather', stock: 1, priceModifier: 1.1 },
+            { itemId: 'armor_iron', stock: 1, priceModifier: 1.1 },
+            { itemId: 'misc_rope', stock: 10, priceModifier: 1.0 },
+            { itemId: 'misc_torch', stock: 10, priceModifier: 1.0 },
         ]
     },
 
@@ -142,9 +149,13 @@ export const initialNpcs: NPC[] = [
             "Нужно что-то для исцеления? У меня есть как раз то, что нужно."
         ],
         inventory: [
-            { itemId: 'potion_health_weak', stock: 15, priceModifier: 1.3 },
-            { itemId: 'potion_magicka_weak', stock: 10, priceModifier: 1.3 },
-            { itemId: 'misc_potatoes', stock: 5, priceModifier: 1.0 }
+            { itemId: 'potion_health_weak', stock: 20, priceModifier: 1.25 },
+            { itemId: 'potion_magicka_weak', stock: 15, priceModifier: 1.25 },
+            { itemId: 'potion_stamina_weak', stock: 12, priceModifier: 1.25 },
+            { itemId: 'ingredient_nirnroot', stock: 3, priceModifier: 2.0 },
+            { itemId: 'ingredient_blue_mountain_flower', stock: 10, priceModifier: 1.1 },
+            { itemId: 'ingredient_butterfly_wing', stock: 10, priceModifier: 1.1 },
+            { itemId: 'misc_potatoes', stock: 10, priceModifier: 1.0 }
         ]
     },
     {

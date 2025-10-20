@@ -40,6 +40,9 @@ import {
 import { WeatherPanel } from '@/components/dashboard/weather-panel';
 import { GameTimeClock } from '@/components/dashboard/GameTimeClock';
 import { allDivinities } from '@/data/divinities';
+import { QuestProgressPanel } from '@/components/dashboard/quest-progress-panel';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 
 const Icon = ({ name, ...props }: { name: string } & LucideIcons.LucideProps) => {
   const LucideIcon = (LucideIcons as any)[name];
@@ -123,7 +126,11 @@ export default function DashboardPage() {
   const [gameData, setGameData] = useState<GameData | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
   const [isIntervening, setIsIntervening] = useState(false);
+  const [divineMessage, setDivineMessage] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [msgCooldownUntil, setMsgCooldownUntil] = useState<number>(0);
   const [logLimit, setLogLimit] = useState<number>(10);
+  const [activeQuest, setActiveQuest] = useState<any | null>(null);
 
   // Load saved log limit from localStorage on mount
   useEffect(() => {
@@ -177,6 +184,15 @@ export default function DashboardPage() {
                 setInitialCharacter(char);
                 const gData = await fetchGameData();
                 setGameData(gData);
+                try {
+                  const resp = await fetch(`/api/quests/active?characterId=${encodeURIComponent(char.id)}`);
+                  const data = await resp.json();
+                  if (data.ok && data.quest) {
+                    setActiveQuest({ id: data.quest.id, title: data.quest.title, progress: data.quest.progress, tasks: data.tasks });
+                  } else {
+                    setActiveQuest(null);
+                  }
+                } catch {}
             } else {
                 router.push('/create-character');
             }
@@ -212,8 +228,14 @@ export default function DashboardPage() {
 
     if (result.success && result.character) {
       setCharacter(result.character);
-      // Immediately refresh logs so the message appears without full page reload
-      refreshOfflineEvents();
+      // Force a character refresh to ensure UI updates immediately
+      setTimeout(async () => {
+        if (user) {
+          const updatedChar = await fetchCharacter(user.userId);
+          if (updatedChar) setCharacter(updatedChar);
+        }
+        refreshOfflineEvents();
+      }, 100);
       toast({
         title: "Вмешательство удалось!",
         description: `Герой подумал: "${result.message}"`
@@ -227,6 +249,44 @@ export default function DashboardPage() {
     }
 
     setIsIntervening(false);
+  };
+
+  const handleSendDivineMessage = async () => {
+    if (!character || !user) return;
+    const cost = 10;
+    const now = Date.now();
+    if (now < msgCooldownUntil) {
+      toast({ title: 'Подождите', description: 'Сообщения можно отправлять раз в 5 минут.' });
+      return;
+    }
+    if (divineMessage.trim().length === 0) {
+      toast({ title: 'Пустое сообщение', description: 'Введите текст для героя.' });
+      return;
+    }
+    if (divineMessage.length > 200) {
+      toast({ title: 'Слишком длинно', description: 'Максимум 200 символов.' });
+      return;
+    }
+    if ((character.interventionPower?.current || 0) < cost) {
+      toast({ title: 'Недостаточно силы', description: `Нужно ${cost} ед. силы.` });
+      return;
+    }
+    try {
+      setSendingMessage(true);
+      const csrf = typeof document !== 'undefined' ? (document.cookie.split('; ').find(x => x.startsWith('csrf_token='))?.split('=')[1] || '') : '';
+      const resp = await fetch('/api/divine/message', { method: 'POST', headers: { 'content-type': 'application/json', 'x-csrf-token': csrf }, body: JSON.stringify({ characterId: character.id, text: divineMessage.trim() }) });
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || 'Не удалось отправить сообщение');
+      // Optimistic local spend of power
+      setCharacter({ ...character, interventionPower: { ...character.interventionPower, current: Math.max(0, character.interventionPower.current - cost) } } as any);
+      setMsgCooldownUntil(Date.now() + 5 * 60 * 1000);
+      setDivineMessage('');
+      toast({ title: 'Сообщение отправлено', description: 'Герой скоро услышит шёпот свыше.' });
+    } catch (e: any) {
+      toast({ title: 'Ошибка', description: e?.message || 'Не удалось отправить сообщение' });
+    } finally {
+      setSendingMessage(false);
+    }
   };
 
   if (authLoading || dataLoading || !character || !gameData) {
@@ -315,6 +375,10 @@ export default function DashboardPage() {
                 </div>
             ) : character.status === 'sleeping' ? (
                 <SleepingStatusPanel character={character} />
+            ) : null}
+
+            {activeQuest ? (
+              <QuestProgressPanel quest={activeQuest} />
             ) : null}
 
             <Card className="flex-1 flex flex-col">
@@ -425,6 +489,26 @@ export default function DashboardPage() {
                             <span className="text-sm font-mono text-muted-foreground">{character.interventionPower.current} / {character.interventionPower.max}</span>
                         </div>
                         <Progress value={(character.interventionPower.current / character.interventionPower.max) * 100} className="h-3" />
+                        <p className="text-xs text-muted-foreground mt-1">Восстановление: ~2 ед./мин реального времени</p>
+                    </div>
+                    <div className="space-y-2">
+                        <Label className="font-semibold">Божественный шёпот</Label>
+                        <Textarea
+                          value={divineMessage}
+                          onChange={(e) => setDivineMessage(e.target.value)}
+                          placeholder="Сообщение герою (до 200 символов)"
+                          maxLength={200}
+                        />
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span>{divineMessage.length}/200</span>
+                          {msgCooldownUntil > Date.now() && (
+                            <span>Кулдаун: {Math.ceil((msgCooldownUntil - Date.now()) / 60000)} мин</span>
+                          )}
+                        </div>
+                        <Button onClick={handleSendDivineMessage} disabled={sendingMessage || divineMessage.trim().length === 0}>
+                          {sendingMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                          Отправить сообщение (10 силы)
+                        </Button>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <Button onClick={() => handleIntervention('bless')} disabled={isIntervening || character.interventionPower.current < 50}>

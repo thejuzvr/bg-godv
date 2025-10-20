@@ -210,7 +210,8 @@ export function useGameLoop(initialCharacter: Character | null, gameData: GameDa
             currentCharacter.status !== updatedCharacter.status ||
             currentCharacter.currentAction?.name !== updatedCharacter.currentAction?.name ||
             currentCharacter.stats.health.current !== updatedCharacter.stats.health.current ||
-            currentCharacter.level !== updatedCharacter.level;
+            currentCharacter.level !== updatedCharacter.level ||
+            currentCharacter.interventionPower?.current !== updatedCharacter.interventionPower?.current;
           if (hasStateChanged) {
             setCharacter(updatedCharacter);
           }

@@ -244,7 +244,7 @@ export interface Character {
   knownSpells?: string[];
   knownShouts?: string[];
   currentAction: ActiveAction | null;
-  interventionPower: { current: number; max: number };
+  interventionPower: { current: number; max: number; lastRegenAt?: number };
   divineSuggestion: string | null; // Name of the suggested action
   divineDestinationId: string | null;
   pendingTravel: { destinationId: string; remainingDuration: number; originalDuration: number; } | null;
@@ -261,6 +261,12 @@ export interface Character {
   preferences?: {
     autoAssignPoints?: boolean;
     autoEquip?: boolean;
+    playerShop?: {
+      name: string;
+      founded: number;
+      revenue: number;
+      inventory: Array<{ itemId: string; quantity: number; pricePerUnit: number; listedAt: number }>;
+    };
   };
   analytics: Analytics;
   divineFavor: number; // 0-100, progress to next major blessing
@@ -275,6 +281,8 @@ export interface Character {
   hasCompletedLocationActivity?: boolean; // Whether character has completed quest/rest at current location
   // LRU of recent arrival destinations to prevent oscillation
   recentDestinations?: string[];
+  // Failed quests registry (lightweight, jsonb-friendly)
+  failedQuests?: Array<{ questId: string; failedAt: number; reason: string }>;
   // Dynamically generated multi-step quest (lightweight inline shape)
   activeGeneratedQuest?: {
     id: string;

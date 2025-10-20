@@ -5,8 +5,8 @@ import { eq, and } from 'drizzle-orm';
 import { GraphModelSchema, type GraphModel } from '@/ai/graph/model';
 import { publishGraphUpdate } from '@/ai/graph/runtime';
 
-export async function GET(_req: NextRequest, { params }: { params: { characterId: string } }) {
-  const { characterId } = params;
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ characterId: string }> }) {
+  const { characterId } = await params;
   const rows = await db.select()
     .from(schema.aiGraphInstances)
     .where(and(eq(schema.aiGraphInstances.characterId, characterId), eq(schema.aiGraphInstances.active, true)))
@@ -18,8 +18,8 @@ export async function GET(_req: NextRequest, { params }: { params: { characterId
   return new Response(JSON.stringify({ version: row.version, graph: row.graphJson }), { status: 200 });
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { characterId: string } }) {
-  const { characterId } = params;
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ characterId: string }> }) {
+  const { characterId } = await params;
   const body = await req.json();
   const parsed = GraphModelSchema.safeParse(body?.graph || body);
   if (!parsed.success) {

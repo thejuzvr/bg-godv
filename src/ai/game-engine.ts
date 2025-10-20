@@ -9,8 +9,12 @@ import { decayTick } from '@/ai/fatigue';
 import { allDivinities } from "@/data/divinities";
 import { getFallbackThought } from "@/data/thoughts";
 import type { OutboxChronicleEntry } from "@/types/chronicle";
+import { buildWorldState } from "./diagnostics";
 
 type OutboxChronicle = OutboxChronicleEntry;
+
+// Re-export buildWorldState for use in other modules
+export { buildWorldState };
 
 // Humorous victory line generator
 export async function getHumorousVictoryLine(enemyName: string, location?: string): Promise<string> {
@@ -1447,10 +1451,23 @@ export async function processGameTick(
     }
     updatedChar = respawnResult.char;
     
-    // --- 2. POWER REGENERATION ---
-    if (updatedChar.interventionPower.current < updatedChar.interventionPower.max) {
-        updatedChar.interventionPower.current = Math.min(updatedChar.interventionPower.max, updatedChar.interventionPower.current + 1);
-    }
+    // --- 2. POWER REGENERATION (real-time based) ---
+    try {
+        const nowRt = Date.now();
+        const maxPow = updatedChar.interventionPower.max;
+        const curPow = updatedChar.interventionPower.current;
+        const lastAt = updatedChar.interventionPower.lastRegenAt || nowRt;
+        // Regen 2 power per real minute
+        const REGEN_PER_MINUTE = 2;
+        const minutesPassed = Math.floor(Math.max(0, nowRt - lastAt) / 60000);
+        const gain = minutesPassed * REGEN_PER_MINUTE;
+        if (gain > 0 && curPow < maxPow) {
+            updatedChar.interventionPower.current = Math.min(maxPow, curPow + gain);
+            updatedChar.interventionPower.lastRegenAt = lastAt + minutesPassed * 60000;
+        } else if (!updatedChar.interventionPower.lastRegenAt) {
+            updatedChar.interventionPower.lastRegenAt = nowRt;
+        }
+    } catch {}
 
     // --- 3. TIME AND SEASON ---
     const timeResult = processTimeAndSeasons(updatedChar);
