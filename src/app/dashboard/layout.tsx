@@ -4,12 +4,16 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupContent,
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
+  SidebarSeparator,
   SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar';
@@ -50,20 +54,40 @@ import { RealmProvider, useRealm } from '@/context/realm-context';
 import { useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
 
-const navItems = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'Дашборд' },
-  { href: '/dashboard/character', icon: UserIcon, label: 'Персонаж' },
-  { href: '/dashboard/inventory', icon: Backpack, label: 'Инвентарь' },
-  { href: '/dashboard/quests', icon: BookOpen, label: 'Задания' },
-  { href: '/dashboard/map', icon: Map, label: 'Карта' },
-  { href: '/dashboard/society', icon: Users, label: 'Общество' },
-  { href: '/dashboard/market', icon: Store, label: 'Рынок' },
-  { href: '/dashboard/crafting', icon: Hammer, label: 'Крафт' },
-  { href: '/dashboard/gathering', icon: Pickaxe, label: 'Добыча' },
-  { href: '/dashboard/factions', icon: Shield, label: 'Фракции' },
-  { href: '/dashboard/chronicle', icon: BookMarked, label: 'Летопись' },
-  { href: '/dashboard/mind', icon: Brain, label: 'Сознание' },
-  { href: '/dashboard/analytics', icon: ChartNetwork, label: 'Аналитика' },
+const navCategories = [
+  {
+    title: 'Основное',
+    items: [
+      { href: '/dashboard', icon: LayoutDashboard, label: 'Дашборд' },
+      { href: '/dashboard/character', icon: UserIcon, label: 'Персонаж' },
+      { href: '/dashboard/inventory', icon: Backpack, label: 'Инвентарь' },
+    ]
+  },
+  {
+    title: 'Приключения',
+    items: [
+      { href: '/dashboard/quests', icon: BookOpen, label: 'Задания' },
+      { href: '/dashboard/map', icon: Map, label: 'Карта' },
+      { href: '/dashboard/society', icon: Users, label: 'Общество' },
+      { href: '/dashboard/factions', icon: Shield, label: 'Фракции' },
+    ]
+  },
+  {
+    title: 'Экономика',
+    items: [
+      { href: '/dashboard/market', icon: Store, label: 'Рынок' },
+      { href: '/dashboard/crafting', icon: Hammer, label: 'Крафт' },
+      { href: '/dashboard/gathering', icon: Pickaxe, label: 'Добыча' },
+    ]
+  },
+  {
+    title: 'Система',
+    items: [
+      { href: '/dashboard/chronicle', icon: BookMarked, label: 'Летопись' },
+      { href: '/dashboard/mind', icon: Brain, label: 'Сознание' },
+      { href: '/dashboard/analytics', icon: ChartNetwork, label: 'Аналитика' },
+    ]
+  }
 ];
 
 function RealmSelector() {
@@ -113,46 +137,66 @@ function MainSidebar() {
   return (
     <Sidebar collapsible={isMobile ? 'offcanvas' : 'icon'}>
       <SidebarContent>
-        <SidebarHeader className="p-4">
-            <Link href="/dashboard" className="flex items-center gap-2 font-headline text-lg font-semibold text-primary">
+        <SidebarHeader className="p-4 border-b border-sidebar-border">
+            <Link href="/dashboard" className="flex items-center gap-2 font-headline text-lg font-semibold text-primary hover:text-primary/80 transition-colors">
                 <DragonIcon className="h-7 w-7" />
                 <span className="group-data-[collapsible=icon]:hidden">ElderScrollsIdle</span>
             </Link>
         </SidebarHeader>
-        <SidebarMenu className="flex-1 p-2">
-          {navItems.map((item) => (
-            <SidebarMenuItem key={item.href}>
-              <SidebarMenuButton
-                asChild
-                isActive={pathname === item.href}
-                tooltip={{ children: item.label }}
-              >
-                <Link href={item.href}>
-                  <item.icon />
-                  <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+        
+        <div className="flex-1 overflow-auto">
+          {navCategories.map((category, index) => (
+            <SidebarGroup key={category.title}>
+              <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider">
+                {category.title}
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {category.items.map((item) => (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={pathname === item.href}
+                        tooltip={{ children: item.label }}
+                      >
+                        <Link href={item.href} className="gap-3">
+                          <item.icon className="h-4 w-4" />
+                          <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+              {index < navCategories.length - 1 && <SidebarSeparator />}
+            </SidebarGroup>
           ))}
-        </SidebarMenu>
-         <SidebarMenu className="p-2 mt-auto">
-            <div className="flex justify-around items-center group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-2">
-                 {user?.isAdmin && (
-                    <SidebarMenuButton size="sm" asChild tooltip={{ children: 'Админ-панель' }} isActive={pathname.startsWith('/admin')}>
-                        <Link href="/admin"><ShieldBanIcon /></Link>
-                    </SidebarMenuButton>
+        </div>
+
+        <SidebarSeparator />
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <div className="flex justify-around items-center p-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-2">
+                {user?.isAdmin && (
+                  <SidebarMenuButton size="sm" asChild tooltip={{ children: 'Админ-панель' }} isActive={pathname.startsWith('/admin')}>
+                    <Link href="/admin"><ShieldBanIcon className="h-4 w-4" /></Link>
+                  </SidebarMenuButton>
                 )}
                 <SidebarMenuButton size="sm" asChild tooltip={{ children: 'Профиль' }} isActive={pathname.startsWith('/profile')}>
-                    <Link href="/profile"><UserIcon /></Link>
+                  <Link href="/profile"><UserIcon className="h-4 w-4" /></Link>
                 </SidebarMenuButton>
                 <SidebarMenuButton size="sm" onClick={handleSignOut} tooltip={{ children: 'Выход' }}>
-                    <LogOut />
+                  <LogOut className="h-4 w-4" />
                 </SidebarMenuButton>
-            </div>
-        </SidebarMenu>
-        <SidebarFooter className="p-2 hidden md:flex">
+              </div>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        
+        <SidebarFooter className="p-2 hidden md:flex border-t border-sidebar-border">
           <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => toggleSidebar()}>
-            {state === 'expanded' ? <PanelLeftClose /> : <PanelLeftOpen />}
+            {state === 'expanded' ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
             <span className="group-data-[collapsible=icon]:hidden">Свернуть</span>
           </Button>
         </SidebarFooter>
