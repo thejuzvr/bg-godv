@@ -50,21 +50,52 @@ import { RealmProvider, useRealm } from '@/context/realm-context';
 import { useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
 
+// Группированная навигация для улучшенной UX
 const navItems = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'Дашборд' },
-  { href: '/dashboard/character', icon: UserIcon, label: 'Персонаж' },
-  { href: '/dashboard/inventory', icon: Backpack, label: 'Инвентарь' },
-  { href: '/dashboard/mind', icon: Brain, label: 'Сознание' },
-  { href: '/dashboard/analytics', icon: ChartNetwork, label: 'Аналитика' },
-  { href: '/dashboard/map', icon: Map, label: 'Карта Мира' },
-  { href: '/dashboard/crafting', icon: Hammer, label: 'Крафт' },
-  { href: '/dashboard/gathering', icon: Pickaxe, label: 'Добыча' },
-  { href: '/dashboard/quests', icon: BookOpen, label: 'Журнал Заданий' },
-  { href: '/dashboard/factions', icon: Shield, label: 'Фракции' },
-  { href: '/dashboard/society', icon: Speech, label: 'Общество' },
-  { href: '/dashboard/market', icon: Store, label: 'Ларьки' },
-  { href: '/dashboard/chronicle', icon: BookMarked, label: 'Летопись' },
-  { href: '/dashboard/arena', icon: Swords, label: 'Арена' },
+  // Основное
+  { 
+    category: 'Основное', 
+    items: [
+      { href: '/dashboard', icon: LayoutDashboard, label: 'Дашборд' },
+      { href: '/dashboard/character', icon: UserIcon, label: 'Персонаж' },
+      { href: '/dashboard/inventory', icon: Backpack, label: 'Инвентарь' },
+    ]
+  },
+  // Мир и Приключения
+  {
+    category: 'Приключения',
+    items: [
+      { href: '/dashboard/map', icon: Map, label: 'Карта Мира' },
+      { href: '/dashboard/quests', icon: BookOpen, label: 'Задания' },
+      { href: '/dashboard/chronicle', icon: BookMarked, label: 'Летопись' },
+      { href: '/dashboard/arena', icon: Swords, label: 'Арена' },
+    ]
+  },
+  // Крафт и Ресурсы
+  {
+    category: 'Ремесло',
+    items: [
+      { href: '/dashboard/crafting', icon: Hammer, label: 'Крафт' },
+      { href: '/dashboard/gathering', icon: Pickaxe, label: 'Добыча' },
+    ]
+  },
+  // Социальное
+  {
+    category: 'Социальное',
+    items: [
+      { href: '/dashboard/social', icon: Users, label: 'Общество' },
+      { href: '/dashboard/factions', icon: Shield, label: 'Фракции' },
+      { href: '/dashboard/market', icon: Store, label: 'Рынок' },
+    ]
+  },
+  // Система
+  {
+    category: 'Система',
+    items: [
+      { href: '/dashboard/mind', icon: Brain, label: 'ИИ Разум' },
+      { href: '/dashboard/analytics', icon: ChartNetwork, label: 'Аналитика' },
+    ]
+  }
 ];
 
 function RealmSelector() {
@@ -120,20 +151,31 @@ function MainSidebar() {
                 <span className="group-data-[collapsible=icon]:hidden">ElderScrollsIdle</span>
             </Link>
         </SidebarHeader>
-        <SidebarMenu className="flex-1 p-2">
-          {navItems.map((item) => (
-            <SidebarMenuItem key={item.href}>
-              <SidebarMenuButton
-                asChild
-                isActive={pathname === item.href}
-                tooltip={{ children: item.label }}
-              >
-                <Link href={item.href}>
-                  <item.icon />
-                  <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+        <SidebarMenu className="flex-1 p-2 space-y-4">
+          {navItems.map((section, idx) => (
+            <div key={idx} className="space-y-1">
+              {/* Категория - видна только когда sidebar развернут */}
+              <div className="px-3 py-2 group-data-[collapsible=icon]:hidden">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  {section.category}
+                </h3>
+              </div>
+              {/* Пункты меню категории */}
+              {section.items.map((item) => (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === item.href}
+                    tooltip={{ children: item.label }}
+                  >
+                    <Link href={item.href} className="gap-3">
+                      <item.icon className="h-4 w-4" />
+                      <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </div>
           ))}
         </SidebarMenu>
          <SidebarMenu className="p-2 mt-auto">

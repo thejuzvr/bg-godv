@@ -4,27 +4,46 @@ import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { fetchCharacter } from "@/app/dashboard/shared-actions";
-import type { Character } from "@/types/character";
+import type { Character, CharacterInventoryItem } from "@/types/character";
 import { useToast } from "@/hooks/use-toast";
-import * as LucideIcons from "lucide-react";
-
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-
+import { fetchGameData } from "@/services/gameDataService";
 import type { NPC } from "@/types/npc";
 import type { Location } from "@/types/location";
-import type { CharacterInventoryItem } from "@/types/character";
 import { interactWithNPC, tradeWithNPC, giftToNPC } from "@/actions/npc-actions";
 import { computeBuyPrice, computeSellPrice, computeBaseValue } from "@/services/pricing";
 import { fetchNPCs, fetchLocations, fetchItems } from "@/actions/game-data-actions";
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Progress } from "@/components/ui/progress";
+
+import * as LucideIcons from "lucide-react";
+import { 
+  Users, 
+  Store, 
+  Heart, 
+  MapPin, 
+  MessageSquare, 
+  ShoppingCart, 
+  Gift, 
+  Coins,
+  Loader2,
+  Search,
+  Globe,
+  Info,
+  UserPlus,
+  Sword,
+  Shield as ShieldIcon
+} from "lucide-react";
+import { ShopManagement } from "@/components/dashboard/shop-management";
 
 const Icon = ({ name, ...props }: { name: keyof typeof LucideIcons } & LucideIcons.LucideProps) => {
     const LucideIcon = LucideIcons[name] as React.ElementType;
@@ -48,11 +67,13 @@ const relationshipColors: Record<number, string> = {
     4: "bg-yellow-500"
 };
 
-export default function SocietyPage() {
+export default function SocialPage() {
     const router = useRouter();
     const { toast } = useToast();
     const { user, loading: authLoading } = useAuth(true);
+    
     const [character, setCharacter] = useState<Character | null>(null);
+    const [gameData, setGameData] = useState<any | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     
     const [npcs, setNpcs] = useState<NPC[]>([]);
@@ -70,11 +91,12 @@ export default function SocietyPage() {
 
         const loadData = async () => {
             try {
-                const [char, npcsData, locationsData, itemsData] = await Promise.all([
+                const [char, npcsData, locationsData, itemsData, gData] = await Promise.all([
                     fetchCharacter(user.userId),
                     fetchNPCs(),
                     fetchLocations(),
                     fetchItems(),
+                    fetchGameData(),
                 ]);
                 
                 if (char) {
@@ -86,11 +108,12 @@ export default function SocietyPage() {
                 setNpcs(npcsData);
                 setLocations(locationsData);
                 setItems(itemsData);
+                setGameData(gData);
             } catch (error) {
-                console.error('Error loading character:', error);
+                console.error('Error loading data:', error);
                 toast({
                     title: "Ошибка",
-                    description: "Не удалось загрузить персонажа",
+                    description: "Не удалось загрузить данные",
                     variant: "destructive",
                 });
             } finally {
@@ -144,6 +167,16 @@ export default function SocietyPage() {
     const currentLocationNPCs = useMemo(() => {
         if (!character) return [];
         return npcs.filter(npc => npc.location === character.location || npc.location === 'on_road');
+    }, [npcs, character]);
+
+    const merchantNPCs = useMemo(() => {
+        if (!character) return [];
+        return currentLocationNPCs.filter(npc => npc.inventory && npc.inventory.length > 0);
+    }, [currentLocationNPCs, character]);
+
+    const companionNPCs = useMemo(() => {
+        if (!character) return [];
+        return npcs.filter(npc => npc.isCompanion);
     }, [npcs, character]);
 
     const handleInteract = async (npc: NPC) => {
@@ -244,207 +277,303 @@ export default function SocietyPage() {
 
     if (authLoading || isLoading) {
         return (
-            <div className="flex items-center justify-center h-full">
-                <LucideIcons.Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="flex items-center justify-center h-full p-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
         );
     }
 
-    if (!character) {
+    if (!character || !gameData) {
         return null;
     }
 
     const currentLocation = locations.find(l => l.id === character.location);
+    const hasShop = Boolean(character.preferences?.playerShop);
+    const playerGold = character.inventory.find(i => i.id === 'gold')?.quantity || 0;
 
     return (
         <div className="space-y-6 p-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Общество</h1>
+                    <h1 className="text-3xl font-bold tracking-tight font-headline">Социальная Жизнь</h1>
                     <p className="text-muted-foreground">
-                        Взаимодействуйте с жителями Скайрима
+                        Торговля, общение и взаимодействия с жителями Скайрима
                     </p>
                 </div>
-                <Badge variant="outline" className="text-sm">
-                    <LucideIcons.MapPin className="mr-1 h-3 w-3" />
-                    {currentLocation?.name || character.location}
-                </Badge>
+                <div className="flex flex-col items-end gap-2">
+                    <Badge variant="outline" className="text-sm">
+                        <MapPin className="mr-1 h-3 w-3" />
+                        {currentLocation?.name || character.location}
+                    </Badge>
+                    <Badge variant="secondary" className="text-sm">
+                        <Coins className="mr-1 h-3 w-3" />
+                        {playerGold} золота
+                    </Badge>
+                </div>
             </div>
 
-            <Tabs defaultValue="current" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="current">
-                        <LucideIcons.Users className="mr-2 h-4 w-4" />
-                        Здесь ({currentLocationNPCs.length})
+            <Tabs defaultValue="npcs" className="w-full">
+                <TabsList className="grid w-full grid-cols-4">
+                    <TabsTrigger value="npcs">
+                        <Users className="mr-2 h-4 w-4" />
+                        NPC ({currentLocationNPCs.length})
                     </TabsTrigger>
-                    <TabsTrigger value="all">
-                        <LucideIcons.Globe className="mr-2 h-4 w-4" />
-                        Все NPC ({npcs.length})
+                    <TabsTrigger value="merchants">
+                        <Store className="mr-2 h-4 w-4" />
+                        Торговцы ({merchantNPCs.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="companions">
+                        <Sword className="mr-2 h-4 w-4" />
+                        Компаньоны ({companionNPCs.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="shop">
+                        <ShieldIcon className="mr-2 h-4 w-4" />
+                        Моя Лавка
                     </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="current" className="space-y-4">
-                    {currentLocationNPCs.length === 0 ? (
-                        <Card>
-                            <CardContent className="flex flex-col items-center justify-center py-12">
-                                <LucideIcons.User className="h-12 w-12 text-muted-foreground mb-4" />
-                                <p className="text-muted-foreground">В этой локации нет NPC</p>
-                            </CardContent>
-                        </Card>
-                    ) : (
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                            {currentLocationNPCs.map(npc => {
-                                const relLevel = getRelationshipLevel(npc.id);
-                                const relName = relationshipLevelNames[relLevel];
-                                const relColor = relationshipColors[relLevel];
-
-                                return (
-                                    <Card key={npc.id} className="overflow-hidden">
-                                        <CardHeader className="pb-3">
-                                            <div className="flex items-start justify-between">
-                                                <div className="flex-1">
-                                                    <CardTitle className="text-lg">{npc.name}</CardTitle>
-                                                    <CardDescription className="text-sm mt-1">
-                                                        {getNPCRoleLabel(npc)}
-                                                    </CardDescription>
-                                                </div>
-                                                <Badge className={`${relColor} text-white ml-2`}>
-                                                    {relName}
-                                                </Badge>
-                                            </div>
-                                        </CardHeader>
-                                        <CardContent className="space-y-3">
-                                            <p className="text-sm text-muted-foreground line-clamp-2">
-                                                {npc.description}
-                                            </p>
-                                            <Dialog>
-                                                <DialogTrigger asChild>
-                                                    <Button 
-                                                        className="w-full" 
-                                                        variant="outline"
-                                                        onClick={() => setSelectedNPC(npc)}
-                                                    >
-                                                        <LucideIcons.MessageSquare className="mr-2 h-4 w-4" />
-                                                        Взаимодействовать
-                                                    </Button>
-                                                </DialogTrigger>
-                                                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                                                    <DialogHeader>
-                                                        <DialogTitle>{npc.name}</DialogTitle>
-                                                        <DialogDescription>{npc.description}</DialogDescription>
-                                                    </DialogHeader>
-                                                    <NPCDialogContent 
-                                                        npc={npc} 
-                                                        character={character}
-                                                        relationshipLevel={relLevel}
-                                                        onInteract={handleInteract}
-                                                        onTrade={handleTrade}
-                                                        onGift={handleGift}
-                                                        isInteracting={isInteracting}
-                                                        locations={locations}
-                                                        items={items}
-                                                    />
-                                                </DialogContent>
-                                            </Dialog>
-                                        </CardContent>
-                                    </Card>
-                                );
-                            })}
-                        </div>
-                    )}
-                </TabsContent>
-
-                <TabsContent value="all" className="space-y-4">
+                {/* NPC Tab */}
+                <TabsContent value="npcs" className="space-y-4">
                     <Card>
                         <CardHeader>
-                            <div className="flex flex-col md:flex-row gap-4">
-                                <div className="flex-1">
-                                    <Input
-                                        placeholder="Поиск по имени или описанию..."
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="w-full"
-                                    />
-                                </div>
-                                <div className="flex gap-2">
-                                    <Select value={locationFilter} onValueChange={setLocationFilter}>
-                                        <SelectTrigger className="w-[180px]">
-                                            <SelectValue placeholder="Локация" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">Все локации</SelectItem>
-                                            {locations.map(loc => (
-                                                <SelectItem key={loc.id} value={loc.id}>
-                                                    {loc.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <Select value={typeFilter} onValueChange={setTypeFilter}>
-                                        <SelectTrigger className="w-[180px]">
-                                            <SelectValue placeholder="Тип" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">Все типы</SelectItem>
-                                            <SelectItem value="merchant">Торговцы</SelectItem>
-                                            <SelectItem value="companion">Компаньоны</SelectItem>
-                                            <SelectItem value="citizen">Жители</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
+                            <CardTitle>Жители локации</CardTitle>
+                            <CardDescription>
+                                Взаимодействуйте с местными жителями, чтобы улучшить отношения и получить информацию
+                            </CardDescription>
                         </CardHeader>
+                        <CardContent>
+                            {currentLocationNPCs.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-12">
+                                    <Users className="h-12 w-12 text-muted-foreground mb-4" />
+                                    <p className="text-muted-foreground">В этой локации нет NPC</p>
+                                </div>
+                            ) : (
+                                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                    {currentLocationNPCs.map(npc => {
+                                        const relLevel = getRelationshipLevel(npc.id);
+                                        const relName = relationshipLevelNames[relLevel];
+                                        const relColor = relationshipColors[relLevel];
+
+                                        return (
+                                            <Card key={npc.id} className="overflow-hidden">
+                                                <CardHeader className="pb-3">
+                                                    <div className="flex items-start justify-between">
+                                                        <div className="flex-1">
+                                                            <CardTitle className="text-lg">{npc.name}</CardTitle>
+                                                            <CardDescription className="text-sm mt-1">
+                                                                {getNPCRoleLabel(npc)}
+                                                            </CardDescription>
+                                                        </div>
+                                                        <Badge className={`${relColor} text-white ml-2`}>
+                                                            {relName}
+                                                        </Badge>
+                                                    </div>
+                                                </CardHeader>
+                                                <CardContent className="space-y-3">
+                                                    <p className="text-sm text-muted-foreground line-clamp-2">
+                                                        {npc.description}
+                                                    </p>
+                                                    <Dialog>
+                                                        <DialogTrigger asChild>
+                                                            <Button 
+                                                                className="w-full" 
+                                                                variant="outline"
+                                                                onClick={() => setSelectedNPC(npc)}
+                                                            >
+                                                                <MessageSquare className="mr-2 h-4 w-4" />
+                                                                Взаимодействовать
+                                                            </Button>
+                                                        </DialogTrigger>
+                                                        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                                                            <DialogHeader>
+                                                                <DialogTitle>{npc.name}</DialogTitle>
+                                                                <DialogDescription>{npc.description}</DialogDescription>
+                                                            </DialogHeader>
+                                                            <NPCDialogContent 
+                                                                npc={npc} 
+                                                                character={character}
+                                                                relationshipLevel={relLevel}
+                                                                onInteract={handleInteract}
+                                                                onTrade={handleTrade}
+                                                                onGift={handleGift}
+                                                                isInteracting={isInteracting}
+                                                                locations={locations}
+                                                                items={items}
+                                                            />
+                                                        </DialogContent>
+                                                    </Dialog>
+                                                </CardContent>
+                                            </Card>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </CardContent>
                     </Card>
+                </TabsContent>
 
-                    {filteredNPCs.length === 0 ? (
-                        <Card>
-                            <CardContent className="flex flex-col items-center justify-center py-12">
-                                <LucideIcons.Search className="h-12 w-12 text-muted-foreground mb-4" />
-                                <p className="text-muted-foreground">Ничего не найдено</p>
-                            </CardContent>
-                        </Card>
-                    ) : (
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                            {filteredNPCs.map(npc => {
-                                const relLevel = getRelationshipLevel(npc.id);
-                                const relName = relationshipLevelNames[relLevel];
-                                const relColor = relationshipColors[relLevel];
-                                const npcLocation = locations.find(l => l.id === npc.location);
-
-                                return (
-                                    <Card key={npc.id} className="overflow-hidden">
-                                        <CardHeader className="pb-3">
-                                            <div className="flex items-start justify-between">
-                                                <div className="flex-1">
-                                                    <CardTitle className="text-lg">{npc.name}</CardTitle>
-                                                    <CardDescription className="text-sm mt-1">
-                                                        {getNPCRoleLabel(npc)}
-                                                    </CardDescription>
+                {/* Merchants Tab */}
+                <TabsContent value="merchants" className="space-y-4">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Торговцы</CardTitle>
+                            <CardDescription>
+                                Покупайте и продавайте предметы у местных торговцев
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {merchantNPCs.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-12">
+                                    <Store className="h-12 w-12 text-muted-foreground mb-4" />
+                                    <p className="text-muted-foreground">В этой локации нет торговцев</p>
+                                </div>
+                            ) : (
+                                <div className="grid gap-4 md:grid-cols-2">
+                                    {merchantNPCs.map((npc) => (
+                                        <Card key={npc.id}>
+                                            <CardHeader>
+                                                <CardTitle className="text-base">{npc.name}</CardTitle>
+                                                <CardDescription>{npc.description}</CardDescription>
+                                            </CardHeader>
+                                            <CardContent className="space-y-2">
+                                                <div className="space-y-2">
+                                                    {(npc.inventory || []).slice(0, 5).map((row, idx) => {
+                                                        const base = gameData.items.find((i: any) => i.id === row.itemId);
+                                                        const name = base?.name || row.itemId;
+                                                        const price = Math.floor((base?.baseValue || 10) * (row.priceModifier || 1));
+                                                        return (
+                                                            <div key={idx} className="flex items-center justify-between text-sm p-2 rounded bg-muted/50">
+                                                                <span>{name}</span>
+                                                                <span className="text-muted-foreground font-mono">{price}g</span>
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
-                                                <Badge className={`${relColor} text-white ml-2`}>
-                                                    {relName}
-                                                </Badge>
-                                            </div>
-                                        </CardHeader>
-                                        <CardContent className="space-y-3">
-                                            <p className="text-sm text-muted-foreground line-clamp-2">
-                                                {npc.description}
-                                            </p>
-                                            <Badge variant="secondary" className="text-xs">
-                                                {npcLocation?.name || npc.location}
-                                            </Badge>
-                                        </CardContent>
-                                    </Card>
-                                );
-                            })}
-                        </div>
-                    )}
+                                                <Separator />
+                                                <Dialog>
+                                                    <DialogTrigger asChild>
+                                                        <Button className="w-full" variant="default" onClick={() => setSelectedNPC(npc)}>
+                                                            <ShoppingCart className="mr-2 h-4 w-4" />
+                                                            Торговать
+                                                        </Button>
+                                                    </DialogTrigger>
+                                                    <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                                                        <DialogHeader>
+                                                            <DialogTitle>{npc.name}</DialogTitle>
+                                                            <DialogDescription>{npc.description}</DialogDescription>
+                                                        </DialogHeader>
+                                                        <NPCDialogContent 
+                                                            npc={npc} 
+                                                            character={character}
+                                                            relationshipLevel={getRelationshipLevel(npc.id)}
+                                                            onInteract={handleInteract}
+                                                            onTrade={handleTrade}
+                                                            onGift={handleGift}
+                                                            isInteracting={isInteracting}
+                                                            locations={locations}
+                                                            items={items}
+                                                        />
+                                                    </DialogContent>
+                                                </Dialog>
+                                            </CardContent>
+                                        </Card>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* Companions Tab */}
+                <TabsContent value="companions" className="space-y-4">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Компаньоны</CardTitle>
+                            <CardDescription>
+                                Нанимайте и управляйте компаньонами для совместных приключений
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {companionNPCs.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-12">
+                                    <Sword className="h-12 w-12 text-muted-foreground mb-4" />
+                                    <p className="text-muted-foreground">Компаньоны пока недоступны</p>
+                                    <p className="text-sm text-muted-foreground mt-2">Эта функция находится в разработке</p>
+                                </div>
+                            ) : (
+                                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                    {companionNPCs.map(npc => (
+                                        <Card key={npc.id}>
+                                            <CardHeader>
+                                                <CardTitle className="text-base">{npc.name}</CardTitle>
+                                                <CardDescription>{npc.description}</CardDescription>
+                                            </CardHeader>
+                                            <CardContent>
+                                                <Button className="w-full" variant="outline">
+                                                    <UserPlus className="mr-2 h-4 w-4" />
+                                                    Нанять компаньона
+                                                </Button>
+                                            </CardContent>
+                                        </Card>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* Player Shop Tab */}
+                <TabsContent value="shop" className="space-y-4">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Моя Торговая Лавка</CardTitle>
+                            <CardDescription>
+                                Откройте свою лавку и продавайте предметы другим героям
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {!hasShop ? (
+                                <div className="space-y-4">
+                                    <div className="flex flex-col items-center justify-center py-12">
+                                        <Store className="h-16 w-16 text-muted-foreground mb-4" />
+                                        <h3 className="text-lg font-semibold mb-2">У вас нет лавки</h3>
+                                        <p className="text-sm text-muted-foreground text-center max-w-md mb-4">
+                                            Откройте свою торговую лавку, чтобы продавать предметы другим героям и зарабатывать золото, пока вы путешествуете
+                                        </p>
+                                        <Button 
+                                            size="lg"
+                                            onClick={async () => {
+                                                const csrf = typeof document !== 'undefined' ? (document.cookie.split('; ').find(x => x.startsWith('csrf_token='))?.split('=')[1] || '') : '';
+                                                const resp = await fetch('/api/shop/purchase', { 
+                                                    method: 'POST', 
+                                                    headers: { 'content-type': 'application/json', 'x-csrf-token': csrf }, 
+                                                    body: JSON.stringify({ characterId: character.id, name: `${character.name} — Лавка` }) 
+                                                });
+                                                const data = await resp.json();
+                                                if (data.ok && data.character) {
+                                                    setCharacter(data.character);
+                                                    toast({ title: "Лавка открыта!", description: "Теперь вы можете продавать предметы" });
+                                                }
+                                            }}
+                                            disabled={playerGold < 500}
+                                        >
+                                            <Store className="mr-2 h-4 w-4" />
+                                            Купить лавку (500 золота)
+                                        </Button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <ShopManagement character={character} gameData={gameData} onUpdated={setCharacter} />
+                            )}
+                        </CardContent>
+                    </Card>
                 </TabsContent>
             </Tabs>
         </div>
     );
 }
 
+// NPC Dialog Content Component
 interface NPCDialogContentProps {
     npc: NPC;
     character: Character;
@@ -487,17 +616,17 @@ function NPCDialogContent({ npc, character, relationshipLevel, onInteract, onTra
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
             <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="info">
-                    <LucideIcons.Info className="mr-2 h-4 w-4" />
+                    <Info className="mr-2 h-4 w-4" />
                     Информация
                 </TabsTrigger>
                 {isMerchant && (
                     <TabsTrigger value="trade">
-                        <LucideIcons.ShoppingCart className="mr-2 h-4 w-4" />
+                        <ShoppingCart className="mr-2 h-4 w-4" />
                         Торговля
                     </TabsTrigger>
                 )}
                 <TabsTrigger value="gift">
-                    <LucideIcons.Gift className="mr-2 h-4 w-4" />
+                    <Gift className="mr-2 h-4 w-4" />
                     Подарок
                 </TabsTrigger>
             </TabsList>
@@ -533,9 +662,9 @@ function NPCDialogContent({ npc, character, relationshipLevel, onInteract, onTra
                         className="w-full mt-4"
                     >
                         {isInteracting ? (
-                            <LucideIcons.Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         ) : (
-                            <LucideIcons.MessageSquare className="mr-2 h-4 w-4" />
+                            <MessageSquare className="mr-2 h-4 w-4" />
                         )}
                         Поговорить
                     </Button>
@@ -563,7 +692,7 @@ function NPCDialogContent({ npc, character, relationshipLevel, onInteract, onTra
 
                     <div className="mb-2">
                         <Badge variant="outline">
-                            <LucideIcons.Coins className="mr-1 h-3 w-3" />
+                            <Coins className="mr-1 h-3 w-3" />
                             {playerGold} золота
                         </Badge>
                     </div>
@@ -579,7 +708,7 @@ function NPCDialogContent({ npc, character, relationshipLevel, onInteract, onTra
                                     merchantItems.map((item: any) => {
                                         const unitPrice = computeBuyPrice(character as any, npc as any, item as any, 1);
                                         const base = computeBaseValue(item as any);
-                                        const modNote = item.priceModifier && item.priceModifier !== 1 ? ` • модификатор торговца x${item.priceModifier}` : '';
+                                        const modNote = item.priceModifier && item.priceModifier !== 1 ? ` • модификатор x${item.priceModifier}` : '';
                                         return (
                                             <Card key={item.id} className="p-3">
                                                 <div className="flex items-center justify-between">
@@ -595,7 +724,7 @@ function NPCDialogContent({ npc, character, relationshipLevel, onInteract, onTra
                                                                         <div className="text-xs space-y-1">
                                                                             <div>База: {base}</div>
                                                                             <div>Редкость: {item.rarity || 'common'}</div>
-                                                                            <div>Отношения/красноречие: скидка применяется</div>
+                                                                            <div>Отношения влияют на цену</div>
                                                                             {modNote && <div>{modNote}</div>}
                                                                         </div>
                                                                     </TooltipContent>
@@ -643,7 +772,7 @@ function NPCDialogContent({ npc, character, relationshipLevel, onInteract, onTra
                                                                         <div className="text-xs space-y-1">
                                                                             <div>База: {base}</div>
                                                                             <div>Редкость: {item.rarity || 'common'}</div>
-                                                                            <div>Скупочная цена ~40% от покупки</div>
+                                                                            <div>Скупочная цена ~40%</div>
                                                                         </div>
                                                                     </TooltipContent>
                                                                 </Tooltip>
@@ -694,7 +823,7 @@ function NPCDialogContent({ npc, character, relationshipLevel, onInteract, onTra
                                                 onClick={() => onGift(npc, item.id)}
                                                 disabled={isInteracting}
                                             >
-                                                <LucideIcons.Gift className="mr-1 h-3 w-3" />
+                                                <Gift className="mr-1 h-3 w-3" />
                                                 Подарить
                                             </Button>
                                         </div>
