@@ -1706,6 +1706,37 @@ export async function processGameTick(
             } catch {}
         }
     } catch {}
+    // --- 12b. REACTIONS TO PLAYER INTERACTIONS (Divine Whisper, etc) ---
+    try {
+        const { listInteractions } = await import('@/services/reactionService');
+        const interactions = await listInteractions(userId, 5); // Get last 5 interactions
+        
+        // Check for unprocessed player messages
+        for (const interaction of interactions) {
+            if (interaction.source === 'player-message' && interaction.payload) {
+                const msg = (interaction.payload as any).text;
+                const msgTime = new Date(interaction.createdAt).getTime();
+                const processedKey = `reaction:processed:${interaction.id}`;
+                
+                // Check if we already processed this message
+                if (!(updatedChar.actionCooldowns as any)?.[processedKey]) {
+                    // Mark as processed
+                    if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {} as any;
+                    (updatedChar.actionCooldowns as any)[processedKey] = Date.now();
+                    
+                    // Add to adventure log
+                    adventureLog.push(`💬 Божественный шепот: "${msg}"`);
+                    
+                    // Log as reaction for analytics
+                    if (updatedChar.status === 'in-combat') {
+                        combatLog.push(`💬 Божественный шепот: "${msg}"`);
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error processing reactions:', error);
+    }
    
     // --- 13. ACTION LOGIC (AI Brain) ---
     if (shouldTakeTurn) {
