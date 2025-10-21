@@ -23,6 +23,7 @@ import {
   Database,
   MessageSquare,
   Shield,
+  MapPinned,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -37,6 +38,7 @@ const adminNavItems = [
   { href: '/admin/data', icon: Database, label: 'Данные' },
   { href: '/admin/telegram', icon: MessageSquare, label: 'Telegram' },
   { href: '/admin/realms', icon: Shield, label: 'Реалмы' },
+  { href: '/admin/debug-map', icon: MapPinned, label: 'Debug Map' },
 
 ];
 
