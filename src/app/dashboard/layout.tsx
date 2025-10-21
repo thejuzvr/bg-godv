@@ -176,8 +176,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="flex min-h-screen w-full">
           <MainSidebar />
           <SidebarInset className="flex-1 flex flex-col">
-            <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-4 border-b bg-card px-4">
-              <div className="flex items-center gap-2 md:hidden">
+            {/* Mobile-only header */}
+            <header className="sticky top-0 z-10 flex h-14 items-center justify-between gap-4 border-b bg-card px-4 md:hidden">
+              <div className="flex items-center gap-2">
                 <SidebarTrigger>
                     <PanelLeft/>
                 </SidebarTrigger>
@@ -185,7 +186,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <DragonIcon className="h-6 w-6" />
                 </Link>
               </div>
-              <div className="hidden md:flex" />
               <RealmSelector />
             </header>
             <main className="flex-1 overflow-auto">

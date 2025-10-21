@@ -3245,10 +3245,53 @@ async function determineNextAction(character: Character, gameData: GameData): Pr
 
     // 5a. Anti-stall shortcuts removed; goals will steer travel when needed
     
-    // 6. Handle Divine Suggestion (override)
+    // 6. Handle Divine Suggestion (with chance of refusal)
     if (character.divineSuggestion) {
         const suggestedAction = possibleActions.find(a => a.name === character.divineSuggestion);
         if (suggestedAction) {
+            // Hero can refuse divine suggestion based on mood and fatigue
+            const mood = character.mood;
+            const fatigueRatio = character.stats.fatigue.current / character.stats.fatigue.max;
+            
+            // Base refusal chance: 20%
+            let refusalChance = 0.2;
+            
+            // Low mood increases refusal chance
+            if (mood < 30) refusalChance += 0.2;
+            else if (mood < 50) refusalChance += 0.1;
+            
+            // High fatigue increases refusal chance
+            if (fatigueRatio > 0.7) refusalChance += 0.15;
+            
+            // Roll for refusal
+            if (Math.random() < refusalChance) {
+                // Hero refuses - log a sarcastic thought
+                try {
+                    const { getRefusalThought } = await import('@/data/refusal-thoughts');
+                    const locationName = character.divineDestinationId 
+                        ? gameData.locations.find(l => l.id === character.divineDestinationId)?.name || 'неизвестное место'
+                        : 'неизвестное место';
+                    const refusalMessage = getRefusalThought(locationName);
+                    
+                    // Clear divine suggestion immediately (hero refused)
+                    const refusedChar = structuredClone(character);
+                    refusedChar.divineSuggestion = null;
+                    refusedChar.divineDestinationId = null;
+                    
+                    // Return wander action with refusal message
+                    return {
+                        ...wanderAction,
+                        perform: async () => ({
+                            character: refusedChar,
+                            logMessage: `[приключение] ${refusalMessage}`
+                        })
+                    };
+                } catch (err) {
+                    console.error('Failed to load refusal thought:', err);
+                }
+            }
+            
+            // Hero accepts the suggestion
             return suggestedAction;
         }
     }
