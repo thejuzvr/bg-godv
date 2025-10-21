@@ -1317,7 +1317,16 @@ const takeQuestAction: Action = {
                 .limit(1);
             
             if (activeQuest) {
-                return { character: updatedChar, logMessage: `Герой уже занят заданием "${(activeQuest as any).title}". Нужно сначала завершить его.` };
+                // Don't spam the log - set a cooldown and return empty message
+                if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {} as any;
+                const lastWarning = (updatedChar.actionCooldowns as any)['quest:active:warning'] || 0;
+                const now = Date.now();
+                if (now - lastWarning > 10 * 60 * 1000) { // Only warn once per 10 minutes
+                    (updatedChar.actionCooldowns as any)['quest:active:warning'] = now;
+                    return { character: updatedChar, logMessage: `[adventure] Герой сосредоточен на задании "${(activeQuest as any).title}".` };
+                }
+                // Silent return - hero is busy with quest, just don't spam
+                return { character: updatedChar, logMessage: '' };
             }
             
             const templates = await selectQuestTemplatesForCharacter(updatedChar);
