@@ -54,17 +54,17 @@ const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Дашборд' },
   { href: '/dashboard/character', icon: UserIcon, label: 'Персонаж' },
   { href: '/dashboard/inventory', icon: Backpack, label: 'Инвентарь' },
-  { href: '/dashboard/mind', icon: Brain, label: 'Сознание' },
-  { href: '/dashboard/analytics', icon: ChartNetwork, label: 'Аналитика' },
-  { href: '/dashboard/map', icon: Map, label: 'Карта Мира' },
+  { href: '/dashboard/quests', icon: BookOpen, label: 'Задания' },
+  { href: '/dashboard/map', icon: Map, label: 'Карта' },
+  { href: '/dashboard/companions', icon: Users, label: 'Компаньоны' },
+  { href: '/dashboard/society', icon: Speech, label: 'Общество' },
+  { href: '/dashboard/market', icon: Store, label: 'Рынок' },
   { href: '/dashboard/crafting', icon: Hammer, label: 'Крафт' },
   { href: '/dashboard/gathering', icon: Pickaxe, label: 'Добыча' },
-  { href: '/dashboard/quests', icon: BookOpen, label: 'Журнал Заданий' },
   { href: '/dashboard/factions', icon: Shield, label: 'Фракции' },
-  { href: '/dashboard/society', icon: Speech, label: 'Общество' },
-  { href: '/dashboard/market', icon: Store, label: 'Ларьки' },
   { href: '/dashboard/chronicle', icon: BookMarked, label: 'Летопись' },
-  { href: '/dashboard/arena', icon: Swords, label: 'Арена' },
+  { href: '/dashboard/mind', icon: Brain, label: 'Сознание' },
+  { href: '/dashboard/analytics', icon: ChartNetwork, label: 'Аналитика' },
 ];
 
 function RealmSelector() {
@@ -176,8 +176,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="flex min-h-screen w-full">
           <MainSidebar />
           <SidebarInset className="flex-1 flex flex-col">
-            <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-4 border-b bg-card px-4">
-              <div className="flex items-center gap-2 md:hidden">
+            {/* Mobile-only header */}
+            <header className="sticky top-0 z-10 flex h-14 items-center justify-between gap-4 border-b bg-card px-4 md:hidden">
+              <div className="flex items-center gap-2">
                 <SidebarTrigger>
                     <PanelLeft/>
                 </SidebarTrigger>
@@ -185,7 +186,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <DragonIcon className="h-6 w-6" />
                 </Link>
               </div>
-              <div className="hidden md:flex" />
               <RealmSelector />
             </header>
             <main className="flex-1 overflow-auto">

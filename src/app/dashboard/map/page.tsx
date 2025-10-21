@@ -15,6 +15,13 @@ import { Button } from "@/components/ui/button";
 import * as LucideIcons from "lucide-react";
 import type { Location, LocationType } from "@/types/location";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 
 const Icon = ({ name, ...props }: { name: string } & LucideIcons.LucideProps) => {
   const LucideIcon = (LucideIcons as any)[name];
@@ -41,6 +48,8 @@ export default function MapPage() {
     const [gameData, setGameData] = useState<GameData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [activeFilters, setActiveFilters] = useState<LocationType[]>(['city', 'town', 'ruin', 'dungeon', 'camp']);
+    const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
     const mapContainerRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
@@ -70,15 +79,25 @@ export default function MapPage() {
         loadData();
     }, [user, router, toast]);
 
-    const handleMapLocationClick = async (locationId: string) => {
-        if (!character || !user || character.location === locationId) return;
+    const handleMapLocationClick = (locationId: string) => {
+        const location = gameData?.locations.find(l => l.id === locationId);
+        if (!location) return;
+        
+        setSelectedLocation(location);
+        setIsModalOpen(true);
+    };
 
-        const result = await suggestTravel(user.userId, locationId);
+    const handleTravelNow = async () => {
+        if (!character || !user || !selectedLocation || character.location === selectedLocation.id) {
+            setIsModalOpen(false);
+            return;
+        }
+
+        const result = await suggestTravel(user.userId, selectedLocation.id);
         if (result.success) {
-            const destinationName = gameData?.locations.find(l => l.id === locationId)?.name || "неизвестное место";
             toast({
                 title: "Приказ отдан",
-                description: `Вы приказали герою отправиться в ${destinationName}. Он выдвинется, как только закончит текущие дела.`
+                description: `Вы приказали герою отправиться в ${selectedLocation.name}. Он выдвинется, как только закончит текущие дела.`
             });
         } else {
             toast({
@@ -87,6 +106,30 @@ export default function MapPage() {
                 variant: "destructive"
             });
         }
+        setIsModalOpen(false);
+    };
+
+    const handleSuggestTravel = async () => {
+        if (!character || !user || !selectedLocation || character.location === selectedLocation.id) {
+            setIsModalOpen(false);
+            return;
+        }
+
+        // Suggest travel with lower priority (hero can refuse)
+        const result = await suggestTravel(user.userId, selectedLocation.id);
+        if (result.success) {
+            toast({
+                title: "Предложение отправлено",
+                description: `Вы предложили герою посетить ${selectedLocation.name}. Он учтёт это при выборе следующего действия.`
+            });
+        } else {
+            toast({
+                title: "Ошибка",
+                description: result.message || "Не удалось отправить предложение.",
+                variant: "destructive"
+            });
+        }
+        setIsModalOpen(false);
     };
 
     const handleFilterToggle = (filter: LocationType) => {
@@ -197,6 +240,89 @@ return (
                 </TransformWrapper>
             </main>
         </div>
+
+        {/* Location Details Modal */}
+        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+            <DialogContent className="sm:max-w-[500px]">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2 text-2xl font-headline">
+                        <Icon 
+                            name={selectedLocation?.type === 'city' ? 'Castle' : 
+                                  selectedLocation?.type === 'town' ? 'Building2' :
+                                  selectedLocation?.type === 'dungeon' ? 'LandPlot' :
+                                  selectedLocation?.type === 'ruin' ? 'TowerControl' :
+                                  'Tent'} 
+                            className="h-6 w-6 text-primary" 
+                        />
+                        {selectedLocation?.name}
+                    </DialogTitle>
+                    <DialogDescription>
+                        <div className="mt-4 space-y-4">
+                            <div>
+                                <h4 className="font-semibold text-sm text-foreground mb-1">Тип локации</h4>
+                                <p className="text-sm capitalize">
+                                    {selectedLocation?.type === 'city' ? 'Город' :
+                                     selectedLocation?.type === 'town' ? 'Поселение' :
+                                     selectedLocation?.type === 'dungeon' ? 'Подземелье' :
+                                     selectedLocation?.type === 'ruin' ? 'Руины' :
+                                     selectedLocation?.type === 'camp' ? 'Лагерь' : 'Окрестности'}
+                                </p>
+                            </div>
+                            
+                            <div>
+                                <h4 className="font-semibold text-sm text-foreground mb-1">Безопасность</h4>
+                                <p className="text-sm flex items-center gap-2">
+                                    {selectedLocation?.isSafe ? (
+                                        <><Icon name="ShieldCheck" className="h-4 w-4 text-green-500" /> Безопасная зона</>
+                                    ) : (
+                                        <><Icon name="Skull" className="h-4 w-4 text-red-500" /> Опасная территория</>
+                                    )}
+                                </p>
+                            </div>
+
+                            <div>
+                                <h4 className="font-semibold text-sm text-foreground mb-1">Описание</h4>
+                                <p className="text-sm text-muted-foreground">
+                                    {selectedLocation?.isSafe 
+                                        ? `${selectedLocation.name} — место, где можно отдохнуть, пополнить запасы и принять новые задания. Здесь герой в безопасности.`
+                                        : `${selectedLocation?.name} — опасное место, полное враждебных существ и ловушек. Герой должен быть готов к бою.`
+                                    }
+                                </p>
+                            </div>
+
+                            {character?.location === selectedLocation?.id && (
+                                <div className="p-3 bg-accent/10 border border-accent rounded-md">
+                                    <p className="text-sm text-accent font-semibold flex items-center gap-2">
+                                        <Icon name="MapPin" className="h-4 w-4" />
+                                        Герой находится здесь сейчас
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="flex gap-3 mt-6">
+                    <Button 
+                        onClick={handleTravelNow} 
+                        className="flex-1"
+                        disabled={character?.location === selectedLocation?.id}
+                    >
+                        <Icon name="Navigation" className="mr-2 h-4 w-4" />
+                        Отправиться сейчас
+                    </Button>
+                    <Button 
+                        onClick={handleSuggestTravel} 
+                        variant="outline" 
+                        className="flex-1"
+                        disabled={character?.location === selectedLocation?.id}
+                    >
+                        <Icon name="Lightbulb" className="mr-2 h-4 w-4" />
+                        Направить героя
+                    </Button>
+                </div>
+            </DialogContent>
+        </Dialog>
     </div>
 );
 }
