@@ -30,6 +30,7 @@ async function migrateGameData() {
       coordX: loc.coords.x,
       coordY: loc.coords.y,
       isSafe: loc.isSafe,
+      dangerLevel: loc.dangerLevel || 0,
     }));
     
     await db.insert(gameLocations)

@@ -8,12 +8,18 @@ export const initialLocations: Location[] = [
   { id: 'markarth', name: 'Маркарт', type: 'city', coords: { x: 18, y: 58 }, isSafe: true },
   { id: 'riften', name: 'Рифтен', type: 'city', coords: { x: 85, y: 80 }, isSafe: true },
 
-  // City outskirts (local activity hubs)
-  { id: 'whiterun_outskirts', name: 'Окрестности Вайтрана', type: 'outskirts', coords: { x: 49, y: 58 }, isSafe: true },
-  { id: 'solitude_outskirts', name: 'Окрестности Солитьюда', type: 'outskirts', coords: { x: 23, y: 24 }, isSafe: true },
-  { id: 'windhelm_outskirts', name: 'Окрестности Виндхельма', type: 'outskirts', coords: { x: 80, y: 42 }, isSafe: true },
-  { id: 'riften_outskirts', name: 'Окрестности Рифтена', type: 'outskirts', coords: { x: 83, y: 84 }, isSafe: true },
-  { id: 'markarth_outskirts', name: 'Окрестности Маркарта', type: 'outskirts', coords: { x: 20, y: 62 }, isSafe: true },
+  // City outskirts (local activity hubs) - zones with varying danger levels
+  { id: 'whiterun_outskirts', name: 'Окрестности Вайтрана', type: 'outskirts', coords: { x: 49, y: 58 }, isSafe: false, dangerLevel: 25 },
+  { id: 'solitude_outskirts', name: 'Окрестности Солитьюда', type: 'outskirts', coords: { x: 23, y: 24 }, isSafe: false, dangerLevel: 20 },
+  { id: 'windhelm_outskirts', name: 'Окрестности Виндхельма', type: 'outskirts', coords: { x: 80, y: 42 }, isSafe: false, dangerLevel: 30 },
+  { id: 'riften_outskirts', name: 'Окрестности Рифтена', type: 'outskirts', coords: { x: 83, y: 84 }, isSafe: false, dangerLevel: 35 },
+  { id: 'markarth_outskirts', name: 'Окрестности Маркарта', type: 'outskirts', coords: { x: 20, y: 62 }, isSafe: false, dangerLevel: 40 },
+
+  // Town outskirts
+  { id: 'dawnstar_outskirts', name: 'Окрестности Данстара', type: 'outskirts', coords: { x: 50, y: 12 }, isSafe: false, dangerLevel: 45 },
+  { id: 'winterhold_outskirts', name: 'Окрестности Винтерхолда', type: 'outskirts', coords: { x: 74, y: 20 }, isSafe: false, dangerLevel: 50 },
+  { id: 'morthal_outskirts', name: 'Окрестности Морфала', type: 'outskirts', coords: { x: 36, y: 28 }, isSafe: false, dangerLevel: 35 },
+  { id: 'falkreath_outskirts', name: 'Окрестности Фолкрита', type: 'outskirts', coords: { x: 42, y: 85 }, isSafe: false, dangerLevel: 30 },
 
   // Minor Cities (represented as towns)
   { id: 'dawnstar', name: 'Данстар', type: 'town', coords: { x: 50, y: 15 }, isSafe: true },

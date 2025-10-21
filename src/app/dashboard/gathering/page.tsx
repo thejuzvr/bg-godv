@@ -14,9 +14,42 @@ import { Pickaxe, MapPin, Zap, Package, Loader2, TrendingUp, Clock } from "lucid
 
 // Типы ресурсов которые можно добыть
 const resourceTypes = [
-  { id: 'ore_iron', name: 'Железная руда', icon: '⛏️', description: 'Основной материал для кузнечного дела' },
-  { id: 'ore_silver', name: 'Серебряная руда', icon: '✨', description: 'Ценный металл для ювелирных изделий' },
-  { id: 'ore_gold', name: 'Золотая руда', name: 'Редкий и ценный металл' },
+  // Руды
+  { id: 'ore_iron', name: 'Железная руда', icon: '⛏️', description: 'Основной материал для кузнечного дела', category: 'Руды' },
+  { id: 'ore_silver', name: 'Серебряная руда', icon: '✨', description: 'Ценный металл для ювелирных изделий', category: 'Руды' },
+  { id: 'ore_gold', name: 'Золотая руда', icon: '💰', description: 'Редкий и ценный металл', category: 'Руды' },
+  { id: 'ore_corundum', name: 'Корунд', icon: '💎', description: 'Прочный минерал для крафта', category: 'Руды' },
+  { id: 'ore_quicksilver', name: 'Ртутная руда', icon: '🌙', description: 'Редкая руда для эльфийского оружия', category: 'Руды' },
+  { id: 'ore_moonstone', name: 'Лунный камень', icon: '🌕', description: 'Магический кристалл', category: 'Руды' },
+  { id: 'ore_malachite', name: 'Малахит', icon: '🟢', description: 'Зеленый минерал для стеклянного оружия', category: 'Руды' },
+  { id: 'ore_orichalcum', name: 'Орихалк', icon: '🟡', description: 'Орочья руда', category: 'Руды' },
+  { id: 'ore_ebony', name: 'Эбонитовая руда', icon: '⚫', description: 'Легендарная темная руда', category: 'Руды' },
+  
+  // Алхимические ингредиенты
+  { id: 'ingredient_blue_mountain_flower', name: 'Голубой горный цветок', icon: '🌸', description: 'Для зелий восстановления', category: 'Алхимия' },
+  { id: 'ingredient_lavender', name: 'Лаванда', icon: '💜', description: 'Успокаивающая трава', category: 'Алхимия' },
+  { id: 'ingredient_red_mountain_flower', name: 'Красный горный цветок', icon: '🌺', description: 'Для зелий магии', category: 'Алхимия' },
+  { id: 'ingredient_thistle_branch', name: 'Ветка чертополоха', icon: '🌿', description: 'Сопротивление магии', category: 'Алхимия' },
+  { id: 'ingredient_tundra_cotton', name: 'Тундровый хлопок', icon: '☁️', description: 'Сопротивление морозу', category: 'Алхимия' },
+  { id: 'ingredient_snowberry', name: 'Снежная ягода', icon: '❄️', description: 'Сопротивление огню', category: 'Алхимия' },
+  { id: 'ingredient_wheat', name: 'Пшеница', icon: '🌾', description: 'Для приготовления пищи', category: 'Алхимия' },
+  { id: 'ingredient_nirnroot', name: 'Корень Нирна', icon: '🔮', description: 'Редкий магический корень', category: 'Алхимия' },
+  
+  // Грибы
+  { id: 'ingredient_imp_stool', name: 'Бесовский гриб', icon: '🍄', description: 'Ядовитый гриб', category: 'Грибы' },
+  { id: 'ingredient_white_cap', name: 'Белая шапка', icon: '🍄', description: 'Ослабляет иммунитет', category: 'Грибы' },
+  { id: 'ingredient_blisterwort', name: 'Волдырник', icon: '🍄', description: 'Восстанавливает здоровье', category: 'Грибы' },
+  { id: 'ingredient_glowing_mushroom', name: 'Светящийся гриб', icon: '✨', description: 'Магическое свечение', category: 'Грибы' },
+  { id: 'ingredient_mora_tapinella', name: 'Мора Тапинелла', icon: '🍄', description: 'Восстанавливает магию', category: 'Грибы' },
+  
+  // Материалы
+  { id: 'material_firewood', name: 'Дрова', icon: '🪵', description: 'Для крафта и отопления', category: 'Материалы' },
+  { id: 'material_charcoal', name: 'Древесный уголь', icon: '⚫', description: 'Для кузнечного дела', category: 'Материалы' },
+  { id: 'material_linen', name: 'Льняная ткань', icon: '🧵', description: 'Для одежды', category: 'Материалы' },
+  
+  // Особые ингредиенты
+  { id: 'ingredient_ectoplasm', name: 'Эктоплазма', icon: '👻', description: 'Призрачная субстанция', category: 'Особое' },
+  { id: 'ingredient_bone_meal', name: 'Костная мука', icon: '💀', description: 'Из костей нежити', category: 'Особое' },
 ];
 
 export default function GatheringPage() {
@@ -70,7 +103,12 @@ export default function GatheringPage() {
   const gatheringStats = useMemo(() => {
     if (!character) return { total: 0, byType: {} };
     
-    const resources = character.inventory.filter(i => i.id.startsWith('ore_'));
+    // Include ores, ingredients, and materials
+    const resources = character.inventory.filter(i => 
+      i.id.startsWith('ore_') || 
+      i.id.startsWith('ingredient_') || 
+      i.id.startsWith('material_')
+    );
     const total = resources.reduce((sum, r) => sum + r.quantity, 0);
     const byType = resources.reduce((acc, r) => ({ ...acc, [r.id]: r.quantity }), {} as Record<string, number>);
     
@@ -201,27 +239,43 @@ export default function GatheringPage() {
               Всего добыто: {gatheringStats.total} ед.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {resourceTypes.map(resource => {
-              const count = gatheringStats.byType[resource.id] || 0;
-              const hasResource = count > 0;
+          <CardContent className="space-y-4">
+            {/* Group resources by category */}
+            {['Руды', 'Алхимия', 'Грибы', 'Материалы', 'Особое'].map(category => {
+              const categoryResources = resourceTypes.filter(r => r.category === category);
+              const categoryTotal = categoryResources.reduce((sum, r) => sum + (gatheringStats.byType[r.id] || 0), 0);
+              
+              if (categoryTotal === 0 && gatheringStats.total > 0) return null; // Hide empty categories if player has some resources
               
               return (
-                <div 
-                  key={resource.id} 
-                  className={`p-3 rounded-lg border ${hasResource ? 'bg-primary/5 border-primary/20' : 'bg-muted/50 border-dashed'}`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">{resource.icon}</span>
-                      <div>
-                        <p className="font-medium">{resource.name}</p>
-                        <p className="text-xs text-muted-foreground">{resource.description}</p>
-                      </div>
-                    </div>
-                    <Badge variant={hasResource ? "default" : "outline"}>
-                      {count} шт.
-                    </Badge>
+                <div key={category}>
+                  <h4 className="text-sm font-semibold text-muted-foreground mb-2">{category}</h4>
+                  <div className="space-y-2">
+                    {categoryResources.slice(0, 5).map(resource => {
+                      const count = gatheringStats.byType[resource.id] || 0;
+                      const hasResource = count > 0;
+                      
+                      if (!hasResource && gatheringStats.total > 5) return null; // Hide empty resources if player has many
+                      
+                      return (
+                        <div 
+                          key={resource.id} 
+                          className={`p-2 rounded-lg border ${hasResource ? 'bg-primary/5 border-primary/20' : 'bg-muted/50 border-dashed'}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xl">{resource.icon}</span>
+                              <div>
+                                <p className="text-sm font-medium">{resource.name}</p>
+                              </div>
+                            </div>
+                            <Badge variant={hasResource ? "default" : "outline"} className="text-xs">
+                              {count}
+                            </Badge>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );
