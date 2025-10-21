@@ -414,6 +414,11 @@ export default function DashboardPage() {
                           const time = new Date(log.timestamp).toLocaleTimeString();
                           let text = msg;
                           let icon: React.ReactNode | null = null;
+                          // Divine messages (божественный шёпот)
+                          if (text.startsWith('[божество]')) {
+                            icon = <Sparkles className="h-4 w-4" />;
+                            text = text.replace(/^\[божество\]\s*/u, '');
+                          }
                           // Thoughts
                           if (text.startsWith('У героя родилась мысль:')) {
                             icon = <BrainCircuit className="h-4 w-4" />;

@@ -174,6 +174,10 @@ export const characters = pgTable('characters', {
   // Location arrival tracking for strict sequencing
   lastLocationArrival: bigint('last_location_arrival', { mode: 'number' }),
   hasCompletedLocationActivity: boolean('has_completed_location_activity').notNull().default(false),
+  
+  // Companions
+  companions: jsonb('companions').notNull().default([]).$type<string[]>(), // IDs of recruited companions
+  activeCompanion: text('active_companion'), // ID of currently active companion
 });
 
 // === Divine messages (user-driven) ===
@@ -553,6 +557,46 @@ export const aiGraphInstances = pgTable('ai_graph_instances', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
+// === COMPANIONS ===
+export const characterCompanions = pgTable('character_companions', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  characterId: text('character_id').notNull().references(() => characters.id, { onDelete: 'cascade' }),
+  npcId: text('npc_id').notNull(), // Reference to NPC companion template
+  name: text('name').notNull(),
+  class: text('class').notNull(), // 'warrior' | 'mage' | 'rogue' | 'healer' | 'ranger'
+  rarity: text('rarity').notNull(), // 'common' | 'uncommon' | 'rare' | 'legendary'
+  level: integer('level').notNull().default(1),
+  stats: jsonb('stats').notNull().$type<{
+    health: { current: number; max: number };
+    damage: number;
+    armor: number;
+  }>(),
+  skills: jsonb('skills').notNull().$type<{
+    combat: number;
+    magic: number;
+    stealth: number;
+  }>(),
+  abilities: jsonb('abilities').notNull().$type<Array<{
+    id: string;
+    name: string;
+    type: string;
+    description: string;
+    cooldown: number;
+    manaCost?: number;
+  }>>(),
+  personality: jsonb('personality').notNull().$type<{
+    loyalty: number;
+    courage: number;
+    humor: number;
+  }>(),
+  experience: integer('experience').notNull().default(0),
+  mood: integer('mood').notNull().default(50), // 0-100
+  isActive: boolean('is_active').notNull().default(false),
+  acquiredAt: bigint('acquired_at', { mode: 'number' }).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 // === QUESTS ===
 export const quests = pgTable('quests', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -649,3 +693,6 @@ export type AiGraphTemplateDB = typeof aiGraphTemplates.$inferSelect;
 export type NewAiGraphTemplateDB = typeof aiGraphTemplates.$inferInsert;
 export type AiGraphInstanceDB = typeof aiGraphInstances.$inferSelect;
 export type NewAiGraphInstanceDB = typeof aiGraphInstances.$inferInsert;
+
+export type CharacterCompanionDB = typeof characterCompanions.$inferSelect;
+export type NewCharacterCompanionDB = typeof characterCompanions.$inferInsert;

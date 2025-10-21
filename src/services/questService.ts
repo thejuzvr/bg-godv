@@ -79,6 +79,24 @@ export async function setTaskStatus(taskId: string, status: 'pending' | 'in-prog
   return row;
 }
 
+export async function acceptQuest(questId: string): Promise<{ ok: boolean; error?: string; quest?: any }> {
+  const [quest] = await db.select().from(schema.quests).where(eq(schema.quests.id, questId)).limit(1);
+  if (!quest) return { ok: false, error: 'Quest not found' };
+  if ((quest as any).status !== 'available') return { ok: false, error: 'Quest is not available' };
+  
+  // Check if character already has an active quest
+  const [activeQuest] = await db.select().from(schema.quests)
+    .where(and(eq(schema.quests.characterId, (quest as any).characterId), eq(schema.quests.status, 'in-progress' as any)))
+    .limit(1);
+  if (activeQuest) return { ok: false, error: 'Character already has an active quest' };
+  
+  const [updated] = await db.update(schema.quests)
+    .set({ status: 'in-progress' as any, updatedAt: new Date() })
+    .where(eq(schema.quests.id, questId))
+    .returning();
+  return { ok: true, quest: updated };
+}
+
 export async function completeQuest(questId: string) {
   const [quest] = await db.select().from(schema.quests).where(eq(schema.quests.id, questId)).limit(1);
   if (!quest) return null;
@@ -115,7 +133,7 @@ export async function selectQuestTemplatesForCharacter(character: Character, opt
   return sorted.slice(0, limit);
 }
 
-export async function createQuestFromTemplate(character: Character, template: Quest) {
+export async function createQuestFromTemplate(character: Character, template: Quest, autoAccept: boolean = false) {
   const baseTasks: Array<{ title: string; type: string; data?: Record<string, any> }> = [];
   if (template.type === 'bounty' && template.targetEnemyId) {
     baseTasks.push({ title: 'Найти цель', type: 'travel', data: { location: template.location } });
@@ -137,6 +155,7 @@ export async function createQuestFromTemplate(character: Character, template: Qu
     type: template.type as any,
     rewards: template.reward as any,
     tasks: baseTasks,
+    status: autoAccept ? 'in-progress' : 'available',
   });
   return created;
 }
