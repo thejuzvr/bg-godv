@@ -149,12 +149,36 @@ export default function FactionsPage() {
                                 <p className="text-xs text-muted-foreground text-center mt-2">{character.templeProgress.toLocaleString()} / {TEMPLE_GOAL.toLocaleString()} золота</p>
                             </div>
                              <Separator />
-                             <div className="flex items-center justify-between gap-4">
+                             <div className="space-y-3">
                                 <p className="text-sm text-muted-foreground">Внесите свой вклад в строительство, чтобы получить вечную славу и божественные дары.</p>
-                                <Button onClick={() => handleDonation(`deity_${deity.id}`, 100)} disabled={isDonating || (character.inventory.find(i => i.id === 'gold')?.quantity || 0) < 100}>
-                                    {isDonating ? <Loader2 className="animate-spin mr-2" /> : <Coins className="mr-2 h-4 w-4" />}
-                                    Пожертвовать 100
-                                </Button>
+                                <div className="flex gap-2">
+                                    <Button 
+                                        onClick={() => handleDonation(`deity_${deity.id}`, 50)} 
+                                        disabled={isDonating || (character.inventory.find(i => i.id === 'gold')?.quantity || 0) < 50}
+                                        variant="outline"
+                                        className="flex-1"
+                                    >
+                                        {isDonating ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Coins className="mr-2 h-4 w-4" />}
+                                        50g
+                                    </Button>
+                                    <Button 
+                                        onClick={() => handleDonation(`deity_${deity.id}`, 100)} 
+                                        disabled={isDonating || (character.inventory.find(i => i.id === 'gold')?.quantity || 0) < 100}
+                                        variant="outline"
+                                        className="flex-1"
+                                    >
+                                        {isDonating ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Coins className="mr-2 h-4 w-4" />}
+                                        100g
+                                    </Button>
+                                    <Button 
+                                        onClick={() => handleDonation(`deity_${deity.id}`, 500)} 
+                                        disabled={isDonating || (character.inventory.find(i => i.id === 'gold')?.quantity || 0) < 500}
+                                        className="flex-1"
+                                    >
+                                        {isDonating ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Coins className="mr-2 h-4 w-4" />}
+                                        500g
+                                    </Button>
+                                </div>
                              </div>
                         </CardContent>
                     </Card>
@@ -196,7 +220,39 @@ export default function FactionsPage() {
                                             {nextTier && <span className="text-muted-foreground">След. ранг: {nextTier.title} ({nextTier.level} rep)</span>}
                                         </div>
                                         <Progress value={progress} />
+                                        <p className="text-xs text-muted-foreground">
+                                            {reputation} / {nextTier ? nextTier.level : currentTier.level} репутации
+                                        </p>
                                     </div>
+                                    
+                                    {isJoinable && (
+                                        <>
+                                            <Separator />
+                                            <div className="space-y-2">
+                                                <p className="text-sm font-medium">Быстрое пожертвование</p>
+                                                <div className="flex gap-2">
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant="outline"
+                                                        onClick={() => handleDonation(faction.id, 50)}
+                                                        disabled={isDonating || (character.inventory.find(i => i.id === 'gold')?.quantity || 0) < 50}
+                                                        className="flex-1"
+                                                    >
+                                                        +5 rep (50g)
+                                                    </Button>
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant="outline"
+                                                        onClick={() => handleDonation(faction.id, 100)}
+                                                        disabled={isDonating || (character.inventory.find(i => i.id === 'gold')?.quantity || 0) < 100}
+                                                        className="flex-1"
+                                                    >
+                                                        +10 rep (100g)
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
                                     
                                     <Accordion type="single" collapsible className="w-full">
                                     <AccordionItem value="item-1">
