@@ -231,65 +231,84 @@ export default function MindPage() {
 
 
     return (
-        <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-6 font-body p-4 md:p-8">
-            <div className="col-span-1 lg:col-span-2 flex justify-end">
-                <a href="/dashboard/mind/editor" className="px-3 py-2 border rounded bg-primary text-primary-foreground">Редактор сознания</a>
+        <div className="w-full font-body p-4 md:p-8 space-y-6">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-primary/10">
+                        <BrainCircuit className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                        <h1 className="text-3xl font-headline text-foreground">Сознание Героя</h1>
+                        <p className="text-muted-foreground text-sm mt-1">
+                            Анализ AI поведения и принятия решений
+                        </p>
+                    </div>
+                </div>
+                <a 
+                    href="/dashboard/mind/editor" 
+                    className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-medium"
+                >
+                    Редактор сознания
+                </a>
             </div>
-            {/* Column 1 */}
-            <div className="flex flex-col gap-6">
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 font-headline">
-                            <Activity className="text-primary" />
-                            Анализ Поведенческих Паттернов
-                        </CardTitle>
-                        <CardDescription>Динамические показатели, влияющие на решения героя</CardDescription>
-                    </CardHeader>
-                    <CardContent className="grid grid-cols-3 md:grid-cols-3 gap-y-6 gap-x-2">
-                        <PatternChart value={patterns.risk} label="Риск" color="hsl(var(--destructive))" />
-                        <PatternChart value={patterns.resources} label="Ресурсы" color="hsl(var(--chart-1))" />
-                        <PatternChart value={patterns.morale} label="Мораль" color="hsl(var(--chart-2))" />
-                        <PatternChart value={patterns.social} label="Социум" color="hsl(var(--chart-3))" />
-                        <PatternChart value={patterns.combat} label="Боевое" color="hsl(var(--chart-4))" />
-                        <PatternChart value={patterns.exploration} label="Исследование" color="hsl(var(--chart-5))" />
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 font-headline">
-                            <Goal className="text-primary" />
-                            Факторы принятия решений
-                        </CardTitle>
-                        <CardDescription>Аналитика текущего поведения</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <ChartContainer config={decisionChartConfig} className="mx-auto aspect-square max-h-[350px]">
-                            <RadarChart data={decisionFactorsData} outerRadius="70%">
-                                <ChartTooltip content={<ChartTooltipContent />} />
-                                <PolarGrid />
-                                <PolarAngleAxis dataKey="name" />
-                                <Radar
-                                    dataKey="value"
-                                    fill="hsl(var(--chart-1))"
-                                    fillOpacity={0.6}
-                                    stroke="hsl(var(--chart-1))"
-                                />
-                            </RadarChart>
-                        </ChartContainer>
-                    </CardContent>
-                </Card>
-            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Column 1 */}
+                <div className="flex flex-col gap-6">
+                    <Card className="border-2">
+                        <CardHeader className="pb-4">
+                            <CardTitle className="flex items-center gap-2 font-headline text-xl">
+                                <Activity className="text-primary h-5 w-5" />
+                                Поведенческие Паттерны
+                            </CardTitle>
+                            <CardDescription>Динамические показатели, влияющие на решения героя в реальном времени</CardDescription>
+                        </CardHeader>
+                        <CardContent className="grid grid-cols-3 md:grid-cols-3 gap-y-6 gap-x-2">
+                            <PatternChart value={patterns.risk} label="Риск" color="hsl(var(--destructive))" />
+                            <PatternChart value={patterns.resources} label="Ресурсы" color="hsl(var(--chart-1))" />
+                            <PatternChart value={patterns.morale} label="Мораль" color="hsl(var(--chart-2))" />
+                            <PatternChart value={patterns.social} label="Социум" color="hsl(var(--chart-3))" />
+                            <PatternChart value={patterns.combat} label="Боевое" color="hsl(var(--chart-4))" />
+                            <PatternChart value={patterns.exploration} label="Исследование" color="hsl(var(--chart-5))" />
+                        </CardContent>
+                    </Card>
+                    <Card className="border-2">
+                        <CardHeader className="pb-4">
+                            <CardTitle className="flex items-center gap-2 font-headline text-xl">
+                                <Goal className="text-primary h-5 w-5" />
+                                Факторы принятия решений
+                            </CardTitle>
+                            <CardDescription>Радарная диаграмма текущего поведения AI</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <ChartContainer config={decisionChartConfig} className="mx-auto aspect-square max-h-[350px]">
+                                <RadarChart data={decisionFactorsData} outerRadius="70%">
+                                    <ChartTooltip content={<ChartTooltipContent />} />
+                                    <PolarGrid />
+                                    <PolarAngleAxis dataKey="name" />
+                                    <Radar
+                                        dataKey="value"
+                                        fill="hsl(var(--chart-1))"
+                                        fillOpacity={0.6}
+                                        stroke="hsl(var(--chart-1))"
+                                    />
+                                </RadarChart>
+                            </ChartContainer>
+                        </CardContent>
+                    </Card>
+                </div>
 
-            {/* Column 2 */}
-            <div className="flex flex-col gap-6">
-                 <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 font-headline">
-                            <moodDetails.icon className={moodDetails.color} />
-                            Эмоциональное состояние
-                        </CardTitle>
-                        <CardDescription>Текущее настроение и влияющие на него факторы</CardDescription>
-                    </CardHeader>
+                {/* Column 2 */}
+                <div className="flex flex-col gap-6">
+                    <Card className="border-2">
+                        <CardHeader className="pb-4">
+                            <CardTitle className="flex items-center gap-2 font-headline text-xl">
+                                <moodDetails.icon className={`${moodDetails.color} h-5 w-5`} />
+                                Эмоциональное состояние
+                            </CardTitle>
+                            <CardDescription>Текущее настроение и влияющие на него факторы</CardDescription>
+                        </CardHeader>
                     <CardContent className="space-y-4">
                         <div>
                             <div className="flex justify-between items-center mb-1">
@@ -310,69 +329,70 @@ export default function MindPage() {
                             </div>
                         </div>
                     </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 font-headline">
-                            <Target className="text-primary" />
-                            Текущее решение
-                        </CardTitle>
-                        <CardDescription>Что сейчас делает герой</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div>
-                            <p className="font-bold text-lg">{currentAction?.name || character.status}</p>
-                            <p className="text-sm text-muted-foreground">{currentAction?.description || "Наблюдает за миром, решая, что делать дальше."}</p>
-                        </div>
-                        {currentAction && (
-                            <div className="flex items-center text-sm text-muted-foreground gap-2">
-                                <Clock className="w-4 h-4"/>
-                                <span>{((currentAction.duration - (Date.now() - currentAction.startedAt)) / 1000).toFixed(0)}s осталось</span>
+                    </Card>
+                    <Card className="border-2">
+                        <CardHeader className="pb-4">
+                            <CardTitle className="flex items-center gap-2 font-headline text-xl">
+                                <Target className="text-primary h-5 w-5" />
+                                Текущее решение
+                            </CardTitle>
+                            <CardDescription>Что сейчас делает герой</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="p-4 rounded-lg bg-muted/50 border">
+                                <p className="font-bold text-lg mb-2">{currentAction?.name || character.status}</p>
+                                <p className="text-sm text-muted-foreground">{currentAction?.description || "Наблюдает за миром, решая, что делать дальше."}</p>
                             </div>
-                        )}
-                    </CardContent>
-                </Card>
-                 <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 font-headline">
-                            <Eye className="text-primary" />
-                            Влияние на настроение
-                        </CardTitle>
-                        <CardDescription>Что сейчас влияет на эмоции</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex items-center justify-center pb-6">
-                         <ChartContainer config={moodChartConfig} className="mx-auto aspect-square max-h-[250px]">
-                            <PieChart>
-                                <ChartTooltip content={<ChartTooltipContent nameKey="name" />} />
-                                <Pie data={moodFactorsData} dataKey="value" nameKey="name" cx="50%" cy="50%">
-                                     {moodFactorsData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                                    ))}
-                                </Pie>
-                                <ChartLegend content={<ChartLegendContent nameKey="name" />} />
-                            </PieChart>
-                        </ChartContainer>
-                    </CardContent>
-                </Card>
-                 <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 font-headline">
-                            <Heart className="text-primary" />
-                            Потребности
-                        </CardTitle>
-                        <CardDescription>Текущие нужды героя</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="grid grid-cols-2 gap-4">
-                            {needs.map((need, index) => (
-                                <div key={need.name} className={`p-3 rounded-lg border text-center bg-card-foreground/5`}>
-                                    <div className="text-2xl font-bold">{need.value}</div>
-                                    <div className="text-xs text-muted-foreground">{need.name}</div>
+                            {currentAction && (
+                                <div className="flex items-center text-sm text-muted-foreground gap-2 p-2 rounded bg-accent/10">
+                                    <Clock className="w-4 h-4"/>
+                                    <span className="font-medium">Осталось: {((currentAction.duration - (Date.now() - currentAction.startedAt)) / 1000).toFixed(0)}s</span>
                                 </div>
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
+                            )}
+                        </CardContent>
+                    </Card>
+                    <Card className="border-2">
+                        <CardHeader className="pb-4">
+                            <CardTitle className="flex items-center gap-2 font-headline text-xl">
+                                <Eye className="text-primary h-5 w-5" />
+                                Влияние на настроение
+                            </CardTitle>
+                            <CardDescription>Что сейчас влияет на эмоции героя</CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex items-center justify-center pb-6">
+                            <ChartContainer config={moodChartConfig} className="mx-auto aspect-square max-h-[250px]">
+                                <PieChart>
+                                    <ChartTooltip content={<ChartTooltipContent nameKey="name" />} />
+                                    <Pie data={moodFactorsData} dataKey="value" nameKey="name" cx="50%" cy="50%">
+                                        {moodFactorsData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={entry.fill} />
+                                        ))}
+                                    </Pie>
+                                    <ChartLegend content={<ChartLegendContent nameKey="name" />} />
+                                </PieChart>
+                            </ChartContainer>
+                        </CardContent>
+                    </Card>
+                    <Card className="border-2">
+                        <CardHeader className="pb-4">
+                            <CardTitle className="flex items-center gap-2 font-headline text-xl">
+                                <Heart className="text-primary h-5 w-5" />
+                                Потребности
+                            </CardTitle>
+                            <CardDescription>Текущие нужды героя</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-2 gap-4">
+                                {needs.map((need, index) => (
+                                    <div key={need.name} className="p-4 rounded-lg border text-center bg-gradient-to-br from-muted/30 to-muted/10 hover:shadow-md transition-shadow">
+                                        <div className="text-2xl font-bold text-primary">{need.value}</div>
+                                        <div className="text-xs text-muted-foreground mt-1">{need.name}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
         </div>
     )

@@ -158,22 +158,30 @@ export default function MapPage() {
     }
 
 return (
-    <div className="w-full p-4 md:p-6 lg:p-8">
-        <header className="mb-4">
-            <div className="flex items-center gap-2">
-                <MapIcon className="h-6 w-6 text-primary" />
-                <h1 className="text-3xl font-headline">Карта Мира</h1>
+    <div className="w-full p-4 md:p-6 lg:p-8 space-y-6">
+        <header className="space-y-4">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-primary/10">
+                        <MapIcon className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                        <h1 className="text-3xl font-headline text-foreground">Карта Скайрима</h1>
+                        <p className="text-muted-foreground text-sm mt-1">
+                            Исследуйте мир и отправляйте героя в новые локации
+                        </p>
+                    </div>
+                </div>
             </div>
-            <p className="text-muted-foreground text-sm mt-1">
-                Прикажите герою отправиться в путь, выбрав точку на карте. Используйте фильтры для отображения локаций.
-            </p>
-            <div className="flex flex-wrap gap-2 mt-3">
+            
+            <div className="flex flex-wrap gap-2">
                 {locationTypeFilters.map(filterInfo => (
                     <Button
                         key={filterInfo.id}
                         variant={activeFilters.includes(filterInfo.id) ? 'default' : 'outline'}
                         size="sm"
                         onClick={() => handleFilterToggle(filterInfo.id)}
+                        className="transition-all hover:scale-105"
                     >
                         <Icon name={filterInfo.icon} className="mr-2 h-4 w-4" />
                         {filterInfo.name}
@@ -182,9 +190,12 @@ return (
             </div>
         </header>
 
-        {/* Контейнер для центрирования карты */}
-        <div className="w-full flex justify-left">
-            <main ref={mapContainerRef} className="w-[70%] h-[calc(80vh-180px)] relative border rounded-lg overflow-hidden">
+        {/* Контейнер для карты */}
+        <div className="w-full flex justify-center">
+            <main 
+                ref={mapContainerRef} 
+                className="w-full max-w-7xl h-[calc(85vh-220px)] relative border-2 border-border rounded-xl overflow-hidden shadow-lg bg-gradient-to-br from-background to-muted/20"
+            >
                 <TransformWrapper
                     initialScale={1}
                     minScale={0.5}
@@ -221,10 +232,34 @@ return (
 
                         return (
                             <>
-                                <div className="absolute top-4 right-4 z-10 flex gap-2">
-                                    <Button size="icon" onClick={() => zoomIn()} aria-label="Приблизить"><LucideIcons.ZoomIn className="h-4 w-4" /></Button>
-                                    <Button size="icon" onClick={() => zoomOut()} aria-label="Отдалить"><LucideIcons.ZoomOut className="h-4 w-4" /></Button>
-                                    <Button size="icon" onClick={() => resetTransform()} aria-label="Сбросить"><LucideIcons.RotateCcw className="h-4 w-4" /></Button>
+                                <div className="absolute top-4 right-4 z-10 flex flex-col gap-2 bg-background/80 backdrop-blur-sm p-2 rounded-lg border border-border shadow-lg">
+                                    <Button 
+                                        size="icon" 
+                                        variant="ghost"
+                                        onClick={() => zoomIn()} 
+                                        aria-label="Приблизить"
+                                        className="hover:bg-primary/10"
+                                    >
+                                        <LucideIcons.ZoomIn className="h-4 w-4" />
+                                    </Button>
+                                    <Button 
+                                        size="icon" 
+                                        variant="ghost"
+                                        onClick={() => zoomOut()} 
+                                        aria-label="Отдалить"
+                                        className="hover:bg-primary/10"
+                                    >
+                                        <LucideIcons.ZoomOut className="h-4 w-4" />
+                                    </Button>
+                                    <Button 
+                                        size="icon" 
+                                        variant="ghost"
+                                        onClick={() => resetTransform()} 
+                                        aria-label="Сбросить"
+                                        className="hover:bg-primary/10"
+                                    >
+                                        <LucideIcons.RotateCcw className="h-4 w-4" />
+                                    </Button>
                                 </div>
 
                                 <TransformComponent>
@@ -256,50 +291,51 @@ return (
                         />
                         {selectedLocation?.name}
                     </DialogTitle>
-                    <DialogDescription>
-                        <div className="mt-4 space-y-4">
-                            <div>
-                                <h4 className="font-semibold text-sm text-foreground mb-1">Тип локации</h4>
-                                <p className="text-sm capitalize">
-                                    {selectedLocation?.type === 'city' ? 'Город' :
-                                     selectedLocation?.type === 'town' ? 'Поселение' :
-                                     selectedLocation?.type === 'dungeon' ? 'Подземелье' :
-                                     selectedLocation?.type === 'ruin' ? 'Руины' :
-                                     selectedLocation?.type === 'camp' ? 'Лагерь' : 'Окрестности'}
-                                </p>
-                            </div>
-                            
-                            <div>
-                                <h4 className="font-semibold text-sm text-foreground mb-1">Безопасность</h4>
-                                <p className="text-sm flex items-center gap-2">
-                                    {selectedLocation?.isSafe ? (
-                                        <><Icon name="ShieldCheck" className="h-4 w-4 text-green-500" /> Безопасная зона</>
-                                    ) : (
-                                        <><Icon name="Skull" className="h-4 w-4 text-red-500" /> Опасная территория</>
-                                    )}
-                                </p>
-                            </div>
-
-                            <div>
-                                <h4 className="font-semibold text-sm text-foreground mb-1">Описание</h4>
-                                <p className="text-sm text-muted-foreground">
-                                    {selectedLocation?.isSafe 
-                                        ? `${selectedLocation.name} — место, где можно отдохнуть, пополнить запасы и принять новые задания. Здесь герой в безопасности.`
-                                        : `${selectedLocation?.name} — опасное место, полное враждебных существ и ловушек. Герой должен быть готов к бою.`
-                                    }
-                                </p>
-                            </div>
-
-                            {character?.location === selectedLocation?.id && (
-                                <div className="p-3 bg-accent/10 border border-accent rounded-md">
-                                    <p className="text-sm text-accent font-semibold flex items-center gap-2">
-                                        <Icon name="MapPin" className="h-4 w-4" />
-                                        Герой находится здесь сейчас
-                                    </p>
-                                </div>
-                            )}
-                        </div>
+                    <DialogDescription className="sr-only">
+                        Детали локации и варианты путешествия
                     </DialogDescription>
+                    <div className="mt-4 space-y-4">
+                        <div>
+                            <div className="font-semibold text-sm text-foreground mb-1">Тип локации</div>
+                            <div className="text-sm capitalize text-muted-foreground">
+                                {selectedLocation?.type === 'city' ? 'Город' :
+                                 selectedLocation?.type === 'town' ? 'Поселение' :
+                                 selectedLocation?.type === 'dungeon' ? 'Подземелье' :
+                                 selectedLocation?.type === 'ruin' ? 'Руины' :
+                                 selectedLocation?.type === 'camp' ? 'Лагерь' : 'Окрестности'}
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <div className="font-semibold text-sm text-foreground mb-1">Безопасность</div>
+                            <div className="text-sm flex items-center gap-2 text-muted-foreground">
+                                {selectedLocation?.isSafe ? (
+                                    <><Icon name="ShieldCheck" className="h-4 w-4 text-green-500" /> Безопасная зона</>
+                                ) : (
+                                    <><Icon name="Skull" className="h-4 w-4 text-red-500" /> Опасная территория</>
+                                )}
+                            </div>
+                        </div>
+
+                        <div>
+                            <div className="font-semibold text-sm text-foreground mb-1">Описание</div>
+                            <div className="text-sm text-muted-foreground">
+                                {selectedLocation?.isSafe 
+                                    ? `${selectedLocation.name} — место, где можно отдохнуть, пополнить запасы и принять новые задания. Здесь герой в безопасности.`
+                                    : `${selectedLocation?.name} — опасное место, полное враждебных существ и ловушек. Герой должен быть готов к бою.`
+                                }
+                            </div>
+                        </div>
+
+                        {character?.location === selectedLocation?.id && (
+                            <div className="p-3 bg-accent/10 border border-accent rounded-md">
+                                <div className="text-sm text-accent font-semibold flex items-center gap-2">
+                                    <Icon name="MapPin" className="h-4 w-4" />
+                                    Герой находится здесь сейчас
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </DialogHeader>
 
                 <div className="flex gap-3 mt-6">
