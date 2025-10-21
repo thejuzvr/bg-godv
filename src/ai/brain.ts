@@ -24,6 +24,7 @@ import { jailHumor } from "@/data/jail";
 import { allFactions } from "@/data/factions";
 import { donateToFaction as performFactionDonation } from "@/app/dashboard/actions";
 import { LOOT_TIER_BASE_CHANCES } from './config/balance';
+import { gameDataService } from '../../server/game-data-service';
 
 // Helper functions for faction reputation (duplicated from game-engine.ts)
 function getFactionForLocation(location: string): string | null {
@@ -934,6 +935,19 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             const reputationGain = 2; // Base reputation for killing enemies
             updatedChar.factions[factionId]!.reputation += reputationGain;
             winMsg += ` Репутация с ${getFactionName(factionId)} увеличилась на ${reputationGain}.`;
+        }
+
+        // Decrease danger level of location when killing enemies (for outskirts and dangerous zones)
+        try {
+            if (updatedChar.location && updatedChar.location.endsWith('_outskirts')) {
+                const dangerDecrease = Math.floor(5 + Math.random() * 5); // 5-10 points per enemy killed
+                const newDangerLevel = await gameDataService.decreaseLocationDanger(updatedChar.location, dangerDecrease);
+                if (newDangerLevel !== undefined) {
+                    winMsg += ` Уровень опасности ${updatedChar.location} снижен до ${newDangerLevel}.`;
+                }
+            }
+        } catch (err) {
+            console.warn('Failed to decrease location danger:', err);
         }
         
         // Humorous flavor line and chronicle hook + route to adventure/chronicle

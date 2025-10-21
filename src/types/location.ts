@@ -6,4 +6,5 @@ export interface Location {
   type: LocationType;
   coords: { x: number; y: number }; // Percentage-based coordinates
   isSafe: boolean;
+  dangerLevel?: number; // 0-100, уровень опасности локации (для окраин и опасных зон)
 }
