@@ -78,12 +78,20 @@ export async function tradeWithNPC(
 
       const baseItem = await gameDataService.getItemById(itemId);
       if (!baseItem) {
-        return { success: false, error: 'Item data not found' };
+        console.error(`Item not found in game data: ${itemId}`);
+        return { success: false, error: 'NPC does not have this item' };
       }
       const totalPrice = computeBuyPrice(character as any, npc as any, baseItem as any, quantity);
 
       if (gold.quantity < totalPrice) {
-        return { success: false, error: 'Not enough gold' };
+        const funnyMessages = [
+          `Пытался купить ${baseItem.name}, но в кошельке мышь повесилась...`,
+          `Захотел ${baseItem.name}, но денег не хватило. Опять на голодный паек!`,
+          `Продавец хмыкнул, когда увидел пустой кошелек. ${baseItem.name} придется подождать.`,
+          `${baseItem.name}? Смешно. У героя даже на корочку хлеба не хватит.`,
+          `Взглянул на ${baseItem.name}, потом на свой кошелек. Мышь там уже третий день голодает.`
+        ];
+        return { success: false, error: funnyMessages[Math.floor(Math.random() * funnyMessages.length)] };
       }
 
       gold.quantity -= totalPrice;
@@ -94,7 +102,8 @@ export async function tradeWithNPC(
       } else {
         const baseItem = await gameDataService.getItemById(itemId);
         if (!baseItem) {
-          return { success: false, error: 'Item data not found' };
+          console.error(`Item not found in game data: ${itemId}`);
+          return { success: false, error: 'NPC does not have this item' };
         }
         character.inventory.push({
           ...baseItem,
@@ -134,7 +143,8 @@ export async function tradeWithNPC(
 
       const baseItem = await gameDataService.getItemById(itemId);
       if (!baseItem) {
-        return { success: false, error: 'Item data not found' };
+        console.error(`Item not found in game data: ${itemId}`);
+        return { success: false, error: 'Item not found' };
       }
       const sellPrice = computeSellPrice(character as any, npc as any, baseItem as any, quantity);
       

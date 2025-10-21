@@ -1317,7 +1317,20 @@ const takeQuestAction: Action = {
                 .limit(1);
             
             if (activeQuest) {
-                return { character: updatedChar, logMessage: `Герой уже занят заданием "${(activeQuest as any).title}". Нужно сначала завершить его.` };
+                // Only block if hero is actually in a quest action right now
+                const isActivelyQuesting = updatedChar.currentAction?.type === 'quest';
+                if (isActivelyQuesting) {
+                    // Don't spam the log - set a cooldown and return mild message
+                    if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {} as any;
+                    const lastWarning = (updatedChar.actionCooldowns as any)['quest:active:warning'] || 0;
+                    const now = Date.now();
+                    if (now - lastWarning > 10 * 60 * 1000) { // warn once per 10 minutes
+                        (updatedChar.actionCooldowns as any)['quest:active:warning'] = now;
+                        return { character: updatedChar, logMessage: `[adventure] Герой сосредоточен на задании "${(activeQuest as any).title}".` };
+                    }
+                    return { character: updatedChar, logMessage: '' };
+                }
+                // Otherwise, ignore stale DB state and proceed to pick/continue a quest
             }
             
             const templates = await selectQuestTemplatesForCharacter(updatedChar);
@@ -2935,7 +2948,19 @@ const tradeWithNPCAction: Action = {
             };
         }
         
-        return { character, logMessage: `Не удалось купить предмет: ${result.error}` };
+        // Build flavorful error without technical prefix
+        const itemName = gameData.items.find(i => i.id === itemToBuy.itemId)?.name || 'предмет';
+        const err = (result.error || '').toString();
+        let friendly = err;
+        if (/NPC does not have this item|Item not found|NPC does not trade/i.test(err)) {
+            const variants = [
+                `Пытался купить ${itemName} у ${merchant.name}, но товар внезапно закончился.`,
+                `${merchant.name} только развел руками: ${itemName} разобрали чуть раньше.`,
+                `Заглянул за ${itemName}, но на полках пусто — не судьба.`
+            ];
+            friendly = variants[Math.floor(Math.random() * variants.length)];
+        }
+        return { character, logMessage: friendly };
     }
 };
 
