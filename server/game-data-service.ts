@@ -54,12 +54,13 @@ export class GameDataService {
     return locations.map(loc => ({
       id: loc.id,
       name: loc.name,
-      type: loc.type as 'city' | 'town' | 'ruin' | 'dungeon' | 'camp',
+      type: loc.type as 'city' | 'town' | 'ruin' | 'dungeon' | 'camp' | 'outskirts',
       coords: {
         x: loc.coordX,
         y: loc.coordY,
       },
       isSafe: loc.isSafe,
+      dangerLevel: loc.dangerLevel || undefined,
     }));
   }
 
@@ -73,10 +74,11 @@ export class GameDataService {
       type: loc.type as any,
       coords: { x: loc.coordX, y: loc.coordY },
       isSafe: loc.isSafe,
+      dangerLevel: loc.dangerLevel || undefined,
     };
   }
 
-  async createLocation(payload: { id: string; name: string; type: 'city' | 'town' | 'ruin' | 'dungeon' | 'camp'; coords: { x: number; y: number }; isSafe: boolean }): Promise<Location> {
+  async createLocation(payload: { id: string; name: string; type: 'city' | 'town' | 'ruin' | 'dungeon' | 'camp' | 'outskirts'; coords: { x: number; y: number }; isSafe: boolean; dangerLevel?: number }): Promise<Location> {
     await db.insert(gameLocations).values({
       id: payload.id,
       name: payload.name,
@@ -84,13 +86,14 @@ export class GameDataService {
       coordX: payload.coords.x,
       coordY: payload.coords.y,
       isSafe: payload.isSafe,
+      dangerLevel: payload.dangerLevel || 0,
     });
     const created = await this.getLocationById(payload.id);
     if (!created) throw new Error('Failed to create location');
     return created;
   }
 
-  async updateLocation(id: string, updates: Partial<{ name: string; type: 'city' | 'town' | 'ruin' | 'dungeon' | 'camp'; coords: { x: number; y: number }; isSafe: boolean }>): Promise<Location | null> {
+  async updateLocation(id: string, updates: Partial<{ name: string; type: 'city' | 'town' | 'ruin' | 'dungeon' | 'camp' | 'outskirts'; coords: { x: number; y: number }; isSafe: boolean; dangerLevel?: number }>): Promise<Location | null> {
     const set: any = {};
     if (updates.name !== undefined) set.name = updates.name;
     if (updates.type !== undefined) set.type = updates.type;
@@ -99,6 +102,7 @@ export class GameDataService {
       set.coordY = updates.coords.y;
     }
     if (updates.isSafe !== undefined) set.isSafe = updates.isSafe;
+    if (updates.dangerLevel !== undefined) set.dangerLevel = updates.dangerLevel;
     if (Object.keys(set).length === 0) return await this.getLocationById(id);
     set.updatedAt = new Date();
     await db.update(gameLocations).set(set).where(eq(gameLocations.id, id));
@@ -107,6 +111,41 @@ export class GameDataService {
 
   async deleteLocation(id: string): Promise<void> {
     await db.delete(gameLocations).where(eq(gameLocations.id, id));
+  }
+
+  // ===== DANGER LEVEL MANAGEMENT =====
+  async decreaseLocationDanger(locationId: string, amount: number = 5): Promise<number> {
+    const loc = await this.getLocationById(locationId);
+    if (!loc || loc.dangerLevel === undefined) return 0;
+    
+    const newDanger = Math.max(0, loc.dangerLevel - amount);
+    await this.updateLocation(locationId, { dangerLevel: newDanger });
+    return newDanger;
+  }
+
+  async increaseLocationDanger(locationId: string, amount: number = 1): Promise<number> {
+    const loc = await this.getLocationById(locationId);
+    if (!loc || loc.dangerLevel === undefined) return 0;
+    
+    const newDanger = Math.min(100, loc.dangerLevel + amount);
+    await this.updateLocation(locationId, { dangerLevel: newDanger });
+    return newDanger;
+  }
+
+  async regenerateDangerLevels(): Promise<number> {
+    const locations = await this.getAllLocations();
+    let updated = 0;
+    
+    for (const loc of locations) {
+      if (loc.type === 'outskirts' && loc.dangerLevel !== undefined && loc.dangerLevel < 100) {
+        // Медленная регенерация опасности со временем (1 единица за вызов)
+        const newDanger = Math.min(100, loc.dangerLevel + 1);
+        await this.updateLocation(loc.id, { dangerLevel: newDanger });
+        updated++;
+      }
+    }
+    
+    return updated;
   }
 
   // ===== ITEMS =====

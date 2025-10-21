@@ -350,16 +350,43 @@ export const initialItems: BaseItem[] = [
   { id: 'misc_flawless_diamond', name: 'Безупречный алмаз', weight: 0.1, type: 'misc', rarity: 'legendary' },
 
   // === ALCHEMY INGREDIENTS ===
+  // Flowers and Plants (common on outskirts)
   { id: 'ingredient_blue_mountain_flower', name: 'Голубой горный цветок', weight: 0.1, type: 'misc', rarity: 'common' },
   { id: 'ingredient_lavender', name: 'Лаванда', weight: 0.1, type: 'misc', rarity: 'common' },
   { id: 'ingredient_red_mountain_flower', name: 'Красный горный цветок', weight: 0.1, type: 'misc', rarity: 'common' },
   { id: 'ingredient_thistle_branch', name: 'Ветка чертополоха', weight: 0.1, type: 'misc', rarity: 'common' },
+  { id: 'ingredient_tundra_cotton', name: 'Тундровый хлопок', weight: 0.1, type: 'misc', rarity: 'common' },
+  { id: 'ingredient_snowberry', name: 'Снежная ягода', weight: 0.1, type: 'misc', rarity: 'common' },
+  { id: 'ingredient_wheat', name: 'Пшеница', weight: 0.1, type: 'misc', rarity: 'common' },
+  { id: 'ingredient_jazbay_grapes', name: 'Виноград Джазбэй', weight: 0.1, type: 'misc', rarity: 'uncommon' },
+  { id: 'ingredient_nirnroot', name: 'Корень Нирна', weight: 0.1, type: 'misc', rarity: 'uncommon' },
+  { id: 'ingredient_crimson_nirnroot', name: 'Багровый корень Нирна', weight: 0.1, type: 'misc', rarity: 'rare' },
+  
+  // Mushrooms (found in darker areas)
+  { id: 'ingredient_imp_stool', name: 'Бесовский гриб', weight: 0.1, type: 'misc', rarity: 'common' },
+  { id: 'ingredient_white_cap', name: 'Белая шапка', weight: 0.1, type: 'misc', rarity: 'common' },
+  { id: 'ingredient_blisterwort', name: 'Волдырник', weight: 0.1, type: 'misc', rarity: 'common' },
+  { id: 'ingredient_glowing_mushroom', name: 'Светящийся гриб', weight: 0.1, type: 'misc', rarity: 'uncommon' },
+  
+  // Special ingredients
   { id: 'ingredient_creep_cluster', name: 'Ползучий кластер', weight: 0.1, type: 'misc', rarity: 'uncommon' },
   { id: 'ingredient_dragons_tongue', name: 'Драконий язык', weight: 0.1, type: 'misc', rarity: 'uncommon' },
+  { id: 'ingredient_mora_tapinella', name: 'Мора Тапинелла', weight: 0.1, type: 'misc', rarity: 'uncommon' },
+  { id: 'ingredient_scaly_pholiota', name: 'Чешуйчатая фолиота', weight: 0.1, type: 'misc', rarity: 'uncommon' },
+  
+  // Salts and rare materials
   { id: 'ingredient_fire_salts', name: 'Огненные соли', weight: 0.1, type: 'misc', rarity: 'uncommon' },
   { id: 'ingredient_frost_salts', name: 'Ледяные соли', weight: 0.1, type: 'misc', rarity: 'uncommon' },
   { id: 'ingredient_void_salts', name: 'Соли пустоты', weight: 0.1, type: 'misc', rarity: 'rare' },
   { id: 'ingredient_daedra_heart', name: 'Сердце даэдра', weight: 0.5, type: 'misc', rarity: 'legendary' },
+  { id: 'ingredient_ectoplasm', name: 'Эктоплазма', weight: 0.1, type: 'misc', rarity: 'uncommon' },
+  { id: 'ingredient_bone_meal', name: 'Костная мука', weight: 0.2, type: 'misc', rarity: 'common' },
+  
+  // Wood and fiber materials
+  { id: 'material_firewood', name: 'Дрова', weight: 2, type: 'misc', rarity: 'common' },
+  { id: 'material_charcoal', name: 'Древесный уголь', weight: 0.5, type: 'misc', rarity: 'common' },
+  { id: 'material_linen', name: 'Льняная ткань', weight: 0.3, type: 'misc', rarity: 'common' },
+  { id: 'material_silk', name: 'Шелк', weight: 0.2, type: 'misc', rarity: 'uncommon' },
 
   // === ORE & CRAFTING MATERIALS ===
   { id: 'ore_iron', name: 'Железная руда', weight: 1, type: 'misc', rarity: 'common' },
@@ -367,6 +394,11 @@ export const initialItems: BaseItem[] = [
   { id: 'ore_gold', name: 'Золотая руда', weight: 1, type: 'misc', rarity: 'uncommon' },
   { id: 'ore_ebony', name: 'Эбонитовая руда', weight: 1, type: 'misc', rarity: 'rare' },
   { id: 'ore_daedric', name: 'Даэдрическая руда', weight: 1, type: 'misc', rarity: 'legendary' },
+  { id: 'ore_corundum', name: 'Корунд', weight: 1, type: 'misc', rarity: 'uncommon' },
+  { id: 'ore_quicksilver', name: 'Ртутная руда', weight: 1, type: 'misc', rarity: 'uncommon' },
+  { id: 'ore_moonstone', name: 'Лунный камень', weight: 0.5, type: 'misc', rarity: 'rare' },
+  { id: 'ore_malachite', name: 'Малахит', weight: 0.8, type: 'misc', rarity: 'rare' },
+  { id: 'ore_orichalcum', name: 'Орихалк', weight: 1, type: 'misc', rarity: 'uncommon' },
   { id: 'leather_strips', name: 'Кожаные полоски', weight: 0.5, type: 'misc', rarity: 'common' },
   { id: 'leather', name: 'Кожа', weight: 1, type: 'misc', rarity: 'common' },
   { id: 'wolf_pelt', name: 'Волчья шкура', weight: 2, type: 'misc', rarity: 'common' },

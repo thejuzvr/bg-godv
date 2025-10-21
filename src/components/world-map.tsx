@@ -194,7 +194,15 @@ export function WorldMap({
                         tabIndex={0}
                         role="button"
                         aria-label={`${loc.name}. ${typeLabel[loc.type]}. Нажмите, чтобы открыть.`}
-                        className="absolute flex items-center justify-center w-8 h-8 p-1.5 -translate-x-1/2 -translate-y-1/2 transition-transform duration-200 cursor-pointer bg-background/60 backdrop-blur-sm rounded-full border-2 border-primary/30 hover:scale-110 hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                        className={cn(
+                          "absolute flex items-center justify-center w-8 h-8 p-1.5 -translate-x-1/2 -translate-y-1/2 transition-transform duration-200 cursor-pointer bg-background/60 backdrop-blur-sm rounded-full border-2 hover:scale-110 hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                          // Danger level border color
+                          loc.dangerLevel !== undefined && loc.dangerLevel >= 70 ? "border-red-500/50" :
+                          loc.dangerLevel !== undefined && loc.dangerLevel >= 40 ? "border-orange-500/50" :
+                          loc.dangerLevel !== undefined && loc.dangerLevel >= 20 ? "border-yellow-500/50" :
+                          loc.dangerLevel !== undefined ? "border-green-500/50" :
+                          "border-primary/30"
+                        )}
                         style={{
                           top: `${loc.coords.y}%`,
                           left: `${loc.coords.x}%`,
@@ -224,8 +232,23 @@ export function WorldMap({
                     <TooltipContent>
                       <p className="font-headline">{loc.name}</p>
                       <p className="text-xs text-muted-foreground capitalize">{typeLabel[loc.type]}</p>
-                      {/* Extra meta placeholder */}
-                      <div className="mt-1 text-xs text-muted-foreground">Сложность: Средняя</div>
+                      {/* Danger level indicator for outskirts and dangerous zones */}
+                      {loc.dangerLevel !== undefined && (
+                        <div className="mt-1 text-xs">
+                          <span className="text-muted-foreground">Уровень опасности: </span>
+                          <span className={
+                            loc.dangerLevel >= 70 ? "text-red-500 font-semibold" :
+                            loc.dangerLevel >= 40 ? "text-orange-500 font-semibold" :
+                            loc.dangerLevel >= 20 ? "text-yellow-500" :
+                            "text-green-500"
+                          }>
+                            {loc.dangerLevel}%
+                          </span>
+                        </div>
+                      )}
+                      {!loc.dangerLevel && (
+                        <div className="mt-1 text-xs text-muted-foreground">Безопасная зона</div>
+                      )}
                     </TooltipContent>
                   </Tooltip>
                 ))}

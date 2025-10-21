@@ -219,10 +219,11 @@ export const offlineEvents = pgTable('offline_events', {
 export const gameLocations = pgTable('game_locations', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
-  type: text('type').notNull(), // 'city' | 'town' | 'ruin' | 'dungeon' | 'camp'
+  type: text('type').notNull(), // 'city' | 'town' | 'ruin' | 'dungeon' | 'camp' | 'outskirts'
   coordX: real('coord_x').notNull(), // percentage 0-100
   coordY: real('coord_y').notNull(), // percentage 0-100
   isSafe: boolean('is_safe').notNull().default(true),
+  dangerLevel: integer('danger_level').default(0), // 0-100, уровень опасности (для окраин и опасных зон)
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
