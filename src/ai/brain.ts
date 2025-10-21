@@ -18,6 +18,7 @@ import { recordAttempt, recordOutcome } from './learning';
 import { recordDecisionTrace } from './diagnostics';
 import type { GameData } from "@/services/gameDataService";
 import { allSpells } from "@/data/spells";
+import { LOOT_TIER_BASE_CHANCES, getSpellDamageMultiplier } from '@/ai/config/balance';
 import { allPerks } from "@/data/perks";
 import { sovngardeThoughts } from "@/data/sovngarde";
 import { jailHumor } from "@/data/jail";
@@ -744,11 +745,17 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             
             if (success) {
                 switch(spellToCast.type) {
-                    case 'damage':
-                        enemy.health.current -= spellToCast.value;
-                        logMessages.push(`"${spellToCast.name}" попадает во врага, нанося ${spellToCast.value} урона.`);
-                        updatedChar.combat!.totalDamageDealt = (updatedChar.combat!.totalDamageDealt || 0) + spellToCast.value;
+                    case 'damage': {
+                        // Apply simple elemental multiplier from balance config
+                        const enemyId = updatedChar.combat?.enemyId || '';
+                        const mult = getSpellDamageMultiplier(spellToCast, enemyId);
+                        const dmg = Math.max(1, Math.floor(spellToCast.value * mult));
+                        enemy.health.current -= dmg;
+                        const extra = mult !== 1 ? ` (x${mult.toFixed(2)})` : '';
+                        logMessages.push(`"${spellToCast.name}" попадает во врага, нанося ${dmg} урона${extra}.`);
+                        updatedChar.combat!.totalDamageDealt = (updatedChar.combat!.totalDamageDealt || 0) + dmg;
                         break;
+                    }
                     case 'heal':
                         updatedChar.stats.health.current = Math.min(updatedChar.stats.health.max, updatedChar.stats.health.current + spellToCast.value);
                         logMessages.push(`Герой исцеляет себя на ${spellToCast.value} здоровья.`);
@@ -871,13 +878,11 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             const lootTable = baseEnemyDef.lootTable;
             const levelMultiplier = 1 + (updatedChar.level - 1) * 0.1; // Scale loot with hero level
             
-            // Process each rarity tier
-            const rarityTiers = [
-                { tier: 'common', chance: 0.6 },
-                { tier: 'uncommon', chance: 0.3 },
-                { tier: 'rare', chance: 0.08 },
-                { tier: 'legendary', chance: 0.02 }
-            ];
+            // Process each rarity tier (configurable chances)
+            const rarityTiers = Object.entries(LOOT_TIER_BASE_CHANCES).map(([tier, chance]) => ({
+                tier: tier as 'common' | 'uncommon' | 'rare' | 'legendary',
+                chance: Number(chance),
+            }));
 
             for (const { tier, chance } of rarityTiers) {
                 if (Math.random() < chance) {
@@ -908,7 +913,7 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
                     goldItem.quantity += goldAmount;
                     winMsg += ` Найдено ${goldAmount} золота.`;
                 } else {
-                    updatedChar.inventory.push({ id: 'gold', name: 'Золото', weight: 0, type: 'misc', quantity: goldAmount });
+                    updatedChar.inventory.push({ id: 'gold', name: 'Золото', weight: 0, type: 'gold', quantity: goldAmount } as any);
                     winMsg += ` Найдено ${goldAmount} золота.`;
                 }
             }
