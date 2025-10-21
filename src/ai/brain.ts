@@ -871,13 +871,11 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             const lootTable = baseEnemyDef.lootTable;
             const levelMultiplier = 1 + (updatedChar.level - 1) * 0.1; // Scale loot with hero level
             
-            // Process each rarity tier
-            const rarityTiers = [
-                { tier: 'common', chance: 0.6 },
-                { tier: 'uncommon', chance: 0.3 },
-                { tier: 'rare', chance: 0.08 },
-                { tier: 'legendary', chance: 0.02 }
-            ];
+            // Process each rarity tier (using configurable balance)
+            const rarityTiers = Object.entries(LOOT_TIER_BASE_CHANCES).map(([tier, chance]) => ({
+                tier: tier as 'common' | 'uncommon' | 'rare' | 'legendary',
+                chance: Number(chance),
+            }));
 
             for (const { tier, chance } of rarityTiers) {
                 if (Math.random() < chance) {
@@ -891,7 +889,9 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
                                 const quantity = Math.max(1, Math.floor(selectedLoot.quantity * levelMultiplier));
                                 const { updatedCharacter: charWithItem, logMessage } = addItemToInventory(updatedChar, baseItem, quantity);
                                 updatedChar = charWithItem;
-                                winMsg += ` ${logMessage}`;
+                                // Add rarity indicator
+                                const rarityEmoji = tier === 'legendary' ? '⭐' : tier === 'rare' ? '💎' : tier === 'uncommon' ? '✨' : '📦';
+                                winMsg += ` ${rarityEmoji} ${logMessage}`;
                             }
                         }
                     }
@@ -906,10 +906,10 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
                 const goldItem = updatedChar.inventory.find(i => i.id === 'gold');
                 if (goldItem) {
                     goldItem.quantity += goldAmount;
-                    winMsg += ` Найдено ${goldAmount} золота.`;
+                    winMsg += ` 💰 ${goldAmount} золота.`;
                 } else {
-                    updatedChar.inventory.push({ id: 'gold', name: 'Золото', weight: 0, type: 'misc', quantity: goldAmount });
-                    winMsg += ` Найдено ${goldAmount} золота.`;
+                    updatedChar.inventory.push({ id: 'gold', name: 'Золото', weight: 0, type: 'gold', quantity: goldAmount } as any);
+                    winMsg += ` 💰 ${goldAmount} золота.`;
                 }
             }
         }
@@ -947,25 +947,42 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
                     const total = data.tasks.length;
                     let completed = 0;
                     for (const t of data.tasks) if (t.status === 'completed') completed++;
+                    
+                    // Find and complete the first uncompleted combat task
                     const combatTask = data.tasks.find((t: any) => t.type === 'combat' && t.status !== 'completed');
                     if (combatTask) {
                         await setTaskStatus(combatTask.id, 'completed', 100);
                         completed += 1;
-                        logMessages.push('[adventure] Этап квеста выполнен: Победить врага.');
+                        logMessages.push('[adventure] ✅ Этап квеста выполнен: Победить врага.');
                     }
+                    
                     const progressPct = Math.floor((completed / total) * 100);
                     await updateQuestProgress(data.quest.id, progressPct);
+                    
+                    // Log current progress
+                    if (completed < total) {
+                        const remaining = total - completed;
+                        logMessages.push(`[adventure] Прогресс квеста "${data.quest.title}": ${completed}/${total} этапов (${progressPct}%). Осталось: ${remaining}.`);
+                    }
+                    
                     // Auto-complete quest if all tasks done and pay out rewards
                     if (completed >= total) {
                         await completeQuest(data.quest.id);
+                        // Add to completed quests list
+                        if (!updatedChar.completedQuests) updatedChar.completedQuests = [];
+                        if (!updatedChar.completedQuests.includes(questId)) {
+                            updatedChar.completedQuests.push(questId);
+                        }
                         // Apply rewards and log
                         const result = await applyRewardsToCharacter(updatedChar, data.quest.rewards);
                         updatedChar = result.character;
-                        logMessages.push(`[adventure] Задание завершено: ${data.quest.title}. ${result.log}`);
+                        logMessages.push(`[adventure] 🎉 Задание завершено: ${data.quest.title}! ${result.log}`);
                     }
                 }
             }
-        } catch {}
+        } catch (err) {
+            console.error('Quest progression failed:', err);
+        }
         // Progress generated quest on combat victory
         try {
             const gq = character.activeGeneratedQuest;
