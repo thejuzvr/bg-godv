@@ -417,7 +417,14 @@ export default function DashboardPage() {
                           // Thoughts
                           if (text.startsWith('У героя родилась мысль:')) {
                             icon = <BrainCircuit className="h-4 w-4" />;
-                            text = text.replace(/^У героя родилась мысль:\s*/u, '').replace(/^"|"$/g, '');
+                            // Extract optional source tag at the end like [db:...] or [code:...]
+                            const srcMatch = text.match(/\s\[(db|code):[^\]]+\]$/);
+                            const sourceTag = srcMatch ? srcMatch[0] : '';
+                            text = text.replace(/^У героя родилась мысль:\s*/u, '').replace(/^"|"$/g, '').replace(/\s\[(db|code):[^\]]+\]$/, '');
+                            if (sourceTag) {
+                              // Append subtle source badge
+                              text = `${text}  ${sourceTag}`;
+                            }
                           } else if (text.startsWith('🎭 Мысли героя:')) {
                             icon = <BrainCircuit className="h-4 w-4" />;
                             text = text.replace(/^🎭 Мысли героя:\s*/u, '').replace(/^"|"$/g, '');

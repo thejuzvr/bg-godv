@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Tooltip,
   TooltipContent,
@@ -18,6 +18,12 @@ type WorldMapProps = {
   currentCity: string;
   locations: Location[];
   onLocationClick: (locationId: string) => void;
+  // Debug controls (optional)
+  debugMode?: boolean;
+  debugMarkers?: Array<{ id: string; x: number; y: number }>;
+  onDebugAdd?: (x: number, y: number) => void;
+  onDebugUpdate?: (id: string, x: number, y: number) => void;
+  onDebugDelete?: (id: string) => void;
 };
 
 const LocationIcon = memo(function LocationIcon({ type, className }: { type: LocationType, className?: string }) {
@@ -40,11 +46,27 @@ const LocationIcon = memo(function LocationIcon({ type, className }: { type: Loc
   }
 });
 
-export function WorldMap({ currentCity, locations, onLocationClick }: WorldMapProps) {
+export function WorldMap({
+  currentCity,
+  locations,
+  onLocationClick,
+  debugMode = false,
+  debugMarkers = [],
+  onDebugAdd,
+  onDebugUpdate,
+  onDebugDelete,
+}: WorldMapProps) {
   const MAP_WIDTH = 2048;
   const MAP_HEIGHT = 1489;
 
   const [svgContent, setSvgContent] = useState<string>("");
+  const [dragging, setDragging] = useState<{
+    id: string;
+    startClientX: number;
+    startClientY: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
 
   useEffect(() => {
     const loadSvg = async () => {
@@ -97,6 +119,24 @@ export function WorldMap({ currentCity, locations, onLocationClick }: WorldMapPr
               yPx <= viewY + viewH + padding
             );
           });
+          // Drag handler bindings for debug markers
+          useEffect(() => {
+            if (!dragging) return;
+            const handleMove = (e: MouseEvent) => {
+              const dx = e.clientX - dragging.startClientX;
+              const dy = e.clientY - dragging.startClientY;
+              const newX = Math.max(0, Math.min(100, dragging.startX + (dx / s.scale) / MAP_WIDTH * 100));
+              const newY = Math.max(0, Math.min(100, dragging.startY + (dy / s.scale) / MAP_HEIGHT * 100));
+              onDebugUpdate?.(dragging.id, newX, newY);
+            };
+            const handleUp = () => setDragging(null);
+            window.addEventListener('mousemove', handleMove);
+            window.addEventListener('mouseup', handleUp, { once: true });
+            return () => {
+              window.removeEventListener('mousemove', handleMove);
+              window.removeEventListener('mouseup', handleUp);
+            };
+          }, [dragging, s.scale]);
           return (
           <div className="relative w-[2048px] h-[1489px] bg-background overflow-hidden">
             {/* Zoom controls */}
@@ -115,6 +155,20 @@ export function WorldMap({ currentCity, locations, onLocationClick }: WorldMapPr
               >
                 <Minus className="w-4 h-4" />
               </button>
+              {debugMode && (
+                <button
+                  className="mt-2 px-2 py-1 bg-accent text-accent-foreground rounded-md border border-border hover:bg-accent/80"
+                  onClick={() => {
+                    const centerX = ((viewX + viewW / 2) / MAP_WIDTH) * 100;
+                    const centerY = ((viewY + viewH / 2) / MAP_HEIGHT) * 100;
+                    onDebugAdd?.(Number(centerX.toFixed(3)), Number(centerY.toFixed(3)));
+                  }}
+                  aria-label="Добавить маркер в центр"
+                  title="Добавить маркер в центр видимой области"
+                >
+                  + Маркер
+                </button>
+              )}
             </div>
 
             {/* Mini map removed by request */}
@@ -174,6 +228,47 @@ export function WorldMap({ currentCity, locations, onLocationClick }: WorldMapPr
                       <div className="mt-1 text-xs text-muted-foreground">Сложность: Средняя</div>
                     </TooltipContent>
                   </Tooltip>
+                ))}
+
+                {/* Debug markers */}
+                {debugMode && (debugMarkers || []).map((m) => (
+                  <div
+                    key={m.id}
+                    className="absolute -translate-x-1/2 -translate-y-1/2"
+                    style={{
+                      top: `${m.y}%`,
+                      left: `${m.x}%`,
+                      transform: `translate(-50%, -50%) scale(${1 / s.scale})`,
+                      zIndex: 50,
+                    }}
+                  >
+                    <div
+                      className="relative flex items-center gap-1"
+                      onMouseDown={(e) => {
+                        if (e.button !== 0) return;
+                        e.preventDefault();
+                        setDragging({
+                          id: m.id,
+                          startClientX: e.clientX,
+                          startClientY: e.clientY,
+                          startX: m.x,
+                          startY: m.y,
+                        });
+                      }}
+                    >
+                      <div className="w-3 h-3 rounded-full bg-red-500 border border-white shadow cursor-move" title={`${m.x.toFixed(2)} | ${m.y.toFixed(2)}`} />
+                      <span className="px-1 py-0.5 text-[10px] font-mono bg-background/80 border rounded">
+                        {m.id}: {m.x.toFixed(2)} | {m.y.toFixed(2)}
+                      </span>
+                      <button
+                        className="ml-1 px-1 text-[10px] bg-destructive text-destructive-foreground rounded border border-destructive/60"
+                        onClick={(e) => { e.stopPropagation(); onDebugDelete?.(m.id); }}
+                        title="Удалить маркер"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
                 ))}
               </div>
             </TransformComponent>
