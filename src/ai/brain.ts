@@ -1306,13 +1306,32 @@ const takeQuestAction: Action = {
         // Prefer DB-backed quest instance creation
         try {
             const svc = await import('@/services/questService');
-            const { selectQuestTemplatesForCharacter, createQuestFromTemplate } = svc as any;
-            const templates = selectQuestTemplatesForCharacter(updatedChar);
+            const { selectQuestTemplatesForCharacter, createQuestFromTemplate, acceptQuest } = svc as any;
+            const { db } = await import('../../server/storage');
+            const schema = await import('../../shared/schema');
+            const { and, eq } = await import('drizzle-orm');
+            
+            // Check if character already has an active quest
+            const [activeQuest] = await db.select().from(schema.quests)
+                .where(and(eq(schema.quests.characterId, updatedChar.id), eq(schema.quests.status, 'in-progress' as any)))
+                .limit(1);
+            
+            if (activeQuest) {
+                return { character: updatedChar, logMessage: `Герой уже занят заданием "${(activeQuest as any).title}". Нужно сначала завершить его.` };
+            }
+            
+            const templates = await selectQuestTemplatesForCharacter(updatedChar);
             if (templates.length === 0) {
                 return { character: updatedChar, logMessage: 'Подходящих заданий нет. Герой решает отдохнуть.' };
             }
             const template = templates[Math.floor(Math.random() * templates.length)];
-            const created = await createQuestFromTemplate(updatedChar, template as any);
+            // Create quest as 'available' and then accept it
+            const created = await createQuestFromTemplate(updatedChar, template as any, false);
+            const acceptResult = await acceptQuest(created?.quest?.id);
+            if (!acceptResult.ok) {
+                return { character: updatedChar, logMessage: `Не удалось взять задание: ${acceptResult.error}` };
+            }
+            
             const quest: any = { id: created?.quest?.id || template.id, title: template.title, type: template.type, narrative: template.narrative, duration: template.duration, targetEnemyId: (template as any).targetEnemyId, combatChance: (template as any).combatChance };
             let initialLog = `Задание "${quest.title}"? Звучит как неплохой способ разбогатеть. Герой берется за дело.`;
 
@@ -1348,7 +1367,8 @@ const takeQuestAction: Action = {
             updatedChar = addToActionHistory(updatedChar, 'quest');
             return { character: updatedChar, logMessage: initialLog + ` Герой приступил к выполнению.` };
         }
-        } catch {
+        } catch (err) {
+            console.error('Quest creation error:', err);
             // Fallback to static quests list if service import fails
             // Fall through to original static behavior below
         }
