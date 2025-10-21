@@ -1,5 +1,3 @@
-'use server';
-
 import { NextRequest } from 'next/server';
 import * as storage from '@/../server/storage';
 
@@ -24,6 +22,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// Helper function to get priority boost (not a Server Action)
 export function getPriorityBoost(characterId: string, actionType: string): number {
   const key = `${characterId}:${actionType}`;
   const rec = mem[key];
