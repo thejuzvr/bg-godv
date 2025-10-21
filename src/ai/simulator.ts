@@ -2,7 +2,7 @@ import type { Character, WorldState, ActionHistoryEntry } from "@/types/characte
 import { fetchGameData, type GameData } from "@/services/gameDataService";
 import { gameDataService } from "../../server/game-data-service";
 import { processGameTick } from "./game-engine";
-import { ACTION_CATALOG } from "./action-catalog";
+import { getActionCatalog } from "./action-catalog";
 import { computeActionScores, type ScoredAction } from "./priority-engine";
 
 export type SimulatorMode = "single" | "batch";
@@ -194,7 +194,8 @@ export async function simulateSingleTick(character: Character, profileCode?: str
     timeOfDayEffect: { findChanceModifier: 1, enemyStrengthModifier: 1, stealthModifier: 1, fleeChanceModifier: 0, regenModifier: { health: 1, magicka: 1, stamina: 1, fatigue: 1 }, npcAvailability: true },
   };
 
-  const scores = await computeActionScores({ character: result.updatedCharacter, actions: ACTION_CATALOG, profileCode: profileCode as any, world });
+  const catalog = await getActionCatalog();
+  const scores = await computeActionScores({ character: result.updatedCharacter, actions: catalog, profileCode: profileCode as any, world });
   return {
     updatedCharacter: result.updatedCharacter,
     adventureLog: result.adventureLog,

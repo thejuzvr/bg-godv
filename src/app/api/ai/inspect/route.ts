@@ -3,7 +3,6 @@ export const dynamic = 'force-dynamic';
 import { NextRequest } from 'next/server';
 import { getCharacterById } from '@/../server/storage';
 import { listPossibleActions } from '@/ai/diagnostics';
-import { ACTION_CATALOG } from '@/ai/action-catalog';
 import { computeActionScores } from '@/ai/priority-engine';
 import { recordDecisionTrace, getLastDecisionTrace } from '@/ai/diagnostics';
 import { fetchGameData } from '@/services/gameDataService';

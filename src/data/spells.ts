@@ -11,6 +11,7 @@ export const allSpells: Spell[] = [
         manaCost: 15,
         value: 10,
         icon: 'Flame',
+        element: 'fire',
     },
     {
         id: 'ice_spike',
@@ -20,6 +21,7 @@ export const allSpells: Spell[] = [
         manaCost: 25,
         value: 20,
         icon: 'Snowflake',
+        element: 'frost',
     },
     {
         id: 'lightning_bolt',
@@ -29,6 +31,7 @@ export const allSpells: Spell[] = [
         manaCost: 30,
         value: 25,
         icon: 'Zap',
+        element: 'shock',
     },
     {
         id: 'fireball',
@@ -38,6 +41,7 @@ export const allSpells: Spell[] = [
         manaCost: 50,
         value: 40,
         icon: 'FlameKindling',
+        element: 'fire',
     },
      {
         id: 'sun_fire',
@@ -47,6 +51,7 @@ export const allSpells: Spell[] = [
         manaCost: 20,
         value: 18,
         icon: 'Sun',
+        element: 'holy',
     },
 
     // === RESTORATION ===
@@ -88,6 +93,7 @@ export const allSpells: Spell[] = [
         value: 40, // armor rating
         duration: 60000,
         icon: 'TreeDeciduous',
+        element: 'arcane',
     },
     
     // === CONJURATION ===
@@ -99,6 +105,7 @@ export const allSpells: Spell[] = [
         manaCost: 25,
         value: 15, // damage amount, heal will be a fraction of this
         icon: 'HeartCrack',
+        element: 'arcane',
     },
 
     // === ILLUSION ===
@@ -111,6 +118,7 @@ export const allSpells: Spell[] = [
         value: 25, // magicka increase
         duration: 300000,
         icon: 'BrainCircuit',
+        element: 'arcane',
     },
     {
         id: 'energize',
@@ -120,5 +128,6 @@ export const allSpells: Spell[] = [
         manaCost: 15,
         value: 40, // stamina restored
         icon: 'BatteryCharging',
+        element: 'arcane',
     }
 ];

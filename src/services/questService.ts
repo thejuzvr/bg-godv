@@ -150,7 +150,7 @@ export async function ensureQuestBackfill(character: Character, minAvailable: nu
   const existing = await listAvailableQuests(character.id);
   const need = Math.max(0, minAvailable - existing.length);
   if (need <= 0) return existing;
-  const templates = selectQuestTemplatesForCharacter(character, { limit: minAvailable * 2, excludeCompletedIds: (character.completedQuests || []) });
+  const templates = await selectQuestTemplatesForCharacter(character, { limit: minAvailable * 2, excludeCompletedIds: (character.completedQuests || []) });
   const picks = templates.slice(0, need);
   const created: any[] = [];
   for (const t of picks) {

@@ -295,6 +295,9 @@ export interface Character {
     currentStep: number;
     rewards: { gold?: number; xp?: number; items?: string[] };
   } | null;
+  // Companions
+  companions?: string[]; // IDs of recruited companions (stored separately)
+  activeCompanion?: string | null; // ID of currently active companion
 }
 
 export type WorldState = {

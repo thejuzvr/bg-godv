@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 import { db } from '@/../server/storage';
 import * as schema from '@/../shared/schema';
 import * as storage from '@/../server/storage';
+import { getRedis } from '@/../server/redis';
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest) {
     }
     // Rate limit by last message (5 minutes per character)
     try {
-      const redis = (await import('@/../server/redis')).default as any;
+      const redis = getRedis();
       const key = `rl:divine_msg:${characterId}`;
       const ok = await redis.set(key, '1', 'EX', 5 * 60, 'NX');
       if (ok !== 'OK') return new Response(JSON.stringify({ ok: false, error: 'rate_limited' }), { status: 429 });

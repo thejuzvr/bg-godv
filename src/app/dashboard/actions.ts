@@ -4,6 +4,7 @@ import * as storage from "../../../server/storage";
 import type { Character } from "@/types/character";
 import { allFactions } from "@/data/factions";
 import { addOfflineEvent } from "@/services/offlineEventsService";
+import { getRedis } from "../../../server/redis";
 
 const INTERVENTION_COST = 50;
 

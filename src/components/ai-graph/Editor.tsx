@@ -110,7 +110,7 @@ export function AiGraphEditor({ characterId }: { characterId: string }) {
 
   const addSelectNode = () => {
     const id = `node_${Math.random().toString(36).slice(2, 8)}`;
-    setNodes(n => n.concat({ id, data: { label: 'Act.SelectByName' }, position: { x: 200, y: 200 } }));
+    setNodes(n => n.concat({ id, data: { label: 'Act.SelectByName' }, position: { x: 200, y: 200 } } as any));
     setGraph(g => {
       const base = g || { version: 1, nodes: [], edges: [] } as GraphModel;
       return { ...base, nodes: base.nodes.concat({ id, type: 'Act.SelectByName', inputs: {}, outputs: { selectedActionName: 'string' }, config: { actionName: 'Прогулка' } }) };
@@ -135,7 +135,7 @@ export function AiGraphEditor({ characterId }: { characterId: string }) {
   const addNodeOfType = () => {
     const id = `node_${Math.random().toString(36).slice(2, 8)}`;
     const label = newType;
-    setNodes(n => n.concat({ id, data: { label }, position: { x: 240, y: 220 } }));
+    setNodes(n => n.concat({ id, data: { label }, position: { x: 240, y: 220 } } as any));
     setGraph(g => {
       const base = g || { version: 1, nodes: [], edges: [] } as GraphModel;
       const outputs = DEFAULT_OUTPUTS[newType] || { out: 'json' };
@@ -148,7 +148,7 @@ export function AiGraphEditor({ characterId }: { characterId: string }) {
     const id = `node_${Math.random().toString(36).slice(2, 8)}`;
     const outputs = DEFAULT_OUTPUTS[type] || { out: 'json' };
     const config = type === 'Act.SelectByCategory' ? { category: 'rest' } : (type === 'Eval.LowHealth' ? { threshold: 0.3 } : (type === 'Eval.IsTired' ? { threshold: 0.6 } : {}));
-    setNodes(n => n.concat({ id, data: { label: type }, position: pos }));
+    setNodes(n => n.concat({ id, data: { label: type }, position: pos } as any));
     setGraph(g => {
       const base = g || { version: 1, nodes: [], edges: [] } as GraphModel;
       return { ...base, nodes: base.nodes.concat({ id, type, inputs: {}, outputs, config }) };

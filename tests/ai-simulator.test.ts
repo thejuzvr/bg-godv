@@ -3,8 +3,6 @@ import { createTestCharacter, runSimulation, simulateSingleTick } from '@/ai/sim
 import { fetchGameData } from '@/services/gameDataService';
 import { buildGameDataForSimulation } from '@/ai/simulator';
 import { processGameTick } from '@/ai/game-engine';
-import { buildGameDataForSimulation } from '@/ai/simulator';
-import { processGameTick } from '@/ai/game-engine';
 
 describe('AI Simulator', () => {
   it('creates a synthetic character and runs a single tick', async () => {

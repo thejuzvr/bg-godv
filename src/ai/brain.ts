@@ -23,6 +23,7 @@ import { sovngardeThoughts } from "@/data/sovngarde";
 import { jailHumor } from "@/data/jail";
 import { allFactions } from "@/data/factions";
 import { donateToFaction as performFactionDonation } from "@/app/dashboard/actions";
+import { LOOT_TIER_BASE_CHANCES } from './config/balance';
 
 // Helper functions for faction reputation (duplicated from game-engine.ts)
 function getFactionForLocation(location: string): string | null {
@@ -408,6 +409,11 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
         }
     } catch {}
     
+    // Safety check - if combat is null, return early
+    if (!updatedChar.combat) {
+        return updatedChar;
+    }
+    
     // Add round header to combat log
     if (!updatedChar.combat.combatLog) updatedChar.combat.combatLog = [];
     updatedChar.combat.combatLog.push(`=== Раунд ${updatedChar.combat.rounds} ===`);
@@ -515,6 +521,10 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
     const heroInitiative = heroIniRoll + getAttributeBonus(updatedChar.attributes.agility);
     const enemyInitiative = enemyIniRoll + getAttributeBonus(baseEnemyDef?.level || 1);
     const heroActsFirst = heroInitiative >= enemyInitiative;
+    
+    // Safety check again (TypeScript flow analysis)
+    if (!updatedChar.combat) return updatedChar;
+    
     updatedChar.combat.initiative = { hero: heroInitiative, enemy: enemyInitiative, acting: heroActsFirst ? 'hero' : 'enemy' };
     logMessages.push(`Инициатива — Герой: ${heroInitiative}, ${enemy.name}: ${enemyInitiative}. Первый ход: ${heroActsFirst ? 'герой' : enemy.name}.`);
 
@@ -871,13 +881,11 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             const lootTable = baseEnemyDef.lootTable;
             const levelMultiplier = 1 + (updatedChar.level - 1) * 0.1; // Scale loot with hero level
             
-            // Process each rarity tier
-            const rarityTiers = [
-                { tier: 'common', chance: 0.6 },
-                { tier: 'uncommon', chance: 0.3 },
-                { tier: 'rare', chance: 0.08 },
-                { tier: 'legendary', chance: 0.02 }
-            ];
+            // Process each rarity tier (using configurable balance)
+            const rarityTiers = Object.entries(LOOT_TIER_BASE_CHANCES).map(([tier, chance]) => ({
+                tier: tier as 'common' | 'uncommon' | 'rare' | 'legendary',
+                chance: Number(chance),
+            }));
 
             for (const { tier, chance } of rarityTiers) {
                 if (Math.random() < chance) {
@@ -891,7 +899,9 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
                                 const quantity = Math.max(1, Math.floor(selectedLoot.quantity * levelMultiplier));
                                 const { updatedCharacter: charWithItem, logMessage } = addItemToInventory(updatedChar, baseItem, quantity);
                                 updatedChar = charWithItem;
-                                winMsg += ` ${logMessage}`;
+                                // Add rarity indicator
+                                const rarityEmoji = tier === 'legendary' ? '⭐' : tier === 'rare' ? '💎' : tier === 'uncommon' ? '✨' : '📦';
+                                winMsg += ` ${rarityEmoji} ${logMessage}`;
                             }
                         }
                     }
@@ -906,10 +916,10 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
                 const goldItem = updatedChar.inventory.find(i => i.id === 'gold');
                 if (goldItem) {
                     goldItem.quantity += goldAmount;
-                    winMsg += ` Найдено ${goldAmount} золота.`;
+                    winMsg += ` 💰 ${goldAmount} золота.`;
                 } else {
-                    updatedChar.inventory.push({ id: 'gold', name: 'Золото', weight: 0, type: 'misc', quantity: goldAmount });
-                    winMsg += ` Найдено ${goldAmount} золота.`;
+                    updatedChar.inventory.push({ id: 'gold', name: 'Золото', weight: 0, type: 'gold', quantity: goldAmount } as any);
+                    winMsg += ` 💰 ${goldAmount} золота.`;
                 }
             }
         }
@@ -947,25 +957,42 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
                     const total = data.tasks.length;
                     let completed = 0;
                     for (const t of data.tasks) if (t.status === 'completed') completed++;
+                    
+                    // Find and complete the first uncompleted combat task
                     const combatTask = data.tasks.find((t: any) => t.type === 'combat' && t.status !== 'completed');
                     if (combatTask) {
                         await setTaskStatus(combatTask.id, 'completed', 100);
                         completed += 1;
-                        logMessages.push('[adventure] Этап квеста выполнен: Победить врага.');
+                        logMessages.push('[adventure] ✅ Этап квеста выполнен: Победить врага.');
                     }
+                    
                     const progressPct = Math.floor((completed / total) * 100);
                     await updateQuestProgress(data.quest.id, progressPct);
+                    
+                    // Log current progress
+                    if (completed < total) {
+                        const remaining = total - completed;
+                        logMessages.push(`[adventure] Прогресс квеста "${data.quest.title}": ${completed}/${total} этапов (${progressPct}%). Осталось: ${remaining}.`);
+                    }
+                    
                     // Auto-complete quest if all tasks done and pay out rewards
                     if (completed >= total) {
                         await completeQuest(data.quest.id);
+                        // Add to completed quests list
+                        if (!updatedChar.completedQuests) updatedChar.completedQuests = [];
+                        if (!updatedChar.completedQuests.includes(questId)) {
+                            updatedChar.completedQuests.push(questId);
+                        }
                         // Apply rewards and log
                         const result = await applyRewardsToCharacter(updatedChar, data.quest.rewards);
                         updatedChar = result.character;
-                        logMessages.push(`[adventure] Задание завершено: ${data.quest.title}. ${result.log}`);
+                        logMessages.push(`[adventure] 🎉 Задание завершено: ${data.quest.title}! ${result.log}`);
                     }
                 }
             }
-        } catch {}
+        } catch (err) {
+            console.error('Quest progression failed:', err);
+        }
         // Progress generated quest on combat victory
         try {
             const gq = character.activeGeneratedQuest;
@@ -3245,10 +3272,53 @@ async function determineNextAction(character: Character, gameData: GameData): Pr
 
     // 5a. Anti-stall shortcuts removed; goals will steer travel when needed
     
-    // 6. Handle Divine Suggestion (override)
+    // 6. Handle Divine Suggestion (with chance of refusal)
     if (character.divineSuggestion) {
         const suggestedAction = possibleActions.find(a => a.name === character.divineSuggestion);
         if (suggestedAction) {
+            // Hero can refuse divine suggestion based on mood and fatigue
+            const mood = character.mood;
+            const fatigueRatio = character.stats.fatigue.current / character.stats.fatigue.max;
+            
+            // Base refusal chance: 20%
+            let refusalChance = 0.2;
+            
+            // Low mood increases refusal chance
+            if (mood < 30) refusalChance += 0.2;
+            else if (mood < 50) refusalChance += 0.1;
+            
+            // High fatigue increases refusal chance
+            if (fatigueRatio > 0.7) refusalChance += 0.15;
+            
+            // Roll for refusal
+            if (Math.random() < refusalChance) {
+                // Hero refuses - log a sarcastic thought
+                try {
+                    const { getRefusalThought } = await import('@/data/refusal-thoughts');
+                    const locationName = character.divineDestinationId 
+                        ? gameData.locations.find(l => l.id === character.divineDestinationId)?.name || 'неизвестное место'
+                        : 'неизвестное место';
+                    const refusalMessage = getRefusalThought(locationName);
+                    
+                    // Clear divine suggestion immediately (hero refused)
+                    const refusedChar = structuredClone(character);
+                    refusedChar.divineSuggestion = null;
+                    refusedChar.divineDestinationId = null;
+                    
+                    // Return wander action with refusal message
+                    return {
+                        ...wanderAction,
+                        perform: async () => ({
+                            character: refusedChar,
+                            logMessage: `[приключение] ${refusalMessage}`
+                        })
+                    };
+                } catch (err) {
+                    console.error('Failed to load refusal thought:', err);
+                }
+            }
+            
+            // Hero accepts the suggestion
             return suggestedAction;
         }
     }
@@ -3689,3 +3759,4 @@ try {
 try {
     if (!idleActions.includes((craftSomethingAction as any))) idleActions.splice(13, 0, craftSomethingAction);
 } catch {}
+

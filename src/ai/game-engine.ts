@@ -1388,8 +1388,8 @@ async function processEpicPhraseGeneration(character: Character, thoughts: Array
                 if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {} as any;
                 (updatedChar.actionCooldowns as any)[`thought:cd:${phrase}`] = Date.now() + 6 * 60 * 60 * 1000;
             } catch {}
-            
-            return { char: updatedChar, log: `У героя родилась мысль: "${phrase}"`, chronicle: null as any };
+            const sourceLabel = chosen ? '[db:game_thoughts]' : '[code:src/data/thoughts.ts]';
+            return { char: updatedChar, log: `У героя родилась мысль: "${phrase}" ${sourceLabel}`, chronicle: null as any };
         }
     } catch (e) {
         // Fallback silently on any error
@@ -1409,8 +1409,7 @@ async function processEpicPhraseGeneration(character: Character, thoughts: Array
             if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {} as any;
             (updatedChar.actionCooldowns as any)[`thought:cd:${phrase}`] = Date.now() + 6 * 60 * 60 * 1000;
         } catch {}
-        
-    return { char: updatedChar, log: `У героя родилась мысль: "${phrase}"`, chronicle: null as any };
+        return { char: updatedChar, log: `У героя родилась мысль: "${phrase}" [code:src/data/thoughts.ts]`, chronicle: null as any };
     }
     return { char: character, log: null };
 }
@@ -1619,25 +1618,40 @@ export async function processGameTick(
         // Handle pending user-driven divine messages (Godville-style)
         try {
             const { getPendingDivineMessages, markDivineMessageProcessed } = await import('../../server/storage');
+            const { selectDivineReaction } = await import('@/data/divine-reactions');
             const pending = await getPendingDivineMessages(updatedChar.id, 3);
             for (const m of pending as any[]) {
                 const text: string = (m as any).text || '';
                 if (!text) continue;
-                // Hero sarcastic reply
-                const replies = [
-                    'Да-да, о великий голос сверху, я всё понял… наверное.',
-                    'Если это божественный план, то он очень… творческий.',
-                    'Слушаю и повинуюсь. Но сначала — сладкий рулет.',
-                    'Заметил знак. Сделаю вид, что это был мой план.',
-                ];
-                const reply = replies[Math.floor(Math.random() * replies.length)];
-                // Small influence
+                
+                // Select appropriate reaction based on character state
+                const reaction = selectDivineReaction({
+                    mood: updatedChar.mood,
+                    status: updatedChar.status,
+                    stats: updatedChar.stats
+                });
+                
+                // Small mood influence from divine contact
                 updatedChar.mood = Math.min(100, Math.max(0, updatedChar.mood + (Math.random() < 0.5 ? 3 : -2)));
-                adventureLog.push(`Божественный шёпот: "${text}"`);
-                adventureLog.push(`Ответ героя: "${reply}"`);
+                
+                // Format: Attribution + Divine Message + Reaction
+                const formattedMessage = `${reaction.attribution}: «${text}». ${reaction.reaction}`;
+                adventureLog.push(`[божество] ${formattedMessage}`);
+                
+                // Add to chronicle for special moments
+                if (Math.random() < 0.3) {
+                    chronicleEntries.push({
+                        text: formattedMessage,
+                        type: 'divine_message',
+                        icon: 'Sparkles'
+                    });
+                }
+                
                 await markDivineMessageProcessed((m as any).id);
             }
-        } catch {}
+        } catch (err) {
+            console.error('Divine message processing failed:', err);
+        }
     }
     
     // --- 12b. IDLE RE-CALCULATION GUARD (2+ minutes of inactivity) ---
