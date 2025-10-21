@@ -869,17 +869,21 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
         // New loot table system
         if (baseEnemyDef?.lootTable) {
             const lootTable = baseEnemyDef.lootTable;
-            const levelMultiplier = 1 + (updatedChar.level - 1) * 0.1; // Scale loot with hero level
+            // Pull config knobs
+            const { LOOT_TIER_BASE_CHANCES, LUCKY_LOOT_CHANCE_BONUS, LOOT_LEVEL_QUANTITY_MULTIPLIER } = await import('./config/balance');
+            const levelMultiplier = 1 + (updatedChar.level - 1) * LOOT_LEVEL_QUANTITY_MULTIPLIER; // scale loot with level
+            const hasLucky = !!updatedChar.effects.find(e => e.id === 'lucky');
             
-            // Process each rarity tier
+            // Process each rarity tier using config chances; apply 'lucky' bonus multiplicatively
             const rarityTiers = [
-                { tier: 'common', chance: 0.6 },
-                { tier: 'uncommon', chance: 0.3 },
-                { tier: 'rare', chance: 0.08 },
-                { tier: 'legendary', chance: 0.02 }
-            ];
+                { tier: 'common', base: LOOT_TIER_BASE_CHANCES.common },
+                { tier: 'uncommon', base: LOOT_TIER_BASE_CHANCES.uncommon },
+                { tier: 'rare', base: LOOT_TIER_BASE_CHANCES.rare },
+                { tier: 'legendary', base: LOOT_TIER_BASE_CHANCES.legendary },
+            ] as const;
 
-            for (const { tier, chance } of rarityTiers) {
+            for (const { tier, base } of rarityTiers) {
+                const chance = Math.min(0.99, base * (hasLucky ? (1 + LUCKY_LOOT_CHANCE_BONUS) : 1));
                 if (Math.random() < chance) {
                     const tierLoot = lootTable[tier as keyof typeof lootTable] as LootEntry[];
                     if (tierLoot && tierLoot.length > 0) {
@@ -908,7 +912,7 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
                     goldItem.quantity += goldAmount;
                     winMsg += ` Найдено ${goldAmount} золота.`;
                 } else {
-                    updatedChar.inventory.push({ id: 'gold', name: 'Золото', weight: 0, type: 'misc', quantity: goldAmount });
+                    updatedChar.inventory.push({ id: 'gold', name: 'Золото', weight: 0, type: 'gold', quantity: goldAmount });
                     winMsg += ` Найдено ${goldAmount} золота.`;
                 }
             }
