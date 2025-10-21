@@ -1388,8 +1388,8 @@ async function processEpicPhraseGeneration(character: Character, thoughts: Array
                 if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {} as any;
                 (updatedChar.actionCooldowns as any)[`thought:cd:${phrase}`] = Date.now() + 6 * 60 * 60 * 1000;
             } catch {}
-            
-            return { char: updatedChar, log: `У героя родилась мысль: "${phrase}"`, chronicle: null as any };
+            const sourceLabel = chosen ? '[db:game_thoughts]' : '[code:src/data/thoughts.ts]';
+            return { char: updatedChar, log: `У героя родилась мысль: "${phrase}" ${sourceLabel}`, chronicle: null as any };
         }
     } catch (e) {
         // Fallback silently on any error
@@ -1409,8 +1409,7 @@ async function processEpicPhraseGeneration(character: Character, thoughts: Array
             if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {} as any;
             (updatedChar.actionCooldowns as any)[`thought:cd:${phrase}`] = Date.now() + 6 * 60 * 60 * 1000;
         } catch {}
-        
-    return { char: updatedChar, log: `У героя родилась мысль: "${phrase}"`, chronicle: null as any };
+        return { char: updatedChar, log: `У героя родилась мысль: "${phrase}" [code:src/data/thoughts.ts]`, chronicle: null as any };
     }
     return { char: character, log: null };
 }

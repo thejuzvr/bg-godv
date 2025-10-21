@@ -41,6 +41,8 @@ export default function MapPage() {
     const [gameData, setGameData] = useState<GameData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [activeFilters, setActiveFilters] = useState<LocationType[]>(['city', 'town', 'ruin', 'dungeon', 'camp']);
+    const [debugMode, setDebugMode] = useState<boolean>(false);
+    const [debugMarkers, setDebugMarkers] = useState<Array<{ id: string; x: number; y: number }>>([]);
 
     const mapContainerRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
@@ -136,6 +138,13 @@ return (
                         {filterInfo.name}
                     </Button>
                 ))}
+                <Button
+                    variant={debugMode ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setDebugMode(v => !v)}
+                >
+                    {debugMode ? 'Debug: Вкл' : 'Debug: Выкл'}
+                </Button>
             </div>
         </header>
 
@@ -189,6 +198,11 @@ return (
                                         currentCity={character.location}
                                         locations={filteredLocations}
                                         onLocationClick={handleMapLocationClick}
+                                        debugMode={debugMode}
+                                        debugMarkers={debugMarkers}
+                                        onDebugAdd={(x, y) => setDebugMarkers(prev => [...prev, { id: `pt-${prev.length + 1}`, x, y }])}
+                                        onDebugUpdate={(id, x, y) => setDebugMarkers(prev => prev.map(m => m.id === id ? { ...m, x, y } : m))}
+                                        onDebugDelete={(id) => setDebugMarkers(prev => prev.filter(m => m.id !== id))}
                                     />
                                 </TransformComponent>
                             </>

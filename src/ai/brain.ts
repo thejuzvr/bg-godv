@@ -9,6 +9,7 @@ import type { LootEntry } from "@/types/enemy";
 import { selectActionSimple } from './policy';
 import { USE_CONFIG_PRIORITY } from './config/constants';
 import { CATEGORY_BASE_MULTIPLIERS } from './config/constants';
+import { LOOT_TIER_BASE_CHANCES } from './config/balance';
 import { initPersonality, getPersonalityModifier } from '@/ai/personality';
 import { generateGoals, selectTopGoal } from '@/ai/goal-manager';
 import { computeActionScores } from './priority-engine';
@@ -871,13 +872,11 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             const lootTable = baseEnemyDef.lootTable;
             const levelMultiplier = 1 + (updatedChar.level - 1) * 0.1; // Scale loot with hero level
             
-            // Process each rarity tier
-            const rarityTiers = [
-                { tier: 'common', chance: 0.6 },
-                { tier: 'uncommon', chance: 0.3 },
-                { tier: 'rare', chance: 0.08 },
-                { tier: 'legendary', chance: 0.02 }
-            ];
+            // Process each rarity tier (configurable chances)
+            const rarityTiers = Object.entries(LOOT_TIER_BASE_CHANCES).map(([tier, chance]) => ({
+                tier: tier as 'common' | 'uncommon' | 'rare' | 'legendary',
+                chance: Number(chance),
+            }));
 
             for (const { tier, chance } of rarityTiers) {
                 if (Math.random() < chance) {
