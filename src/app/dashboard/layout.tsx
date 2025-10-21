@@ -49,6 +49,18 @@ import { logout } from '@/services/authService';
 import { RealmProvider, useRealm } from '@/context/realm-context';
 import { useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
+import {
+  Menubar,
+  MenubarMenu,
+  MenubarTrigger,
+  MenubarContent,
+  MenubarItem,
+  MenubarSub,
+  MenubarSubTrigger,
+  MenubarSubContent,
+  MenubarSeparator,
+  MenubarLabel,
+} from '@/components/ui/menubar';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Дашборд' },
@@ -185,7 +197,115 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <DragonIcon className="h-6 w-6" />
                 </Link>
               </div>
-              <div className="hidden md:flex" />
+              <div className="hidden md:flex">
+                <Menubar>
+                  <MenubarMenu>
+                    <MenubarTrigger>Герой</MenubarTrigger>
+                    <MenubarContent>
+                      <MenubarItem asChild>
+                        <Link href="/dashboard/character">Персонаж</Link>
+                      </MenubarItem>
+                      <MenubarItem asChild>
+                        <Link href="/dashboard/inventory">Инвентарь</Link>
+                      </MenubarItem>
+                      <MenubarItem asChild>
+                        <Link href="/dashboard/mind">Сознание</Link>
+                      </MenubarItem>
+                      <MenubarSeparator />
+                      <MenubarItem asChild>
+                        <Link href="/dashboard/chronicle">Летопись</Link>
+                      </MenubarItem>
+                    </MenubarContent>
+                  </MenubarMenu>
+
+                  <MenubarMenu>
+                    <MenubarTrigger>Мир</MenubarTrigger>
+                    <MenubarContent>
+                      <MenubarItem asChild>
+                        <Link href="/dashboard/map">Карта Мира</Link>
+                      </MenubarItem>
+                      <MenubarItem asChild>
+                        <Link href="/dashboard/factions">Фракции</Link>
+                      </MenubarItem>
+                      <MenubarItem asChild>
+                        <Link href="/dashboard/society">Общество</Link>
+                      </MenubarItem>
+                      <MenubarItem asChild>
+                        <Link href="/dashboard/companions">Спутники</Link>
+                      </MenubarItem>
+                    </MenubarContent>
+                  </MenubarMenu>
+
+                  <MenubarMenu>
+                    <MenubarTrigger>Деятельность</MenubarTrigger>
+                    <MenubarContent>
+                      <MenubarSub>
+                        <MenubarSubTrigger>Ремесло</MenubarSubTrigger>
+                        <MenubarSubContent>
+                          <MenubarItem asChild>
+                            <Link href="/dashboard/crafting">Крафт</Link>
+                          </MenubarItem>
+                          <MenubarItem asChild>
+                            <Link href="/dashboard/gathering">Добыча</Link>
+                          </MenubarItem>
+                        </MenubarSubContent>
+                      </MenubarSub>
+                      <MenubarSub>
+                        <MenubarSubTrigger>Экономика</MenubarSubTrigger>
+                        <MenubarSubContent>
+                          <MenubarItem asChild>
+                            <Link href="/dashboard/market">Ларьки</Link>
+                          </MenubarItem>
+                          <MenubarItem asChild>
+                            <Link href="/dashboard/trade">Торговля</Link>
+                          </MenubarItem>
+                        </MenubarSubContent>
+                      </MenubarSub>
+                      <MenubarSeparator />
+                      <MenubarSub>
+                        <MenubarSubTrigger>Приключения</MenubarSubTrigger>
+                        <MenubarSubContent>
+                          <MenubarItem asChild>
+                            <Link href="/dashboard/quests">Журнал Заданий</Link>
+                          </MenubarItem>
+                          <MenubarItem asChild>
+                            <Link href="/dashboard/arena">Арена</Link>
+                          </MenubarItem>
+                        </MenubarSubContent>
+                      </MenubarSub>
+                    </MenubarContent>
+                  </MenubarMenu>
+
+                  <MenubarMenu>
+                    <MenubarTrigger>Отчёты</MenubarTrigger>
+                    <MenubarContent>
+                      <MenubarItem asChild>
+                        <Link href="/dashboard/analytics">Аналитика</Link>
+                      </MenubarItem>
+                      <MenubarItem asChild>
+                        <Link href="/dashboard/chronicle">Летопись</Link>
+                      </MenubarItem>
+                    </MenubarContent>
+                  </MenubarMenu>
+
+                  <MenubarMenu>
+                    <MenubarTrigger>Система</MenubarTrigger>
+                    <MenubarContent>
+                      <MenubarLabel>Ссылки</MenubarLabel>
+                      <MenubarItem asChild>
+                        <Link href="/dashboard">Дашборд</Link>
+                      </MenubarItem>
+                      <MenubarSeparator />
+                      <MenubarItem asChild>
+                        <Link href="/profile">Профиль</Link>
+                      </MenubarItem>
+                      <MenubarItem asChild>
+                        <Link href="/admin">Админ-панель</Link>
+                      </MenubarItem>
+                    </MenubarContent>
+                  </MenubarMenu>
+                </Menubar>
+              </div>
               <RealmSelector />
             </header>
             <main className="flex-1 overflow-auto">

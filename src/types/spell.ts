@@ -10,4 +10,6 @@ export interface Spell {
     value: number; // damage amount, healing amount, or buff multiplier
     icon: string;
     duration?: number; // duration in ms for buffs
+    // Optional light element tagging for balance lookups
+    element?: 'fire' | 'frost' | 'shock' | 'holy' | 'arcane';
 }
