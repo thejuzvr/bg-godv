@@ -1001,6 +1001,17 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
                         const result = await applyRewardsToCharacter(updatedChar, data.quest.rewards);
                         updatedChar = result.character;
                         logMessages.push(`[adventure] 🎉 Задание завершено: ${data.quest.title}! ${result.log}`);
+                        
+                        // Auto-select next quest based on priority
+                        try {
+                            const { autoSelectNextQuest } = svc as any;
+                            const nextResult = await autoSelectNextQuest(updatedChar.id);
+                            if (nextResult.ok && nextResult.quest) {
+                                logMessages.push(`[adventure] 📋 Героя уже ждёт новое задание: ${nextResult.quest.title}`);
+                            }
+                        } catch (err) {
+                            console.warn('Failed to auto-select next quest:', err);
+                        }
                     }
                 }
             }
@@ -1317,20 +1328,21 @@ const takeQuestAction: Action = {
     async perform(character: Character, gameData: GameData) {
         let updatedChar = structuredClone(character);
         const { enemies } = gameData;
-        // Prefer DB-backed quest instance creation
+        // Prefer DB-backed quest instance creation with priority system
         try {
             const svc = await import('@/services/questService');
-            const { selectQuestTemplatesForCharacter, createQuestFromTemplate, acceptQuest } = svc as any;
+            const { selectQuestTemplatesForCharacter, createQuestFromTemplate, acceptQuest, getActiveQuest, setActiveQuest, listInProgressQuests, autoSelectNextQuest } = svc as any;
             const { db } = await import('../../server/storage');
             const schema = await import('../../shared/schema');
-            const { and, eq } = await import('drizzle-orm');
+            const { and, eq, desc } = await import('drizzle-orm');
             
-            // Check if character already has an active quest
-            const [activeQuest] = await db.select().from(schema.quests)
-                .where(and(eq(schema.quests.characterId, updatedChar.id), eq(schema.quests.status, 'in-progress' as any)))
-                .limit(1);
+            // Step 1: Check if character has an ACTIVE quest (is_active = true)
+            const activeQuestData = await getActiveQuest(updatedChar.id);
             
-            if (activeQuest) {
+            if (activeQuestData && activeQuestData.quest) {
+                // Hero has an active quest - work on it
+                const activeQuest = activeQuestData.quest;
+                
                 // Only block if hero is actually in a quest action right now
                 const isActivelyQuesting = updatedChar.currentAction?.type === 'quest';
                 if (isActivelyQuesting) {
@@ -1344,17 +1356,117 @@ const takeQuestAction: Action = {
                     }
                     return { character: updatedChar, logMessage: '' };
                 }
-                // Otherwise, ignore stale DB state and proceed to pick/continue a quest
+                
+                // Continue working on the active quest
+                const quest: any = {
+                    id: activeQuest.id,
+                    title: activeQuest.title,
+                    type: activeQuest.type,
+                    narrative: `Продолжаю выполнение задания: ${activeQuest.title}`,
+                    duration: 3, // default duration
+                    targetEnemyId: (activeQuest as any).metadata?.targetEnemyId,
+                    combatChance: 0.5
+                };
+                
+                let initialLog = `Пора продолжить задание "${quest.title}". Героя ничто не остановит!`;
+                
+                // Proceed with quest execution (combat or timed activity)
+                if (quest.type === 'bounty' || (quest.type === 'side' && Math.random() < (quest.combatChance || 0))) {
+                    const baseEnemy = enemies.find(e => e.id === quest.targetEnemyId) || enemies[Math.floor(Math.random() * enemies.length)];
+                    const levelMultiplier = 1 + (character.level - 1) * 0.15;
+                    const enemy = { 
+                        name: baseEnemy.name, 
+                        health: { current: Math.floor(baseEnemy.health * levelMultiplier), max: Math.floor(baseEnemy.health * levelMultiplier) }, 
+                        damage: Math.floor(baseEnemy.damage * levelMultiplier), 
+                        xp: Math.floor(baseEnemy.xp * levelMultiplier),
+                        armor: Math.max(8, Math.min(25, (baseEnemy.armor ?? (10 + (baseEnemy.level || 1))))),
+                        appliesEffect: baseEnemy.appliesEffect || null,
+                    };
+
+                    if (!updatedChar.analytics.encounteredEnemies.includes(baseEnemy.id)) {
+                        updatedChar.analytics.encounteredEnemies.push(baseEnemy.id);
+                    }
+
+                    updatedChar.status = 'in-combat';
+                    updatedChar.combat = { enemyId: baseEnemy.id, enemy, onWinQuestId: quest.id, fleeAttempted: false };
+                    updatedChar = addToActionHistory(updatedChar, 'quest');
+                    const questLog = `Герой выследил цель по заданию и вступает в бой с ${enemy.name}!`;
+                    return { character: updatedChar, logMessage: initialLog + " " + questLog };
+                } else {
+                    updatedChar.status = 'busy';
+                    updatedChar.currentAction = {
+                        type: "quest", name: `Выполнение: ${quest.title}`, description: quest.narrative,
+                        startedAt: Date.now(), duration: quest.duration * 60 * 1000, questId: quest.id,
+                    };
+                    updatedChar = addToActionHistory(updatedChar, 'quest');
+                    return { character: updatedChar, logMessage: initialLog + ` Герой приступил к выполнению.` };
+                }
             }
             
+            // Step 2: No active quest - check for in-progress quests to activate
+            const inProgressQuests = await listInProgressQuests(updatedChar.id);
+            
+            if (inProgressQuests && inProgressQuests.length > 0) {
+                // Auto-select highest priority quest
+                const nextQuest = inProgressQuests[0]; // Already sorted by priority
+                
+                // Set it as active
+                await setActiveQuest(updatedChar.id, nextQuest.id);
+                
+                const quest: any = {
+                    id: nextQuest.id,
+                    title: nextQuest.title,
+                    type: nextQuest.type,
+                    narrative: `Возобновляю задание: ${nextQuest.title}`,
+                    duration: 3,
+                    targetEnemyId: (nextQuest as any).metadata?.targetEnemyId,
+                    combatChance: 0.5
+                };
+                
+                let initialLog = `Пора вернуться к заданию "${quest.title}". Героя зовёт приключение!`;
+                
+                // Proceed with quest execution
+                if (quest.type === 'bounty' || (quest.type === 'side' && Math.random() < (quest.combatChance || 0))) {
+                    const baseEnemy = enemies.find(e => e.id === quest.targetEnemyId) || enemies[Math.floor(Math.random() * enemies.length)];
+                    const levelMultiplier = 1 + (character.level - 1) * 0.15;
+                    const enemy = { 
+                        name: baseEnemy.name, 
+                        health: { current: Math.floor(baseEnemy.health * levelMultiplier), max: Math.floor(baseEnemy.health * levelMultiplier) }, 
+                        damage: Math.floor(baseEnemy.damage * levelMultiplier), 
+                        xp: Math.floor(baseEnemy.xp * levelMultiplier),
+                        armor: Math.max(8, Math.min(25, (baseEnemy.armor ?? (10 + (baseEnemy.level || 1))))),
+                        appliesEffect: baseEnemy.appliesEffect || null,
+                    };
+
+                    if (!updatedChar.analytics.encounteredEnemies.includes(baseEnemy.id)) {
+                        updatedChar.analytics.encounteredEnemies.push(baseEnemy.id);
+                    }
+
+                    updatedChar.status = 'in-combat';
+                    updatedChar.combat = { enemyId: baseEnemy.id, enemy, onWinQuestId: quest.id, fleeAttempted: false };
+                    updatedChar = addToActionHistory(updatedChar, 'quest');
+                    const questLog = `Герой выследил цель по заданию и вступает в бой с ${enemy.name}!`;
+                    return { character: updatedChar, logMessage: initialLog + " " + questLog };
+                } else {
+                    updatedChar.status = 'busy';
+                    updatedChar.currentAction = {
+                        type: "quest", name: `Выполнение: ${quest.title}`, description: quest.narrative,
+                        startedAt: Date.now(), duration: quest.duration * 60 * 1000, questId: quest.id,
+                    };
+                    updatedChar = addToActionHistory(updatedChar, 'quest');
+                    return { character: updatedChar, logMessage: initialLog + ` Герой приступил к выполнению.` };
+                }
+            }
+            
+            // Step 3: No quests at all - create a new one
             const templates = await selectQuestTemplatesForCharacter(updatedChar);
             if (templates.length === 0) {
                 return { character: updatedChar, logMessage: 'Подходящих заданий нет. Герой решает отдохнуть.' };
             }
             const template = templates[Math.floor(Math.random() * templates.length)];
-            // Create quest as 'available' and then accept it
+            // Create quest as 'available' and then accept it as active
             const created = await createQuestFromTemplate(updatedChar, template as any, false);
-            const acceptResult = await acceptQuest(created?.quest?.id);
+            const acceptResult = await acceptQuest(created?.quest?.id, true); // setAsActive = true
             if (!acceptResult.ok) {
                 return { character: updatedChar, logMessage: `Не удалось взять задание: ${acceptResult.error}` };
             }
