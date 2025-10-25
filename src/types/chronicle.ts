@@ -10,6 +10,7 @@ export type ChronicleEntryType =
   | 'combat_victory'
   | 'discovery_dungeon'
   | 'achievement'
+  | 'divine_message'
   | 'system';
 
 export interface ChronicleEntry {
