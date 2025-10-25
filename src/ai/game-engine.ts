@@ -508,25 +508,61 @@ async function processActionCompletion(character: Character, gameData: GameData,
             let quest: any = null;
             let questFromDb = false;
             try {
-                const { getQuest, completeQuest, applyRewardsToCharacter } = await import('@/services/questService');
+                const { getQuest, completeQuest, applyRewardsToCharacter, setTaskStatus } = await import('@/services/questService');
                 const dbQuest = await getQuest(currentAction.questId!);
                 if (dbQuest && dbQuest.quest) {
                     questFromDb = true;
-                    // Complete the quest in DB
-                    await completeQuest(dbQuest.quest.id);
-                    // Apply rewards from DB quest
-                    const result = await applyRewardsToCharacter(updatedChar, dbQuest.quest.rewards);
-                    updatedChar = result.character;
-                    logs.push(result.log);
-                    updatedChar.mood = Math.min(100, updatedChar.mood + 15);
-                    logs.push(`Настроение ${updatedChar.name} улучшилось.`);
-                    // Add to completed quests if it has a templateId
-                    if (dbQuest.quest.templateId) {
-                        if (!updatedChar.completedQuests) updatedChar.completedQuests = [];
-                        if (!updatedChar.completedQuests.includes(dbQuest.quest.templateId)) {
-                            updatedChar.completedQuests.push(dbQuest.quest.templateId);
+                    
+                    // If this action has a questTaskId, complete that task
+                    if ((currentAction as any).questTaskId) {
+                        const taskId = (currentAction as any).questTaskId;
+                        const task = dbQuest.tasks?.find((t: any) => t.id === taskId);
+                        if (task && task.status !== 'completed') {
+                            await setTaskStatus(taskId, 'completed', 100);
+                            logs.push(`✅ Этап квеста выполнен: ${task.title}.`);
                         }
                     }
+                    
+                    // Check if all tasks are completed
+                    const tasks = dbQuest.tasks || [];
+                    const allCompleted = tasks.length > 0 && tasks.every((t: any) => t.status === 'completed');
+                    
+                    if (allCompleted || tasks.length === 0) {
+                        // Complete the quest in DB
+                        await completeQuest(dbQuest.quest.id);
+                        // Apply rewards from DB quest
+                        const result = await applyRewardsToCharacter(updatedChar, dbQuest.quest.rewards);
+                        updatedChar = result.character;
+                        logs.push(`🎉 Задание завершено: ${dbQuest.quest.title}!`);
+                        logs.push(result.log);
+                        updatedChar.mood = Math.min(100, updatedChar.mood + 15);
+                        logs.push(`Настроение ${updatedChar.name} улучшилось.`);
+                        // Add to completed quests if it has a templateId
+                        if (dbQuest.quest.templateId) {
+                            if (!updatedChar.completedQuests) updatedChar.completedQuests = [];
+                            if (!updatedChar.completedQuests.includes(dbQuest.quest.templateId)) {
+                                updatedChar.completedQuests.push(dbQuest.quest.templateId);
+                            }
+                        }
+                        
+                        // Auto-select next quest based on priority
+                        try {
+                            const { autoSelectNextQuest } = await import('@/services/questService');
+                            const nextResult = await autoSelectNextQuest(updatedChar.id);
+                            if (nextResult.ok && nextResult.quest) {
+                                logs.push(`📋 Героя уже ждёт новое задание: ${nextResult.quest.title}`);
+                            }
+                        } catch (err) {
+                            console.warn('Failed to auto-select next quest:', err);
+                        }
+                    } else {
+                        // Quest has more tasks - log progress
+                        const completedCount = tasks.filter((t: any) => t.status === 'completed').length;
+                        const remaining = tasks.length - completedCount;
+                        const progressPct = Math.floor((completedCount / tasks.length) * 100);
+                        logs.push(`Прогресс квеста "${dbQuest.quest.title}": ${completedCount}/${tasks.length} этапов (${progressPct}%). Осталось: ${remaining}.`);
+                    }
+                    
                     quest = dbQuest.quest; // For analytics below
                 }
             } catch (err) {

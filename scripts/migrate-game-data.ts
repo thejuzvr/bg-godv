@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { drizzle } from 'drizzle-orm/node-postgres';
+import { sql } from 'drizzle-orm';
 import pkg from 'pg';
 const { Pool } = pkg;
 import { gameLocations, gameItems, gameNpcs, gameEnemies, gameThoughts, npcDialogueLines } from '../shared/schema.js';
@@ -38,26 +39,48 @@ async function migrateGameData() {
       .onConflictDoNothing();
     console.log(`✅ Migrated ${locationData.length} locations\n`);
 
-    // Migrate Items
+    // Migrate Items (with UPSERT to update existing items)
     console.log('⚔️ Migrating items...');
-    const itemData = initialItems.map(item => ({
-      id: item.id,
-      name: item.name,
-      weight: item.weight,
-      type: item.type,
-      rarity: item.rarity || null,
-      equipmentSlot: item.equipmentSlot || null,
-      damage: item.damage || null,
-      armor: item.armor || null,
-      effect: item.effect || null,
-      spellId: item.spellId || null,
-      learningEffect: item.learningEffect || null,
-    }));
-    
-    await db.insert(gameItems)
-      .values(itemData)
-      .onConflictDoNothing();
-    console.log(`✅ Migrated ${itemData.length} items\n`);
+    let itemsUpdated = 0;
+    for (const item of initialItems) {
+      try {
+        await db.execute(sql`
+          INSERT INTO game_items (id, name, weight, type, rarity, equipment_slot, damage, armor, effect, spell_id, learning_effect, created_at, updated_at)
+          VALUES (
+            ${item.id}, 
+            ${item.name}, 
+            ${item.weight}, 
+            ${item.type}, 
+            ${item.rarity || null}, 
+            ${item.equipmentSlot || null}, 
+            ${item.damage || null}, 
+            ${item.armor || null}, 
+            ${item.effect ? JSON.stringify(item.effect) : null}::jsonb, 
+            ${item.spellId || null}, 
+            ${item.learningEffect ? JSON.stringify(item.learningEffect) : null}::jsonb,
+            CURRENT_TIMESTAMP,
+            CURRENT_TIMESTAMP
+          )
+          ON CONFLICT (id) 
+          DO UPDATE SET
+            name = EXCLUDED.name,
+            weight = EXCLUDED.weight,
+            type = EXCLUDED.type,
+            rarity = EXCLUDED.rarity,
+            equipment_slot = EXCLUDED.equipment_slot,
+            damage = EXCLUDED.damage,
+            armor = EXCLUDED.armor,
+            effect = EXCLUDED.effect,
+            spell_id = EXCLUDED.spell_id,
+            learning_effect = EXCLUDED.learning_effect,
+            updated_at = CURRENT_TIMESTAMP
+        `);
+        itemsUpdated++;
+      } catch (err) {
+        console.error(`Failed to migrate item ${item.id}:`, err);
+      }
+    }
+    console.log(`✅ Migrated/Updated ${itemsUpdated} items\n`);
 
     // Migrate NPCs
     console.log('👥 Migrating NPCs...');

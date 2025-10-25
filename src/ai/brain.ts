@@ -1358,48 +1358,80 @@ const takeQuestAction: Action = {
                 }
                 
                 // Continue working on the active quest
-                const quest: any = {
-                    id: activeQuest.id,
-                    title: activeQuest.title,
-                    type: activeQuest.type,
-                    narrative: `Продолжаю выполнение задания: ${activeQuest.title}`,
-                    duration: 3, // default duration
-                    targetEnemyId: (activeQuest as any).metadata?.targetEnemyId,
-                    combatChance: 0.5
-                };
+                // Check current task to determine what action to take
+                const tasks = activeQuestData.tasks || [];
+                const currentTask = tasks.find((t: any) => t.status !== 'completed');
                 
-                let initialLog = `Пора продолжить задание "${quest.title}". Героя ничто не остановит!`;
+                let initialLog = `Пора продолжить задание "${activeQuest.title}". Героя ничто не остановит!`;
                 
-                // Proceed with quest execution (combat or timed activity)
-                if (quest.type === 'bounty' || (quest.type === 'side' && Math.random() < (quest.combatChance || 0))) {
-                    const baseEnemy = enemies.find(e => e.id === quest.targetEnemyId) || enemies[Math.floor(Math.random() * enemies.length)];
-                    const levelMultiplier = 1 + (character.level - 1) * 0.15;
-                    const enemy = { 
-                        name: baseEnemy.name, 
-                        health: { current: Math.floor(baseEnemy.health * levelMultiplier), max: Math.floor(baseEnemy.health * levelMultiplier) }, 
-                        damage: Math.floor(baseEnemy.damage * levelMultiplier), 
-                        xp: Math.floor(baseEnemy.xp * levelMultiplier),
-                        armor: Math.max(8, Math.min(25, (baseEnemy.armor ?? (10 + (baseEnemy.level || 1))))),
-                        appliesEffect: baseEnemy.appliesEffect || null,
-                    };
+                // If there's a current task, act based on its type
+                if (currentTask) {
+                    const taskType = currentTask.type;
+                    
+                    if (taskType === 'combat') {
+                        // Combat task - initiate battle
+                        const targetEnemyId = currentTask.data?.enemyId || (activeQuest as any).metadata?.targetEnemyId;
+                        const baseEnemy = enemies.find(e => e.id === targetEnemyId) || enemies[Math.floor(Math.random() * enemies.length)];
+                        const levelMultiplier = 1 + (character.level - 1) * 0.15;
+                        const enemy = { 
+                            name: baseEnemy.name, 
+                            health: { current: Math.floor(baseEnemy.health * levelMultiplier), max: Math.floor(baseEnemy.health * levelMultiplier) }, 
+                            damage: Math.floor(baseEnemy.damage * levelMultiplier), 
+                            xp: Math.floor(baseEnemy.xp * levelMultiplier),
+                            armor: Math.max(8, Math.min(25, (baseEnemy.armor ?? (10 + (baseEnemy.level || 1))))),
+                            appliesEffect: baseEnemy.appliesEffect || null,
+                        };
 
-                    if (!updatedChar.analytics.encounteredEnemies.includes(baseEnemy.id)) {
-                        updatedChar.analytics.encounteredEnemies.push(baseEnemy.id);
+                        if (!updatedChar.analytics.encounteredEnemies.includes(baseEnemy.id)) {
+                            updatedChar.analytics.encounteredEnemies.push(baseEnemy.id);
+                        }
+
+                        updatedChar.status = 'in-combat';
+                        updatedChar.combat = { enemyId: baseEnemy.id, enemy, onWinQuestId: activeQuest.id, fleeAttempted: false };
+                        updatedChar = addToActionHistory(updatedChar, 'quest');
+                        return { character: updatedChar, logMessage: `${initialLog} Цель найдена - ${currentTask.title}!` };
+                    } else if (taskType === 'report' || taskType === 'interact') {
+                        // Report/interact task - complete it automatically with a short delay
+                        updatedChar.status = 'busy';
+                        updatedChar.currentAction = {
+                            type: "quest", 
+                            name: currentTask.title, 
+                            description: `Герой ${taskType === 'report' ? 'докладывает о выполнении' : 'взаимодействует с объектом'}`,
+                            startedAt: Date.now(), 
+                            duration: 2 * 60 * 1000, // 2 minutes
+                            questId: activeQuest.id,
+                            questTaskId: currentTask.id,
+                        };
+                        updatedChar = addToActionHistory(updatedChar, 'quest');
+                        return { character: updatedChar, logMessage: `${initialLog} ${currentTask.title}.` };
+                    } else {
+                        // Travel/explore/other tasks - generic timed activity
+                        updatedChar.status = 'busy';
+                        updatedChar.currentAction = {
+                            type: "quest", 
+                            name: currentTask.title, 
+                            description: `Продолжаю выполнение: ${activeQuest.title}`,
+                            startedAt: Date.now(), 
+                            duration: 3 * 60 * 1000,
+                            questId: activeQuest.id,
+                            questTaskId: currentTask.id,
+                        };
+                        updatedChar = addToActionHistory(updatedChar, 'quest');
+                        return { character: updatedChar, logMessage: `${initialLog} ${currentTask.title}.` };
                     }
-
-                    updatedChar.status = 'in-combat';
-                    updatedChar.combat = { enemyId: baseEnemy.id, enemy, onWinQuestId: quest.id, fleeAttempted: false };
-                    updatedChar = addToActionHistory(updatedChar, 'quest');
-                    const questLog = `Герой выследил цель по заданию и вступает в бой с ${enemy.name}!`;
-                    return { character: updatedChar, logMessage: initialLog + " " + questLog };
                 } else {
+                    // No current task but quest is active - это не должно происходить, но на всякий случай
                     updatedChar.status = 'busy';
                     updatedChar.currentAction = {
-                        type: "quest", name: `Выполнение: ${quest.title}`, description: quest.narrative,
-                        startedAt: Date.now(), duration: quest.duration * 60 * 1000, questId: quest.id,
+                        type: "quest", 
+                        name: `Выполнение: ${activeQuest.title}`, 
+                        description: `Продолжаю выполнение задания`,
+                        startedAt: Date.now(), 
+                        duration: 3 * 60 * 1000,
+                        questId: activeQuest.id,
                     };
                     updatedChar = addToActionHistory(updatedChar, 'quest');
-                    return { character: updatedChar, logMessage: initialLog + ` Герой приступил к выполнению.` };
+                    return { character: updatedChar, logMessage: initialLog };
                 }
             }
             

@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import type { Character, CharacterInventoryItem, EquipmentSlot } from '@/types/character';
-import { fetchCharacter } from '@/app/dashboard/shared-actions';
+import { fetchCharacter, fetchAllItems } from '@/app/dashboard/shared-actions';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -64,6 +64,7 @@ export default function InventoryPage() {
     const { toast } = useToast();
     const { user, loading: authLoading } = useAuth(true);
     const [character, setCharacter] = useState<Character | null>(null);
+    const [allItems, setAllItems] = useState<CharacterInventoryItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [filter, setFilter] = useState('all');
@@ -74,9 +75,13 @@ export default function InventoryPage() {
 
         const loadData = async () => {
             try {
-                const char = await fetchCharacter(user.userId);
+                const [char, items] = await Promise.all([
+                    fetchCharacter(user.userId),
+                    fetchAllItems()
+                ]);
                 if (char) {
                     setCharacter(char);
+                    setAllItems(items);
                 } else {
                     router.push('/create-character');
                 }
@@ -147,6 +152,12 @@ export default function InventoryPage() {
         });
     };
 
+    // Получить актуальное название предмета из БД
+    const getItemName = (itemId: string, fallbackName?: string): string => {
+        const dbItem = allItems.find(i => i.id === itemId);
+        return dbItem?.name || fallbackName || itemId;
+    };
+
     if (isLoading) {
         return <div className="flex items-center justify-center min-h-screen font-headline text-xl">Загрузка инвентаря...</div>;
     }
@@ -207,17 +218,17 @@ export default function InventoryPage() {
                                     return (
                                         <TooltipProvider key={slot.id}>
                                             <Tooltip>
-                                                <TooltipTrigger asChild>
+                                                                <TooltipTrigger asChild>
                                                     <div className="aspect-square p-2 border rounded-lg flex flex-col items-center justify-center gap-1 bg-secondary/30">
                                                         { slot.icon === 'Sword' ? <SwordIcon className="w-5 h-5 text-muted-foreground" /> : <Icon name={slot.icon} className="w-5 h-5 text-muted-foreground" /> }
                                                         <span className="text-xs text-muted-foreground">{slot.name}</span>
-                                                        <span className="text-xs font-semibold text-center truncate w-full">{item?.name || 'Пусто'}</span>
+                                                        <span className="text-xs font-semibold text-center truncate w-full">{item ? getItemName(item.id, item.name) : 'Пусто'}</span>
                                                     </div>
                                                 </TooltipTrigger>
                                                 <TooltipContent>
                                                     {item ? (
                                                         <div>
-                                                            <p className="font-bold">{item.name}</p>
+                                                            <p className="font-bold">{getItemName(item.id, item.name)}</p>
                                                             {item.damage && <p>Урон: {item.damage}</p>}
                                                             {item.armor && <p>Броня: {item.armor}</p>}
                                                         </div>
@@ -322,7 +333,7 @@ export default function InventoryPage() {
                                 {filteredInventory.map((item, i) => (
                                     <Card key={item.id + i} className="hover:border-primary/50 transition-colors flex flex-col">
                                         <CardHeader>
-                                            <CardTitle className="text-base font-semibold truncate">{item.name}</CardTitle>
+                                            <CardTitle className="text-base font-semibold truncate">{getItemName(item.id, item.name)}</CardTitle>
                                         </CardHeader>
                                         <CardContent className="flex-grow">
                                             <p className="text-sm text-muted-foreground capitalize">{item.type}</p>

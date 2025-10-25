@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { useAuth } from "@/hooks/use-auth";
-import { fetchCharacter } from "@/app/dashboard/shared-actions";
-import type { Character } from "@/types/character";
+import { fetchCharacter, fetchAllItems } from "@/app/dashboard/shared-actions";
+import type { Character, CharacterInventoryItem } from "@/types/character";
 import { allAchievements } from "@/data/achievements";
 import type { Achievement } from "@/types/achievement";
 
@@ -57,6 +57,7 @@ export default function ProfilePage() {
     const router = useRouter();
     const { user, loading: authLoading } = useAuth(true);
     const [character, setCharacter] = useState<Character | null>(null);
+    const [allItems, setAllItems] = useState<CharacterInventoryItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [timeAlive, setTimeAlive] = useState('');
 
@@ -64,9 +65,13 @@ export default function ProfilePage() {
         if (!user) return;
 
         const loadData = async () => {
-            const char = await fetchCharacter(user.userId);
+            const [char, items] = await Promise.all([
+                fetchCharacter(user.userId),
+                fetchAllItems()
+            ]);
             if (char) {
                 setCharacter(char);
+                setAllItems(items);
             } else {
                 router.push('/create-character');
             }
@@ -83,6 +88,12 @@ export default function ProfilePage() {
             return () => clearInterval(interval);
         }
     }, [character]);
+
+    // Получить актуальное название предмета из БД
+    const getItemName = (itemId: string, fallbackName?: string): string => {
+        const dbItem = allItems.find(i => i.id === itemId);
+        return dbItem?.name || fallbackName || itemId;
+    };
 
     if (authLoading || isLoading) {
         return <div className="flex items-center justify-center min-h-screen font-headline text-xl">Загрузка профиля...</div>;
@@ -269,7 +280,7 @@ export default function ProfilePage() {
                                         {character.inventory.map((item, idx) => (
                                             <div key={idx} className="rounded-md border p-3 text-sm flex flex-col gap-1">
                                                 <div className="flex items-center justify-between">
-                                                    <span className="font-medium">{item.name}</span>
+                                                    <span className="font-medium">{getItemName(item.id, item.name)}</span>
                                                     <span className="text-muted-foreground">x{item.quantity}</span>
                                                 </div>
                                                 <div className="text-muted-foreground">{item.type}</div>
