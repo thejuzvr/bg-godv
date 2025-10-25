@@ -25,7 +25,7 @@ export async function getHumorousVictoryLine(enemyName: string, location?: strin
         `${enemyName} попытался позвать маму... но получил урок истории${loc}.`,
         `Герой победил ${enemyName} и забил поиск: 'как отстирать кровь'${loc}.`,
         `${enemyName} понял, что сегодня — не его день. Герой — понял это раньше${loc}.`,
-        `Легенды говорят, что ${enemyName} исчез. На деле — его спрятала тень славы героя${loc}.`,
+        `Легенды говорят, что ${enemyName} исчез. На деле — его спрятала тень славы нашего героя${loc}.`,
     ];
     return jokes[Math.floor(Math.random() * jokes.length)];
 }
@@ -118,7 +118,7 @@ function processRespawn(character: Character): {char: Character, log: string | n
         updatedChar.currentAction = null;
         updatedChar.effects = [];
         updatedChar.mood = 40; // Respawned, but not happy
-        const logMessage = "Боги сжалились, и душа героя вернулась в тело. Он очнулся в Вайтране.";
+        const logMessage = `Боги сжалились, и душа ${updatedChar.name} вернулась в тело. Он очнулся в Вайтране.`;
         return { char: updatedChar, log: logMessage };
     }
     return { char: character, log: null };
@@ -148,7 +148,7 @@ function processEffects(character: Character): {char: Character, logs: string[]}
             if (updatedChar.status !== 'dead' && effect.id === 'weak_poison') {
                 const poisonDamage = effect.value || 2;
                 updatedChar.stats.health.current -= poisonDamage;
-                logs.push(`Герой теряет ${poisonDamage} здоровья от яда.`);
+                logs.push(`${updatedChar.name} теряет ${poisonDamage} здоровья от яда.`);
             }
 
             // Disease handling: hunger and day/night penalties
@@ -161,7 +161,7 @@ function processEffects(character: Character): {char: Character, logs: string[]}
                 const stage = Math.max(0, Math.min(3, Math.floor(elapsed / (30 * 60 * 1000)))); // +1 stage per 30m, cap 3
                 if ((effect.data.hungerLevel || 0) !== stage) {
                     effect.data.hungerLevel = stage;
-                    if (stage > 0) logs.push(`Голод усиливается (${stage}).`);
+                    if (stage > 0) logs.push(`Голод ${updatedChar.name} усиливается (${stage}).`);
                 }
 
                 // Apply periodic penalties based on hunger
@@ -171,7 +171,7 @@ function processEffects(character: Character): {char: Character, logs: string[]}
                 }
                 if (drain > 0) {
                     updatedChar.stats.stamina.current = Math.max(0, updatedChar.stats.stamina.current - drain);
-                    if (Math.random() < 0.1) logs.push('Голод подтачивает силы героя.');
+                    if (Math.random() < 0.1) logs.push(`Голод подтачивает силы ${updatedChar.name}.`);
                 }
 
                 // Daylight discomfort for vampires
@@ -210,7 +210,7 @@ async function processDeath(character: Character, userId: string): Promise<{char
         updatedChar.mood = 5; // Very sad
         if (updatedChar.activeCryptQuest) {
             updatedChar.activeCryptQuest = null; 
-            logMessages += "Смерть в склепе! Дух героя с позором изгнан из древних залов.";
+            logMessages += `Смерть в склепе! Дух ${updatedChar.name} с позором изгнан из древних залов.`;
         }
         updatedChar.stats.health.current = 0;
         // Keep permanent effects on death
@@ -223,8 +223,8 @@ async function processDeath(character: Character, userId: string): Promise<{char
         updatedChar.deathOccurredAt = Date.now();
         updatedChar.respawnAt = updatedChar.deathOccurredAt + respawnTime;
         
-        logMessages += ` Герой пал... Его душа отправляется в Совнгард. Возрождение через ${Math.floor(respawnTime / (60 * 1000))} минут.`;
-        const chronicle: OutboxChronicle = { type: 'death', title: 'Герой пал', description: 'Душа героя отправилась в Совнгард на заслуженный (или не очень) отдых.', icon: 'Skull' };
+        logMessages += ` ${updatedChar.name} пал... Его душа отправляется в Совнгард. Возрождение через ${Math.floor(respawnTime / (60 * 1000))} минут.`;
+        const chronicle: OutboxChronicle = { type: 'death', title: `${updatedChar.name} пал`, description: `Душа ${updatedChar.name} отправилась в Совнгард на заслуженный (или не очень) отдых.`, icon: 'Skull' };
         return { char: updatedChar, log: logMessages.trim(), didDie: true, chronicle };
     }
     return { char: character, log: null, didDie: false, chronicle: null };
@@ -252,7 +252,7 @@ async function processLevelUp(character: Character): Promise<{ char: Character, 
 
         logMessages += ` Уровень повышен! Герой теперь ${updatedChar.level} уровня! Получено 1 очко характеристик и 5 очков навыков.`;
         // Chronicle entry will be emitted by worker
-        const chronicle: OutboxChronicle = { type: 'level_up', title: `Достигнут ${updatedChar.level} уровень`, description: 'Опыт, полученный в боях, сделал героя сильнее.', icon: 'Award', data: { level: updatedChar.level } };
+        const chronicle: OutboxChronicle = { type: 'level_up', title: `Достигнут ${updatedChar.level} уровень`, description: `Опыт, полученный в боях, сделал ${updatedChar.name} сильнее.`, icon: 'Award', data: { level: updatedChar.level } };
         // Return at the end
     }
 
@@ -322,7 +322,7 @@ async function processLevelUp(character: Character): Promise<{ char: Character, 
     updatedChar.mood = Math.min(100, updatedChar.mood + levelUpMoodBoost);
     logMessages += ` Характеристики восстановлены и улучшены, а настроение взлетело до небес (+${levelUpMoodBoost})!`;
     
-    return { char: updatedChar, log: logMessages.trim(), chronicle: { type: 'level_up', title: `Достигнут ${updatedChar.level} уровень`, description: 'Опыт, полученный в боях, сделал героя сильнее.', icon: 'Award', data: { level: updatedChar.level } } };
+    return { char: updatedChar, log: logMessages.trim(), chronicle: { type: 'level_up', title: `Достигнут ${updatedChar.level} уровень`, description: `Опыт, полученный в боях, сделал ${updatedChar.name} сильнее.`, icon: 'Award', data: { level: updatedChar.level } } };
 }
 
 
@@ -341,7 +341,7 @@ async function processActionCompletion(character: Character, gameData: GameData,
     const chronicles: OutboxChronicle[] = [];
     switch (currentAction.type) {
         case 'rest':
-            logs.push(`Отдых в таверне подошел к концу. Герой чувствует себя посвежевшим.`);
+            logs.push(`Отдых в таверне подошёл к концу. ${updatedChar.name} чувствует себя посвежевшим.`);
             updatedChar.mood = Math.min(100, updatedChar.mood + 5);
             updatedChar.status = 'idle';
             updatedChar.currentAction = null as any;
@@ -351,7 +351,7 @@ async function processActionCompletion(character: Character, gameData: GameData,
             try { if (Array.isArray(updatedChar.actionHistory) && updatedChar.actionHistory.length > 0) { (updatedChar.actionHistory[updatedChar.actionHistory.length - 1] as any).timestamp = Date.now(); } } catch {}
             break;
         case 'travel_rest':
-            logs.push("Привал окончен. Отдых придал герою сил и бодрости. Он чувствует себя готовым к новым свершениям!");
+            logs.push(`Привал окончен. Отдых придал ${updatedChar.name} сил и бодрости. Он чувствует себя готовым к новым свершениям!`);
             updatedChar.status = 'idle';
             updatedChar.stats.stamina.current = updatedChar.stats.stamina.max;
             updatedChar.stats.fatigue.current = 0;
@@ -362,7 +362,7 @@ async function processActionCompletion(character: Character, gameData: GameData,
             try { if (Array.isArray(updatedChar.actionHistory) && updatedChar.actionHistory.length > 0) { (updatedChar.actionHistory[updatedChar.actionHistory.length - 1] as any).timestamp = Date.now(); } } catch {}
             break;
         case 'jail':
-            logs.push("Стража выпустила героя из-под стражи. Свобода сладка, даже если немного стыдно.");
+            logs.push(`Стража выпустила ${updatedChar.name} из-под стражи. Свобода сладка, даже если немного стыдно.`);
             updatedChar.status = 'idle';
             if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {};
             updatedChar.actionCooldowns['exploreCity'] = Date.now();
@@ -436,7 +436,7 @@ async function processActionCompletion(character: Character, gameData: GameData,
                 const last = Number((updatedChar.actionCooldowns as any)?.[arrivalKey] || 0);
                 const canLog = (Date.now() - last) > 10 * 1000; // 10s cooldown
                 if (canLog) {
-                    logs.push(`...После долгого пути, герой наконец прибыл в ${destination?.name || 'новые земли'}.`);
+                    logs.push(`...После долгого пути, ${updatedChar.name} наконец прибыл в ${destination?.name || 'новые земли'}.`);
                     if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {} as any;
                     (updatedChar.actionCooldowns as any)[arrivalKey] = Date.now();
                 }
@@ -519,7 +519,7 @@ async function processActionCompletion(character: Character, gameData: GameData,
                     updatedChar = result.character;
                     logs.push(result.log);
                     updatedChar.mood = Math.min(100, updatedChar.mood + 15);
-                    logs.push('Настроение героя улучшилось.');
+                    logs.push(`Настроение ${updatedChar.name} улучшилось.`);
                     // Add to completed quests if it has a templateId
                     if (dbQuest.quest.templateId) {
                         if (!updatedChar.completedQuests) updatedChar.completedQuests = [];
@@ -537,10 +537,10 @@ async function processActionCompletion(character: Character, gameData: GameData,
                 quest = gameData.quests.find(q => q.id === currentAction.questId);
             }
             if (quest && !questFromDb) {
-                let logMessage = `Герой достиг успеха в задании "${quest.title}"! Получено ${quest.reward.xp} опыта.`;
+                let logMessage = `${updatedChar.name} достиг успеха в задании «${quest.title}»! Получено ${quest.reward.xp} опыта.`;
                 updatedChar.xp.current += quest.reward.xp;
                 updatedChar.mood = Math.min(100, updatedChar.mood + 15);
-                logMessage += ' Настроение героя улучшилось.';
+                logMessage += ` Настроение ${updatedChar.name} улучшилось.`;
 
                 const { updatedCharacter: charWithGold, logMessage: goldLog } = addItemToInventory(updatedChar, {id: 'gold', name: 'Золото', weight: 0, type: 'gold'}, quest.reward.gold);
                 updatedChar = charWithGold;
@@ -787,7 +787,7 @@ function processTravelEvents(character: Character, gameData: GameData): { char: 
                         updatedChar.currentAction = null; // Interrupt travel
                         updatedChar.status = 'in-combat';
                         updatedChar.combat = { enemyId: baseEnemy.id, enemy, fleeAttempted: false };
-                        logs.push(`Путешествие прервано! Герой вступает в бой с ${enemy.name}!`);
+                        logs.push(`Путешествие прервано! ${updatedChar.name} вступает в бой с ${enemy.name}!`);
                         return { char: updatedChar, logs }; // Exit after one combat event
                     }
                     break;
@@ -831,7 +831,7 @@ function processTravelEvents(character: Character, gameData: GameData): { char: 
                     const npc = gameData.npcs.find(n => n.id === event.npcId);
                     if (npc && npc.dialogue.length > 0) {
                         const randomDialogue = npc.dialogue[Math.floor(Math.random() * npc.dialogue.length)];
-                        logs.push(`Он говорит: "${randomDialogue}"`);
+                        logs.push(`${npc.name}: «${randomDialogue}»`);
                     }
                     break;
                 case 'narrative':
@@ -1195,7 +1195,7 @@ function processMood(character: Character): {char: Character, logs: string[]} {
     if (updatedChar.stats.health.current < updatedChar.stats.health.max * 0.4) {
         updatedChar.mood = Math.max(0, updatedChar.mood - 1);
         if (Math.random() < 0.05) { // small chance to log
-            logs.push("Ноющие раны портят герою настроение.");
+            logs.push(`Ноющие раны портят ${updatedChar.name} настроение.`);
         }
         moodChanged = true;
     }
@@ -1228,7 +1228,7 @@ function processDivineFavor(character: Character): { char: Character, log: strin
     updatedChar = deity.grace.apply(updatedChar);
     updatedChar.divineFavor = 0; // Reset favor
 
-    const logMessage = `Ваш бог-покровитель ${deity.name} доволен! Герой получает благословение: "${deity.grace.name}".`;
+    const logMessage = `Бог-покровитель ${deity.name} доволен! ${character.name} получает благословение: "${deity.grace.name}".`;
 
     return { char: updatedChar, log: logMessage };
 }
@@ -1265,7 +1265,7 @@ async function processTempleCompletion(character: Character): Promise<{ char: Ch
     const chronicle: OutboxChronicle = {
         type: 'quest_complete',
         title: `Храм ${deity.name} достроен!`,
-        description: `Годы пожертвований и молитв принесли свои плоды. Великий храм теперь стоит как вечный памятник вере героя.`,
+        description: `Годы пожертвований и молитв принесли свои плоды. Великий храм теперь стоит как вечный памятник вере ${updatedChar.name}.`,
         icon: 'Castle'
     };
     return { char: updatedChar, log: logMessage, chronicle };
@@ -1388,8 +1388,8 @@ async function processEpicPhraseGeneration(character: Character, thoughts: Array
                 if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {} as any;
                 (updatedChar.actionCooldowns as any)[`thought:cd:${phrase}`] = Date.now() + 6 * 60 * 60 * 1000;
             } catch {}
-            const sourceLabel = chosen ? '[db:game_thoughts]' : '[code:src/data/thoughts.ts]';
-            return { char: updatedChar, log: `У героя родилась мысль: "${phrase}" ${sourceLabel}`, chronicle: null as any };
+            // Return thought without meta-prefix for natural Godville-style narrative
+            return { char: updatedChar, log: `🎭 ${phrase}`, chronicle: null as any };
         }
     } catch (e) {
         // Fallback silently on any error
@@ -1409,7 +1409,8 @@ async function processEpicPhraseGeneration(character: Character, thoughts: Array
             if (!updatedChar.actionCooldowns) updatedChar.actionCooldowns = {} as any;
             (updatedChar.actionCooldowns as any)[`thought:cd:${phrase}`] = Date.now() + 6 * 60 * 60 * 1000;
         } catch {}
-        return { char: updatedChar, log: `У героя родилась мысль: "${phrase}" [code:src/data/thoughts.ts]`, chronicle: null as any };
+        // Return thought without meta-prefix for natural Godville-style narrative
+        return { char: updatedChar, log: `🎭 ${phrase}`, chronicle: null as any };
     }
     return { char: character, log: null };
 }
@@ -1559,7 +1560,7 @@ export async function processGameTick(
         };
         updatedChar.effects = updatedChar.effects.filter(e => e.id !== 'well_rested' && e.id !== 'rested');
         updatedChar.effects.push(wellRestedEffect);
-        adventureLog.push("Герой проснулся отдохнувшим и полным сил. Он чувствует себя хорошо отдохнувшим и пока не хочет снова ложиться спать.");
+        adventureLog.push(`${updatedChar.name} проснулся отдохнувшим и полным сил. Он чувствует себя хорошо отдохнувшим и пока не хочет снова ложиться спать.`);
         shouldTakeTurn = false;
     }
     
