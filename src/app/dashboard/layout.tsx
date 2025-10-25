@@ -231,9 +231,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
               <RealmSelector />
             </header>
-            <main className="flex-1 overflow-auto">
-              {pathname?.startsWith('/dashboard/mind/editor') ? (
-                <div className="min-w-full">
+            <main className={pathname?.startsWith('/dashboard/map') ? "flex-1 overflow-hidden" : "flex-1 overflow-auto"}>
+              {pathname?.startsWith('/dashboard/mind/editor') || pathname?.startsWith('/dashboard/map') ? (
+                <div className={pathname?.startsWith('/dashboard/map') ? "min-w-full h-full" : "min-w-full"}>
                   {children}
                 </div>
               ) : (

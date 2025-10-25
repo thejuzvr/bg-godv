@@ -14,7 +14,7 @@ import { suggestTravel } from "../actions";
 import { Button } from "@/components/ui/button";
 import * as LucideIcons from "lucide-react";
 import type { Location, LocationType } from "@/types/location";
-import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+// Removed parent TransformWrapper to avoid nested transform with WorldMap
 import {
     Dialog,
     DialogContent,
@@ -37,6 +37,7 @@ const locationTypeFilters: { id: LocationType; name: string; icon: string }[] = 
     { id: 'ruin', name: 'Руины', icon: 'TowerControl' },
     { id: 'dungeon', name: 'Подземелья', icon: 'LandPlot' },
     { id: 'camp', name: 'Лагеря', icon: 'Tent' },
+    { id: 'outskirts', name: 'Окраины', icon: 'LandPlot' },
 ];
 
 
@@ -47,11 +48,28 @@ export default function MapPage() {
     const [character, setCharacter] = useState<Character | null>(null);
     const [gameData, setGameData] = useState<GameData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [activeFilters, setActiveFilters] = useState<LocationType[]>(['city', 'town', 'ruin', 'dungeon', 'camp']);
+    const [activeFilters, setActiveFilters] = useState<LocationType[]>(['city', 'town', 'ruin', 'dungeon', 'camp', 'outskirts']);
     const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     const mapContainerRef = useRef<HTMLDivElement>(null);
+    const headerRef = useRef<HTMLDivElement>(null);
+    const [availableHeight, setAvailableHeight] = useState<number>(0);
+
+    useEffect(() => {
+        const updateHeight = () => {
+            const headerH = headerRef.current?.offsetHeight || 200;
+            const viewportH = window.innerHeight;
+            const paddingV = 0; // root has pt-4 pb-0; already accounted visually
+            const h = Math.max(0, viewportH - headerH - paddingV);
+            setAvailableHeight(h);
+        };
+        updateHeight();
+        const ro = new ResizeObserver(updateHeight);
+        if (headerRef.current) ro.observe(headerRef.current);
+        window.addEventListener('resize', updateHeight);
+        return () => { window.removeEventListener('resize', updateHeight); ro.disconnect(); };
+    }, []);
     useEffect(() => {
         if (!user) return;
 
@@ -158,8 +176,8 @@ export default function MapPage() {
     }
 
 return (
-    <div className="w-full p-4 md:p-6 lg:p-8 space-y-6">
-        <header className="space-y-4">
+    <div className="w-full h-full min-h-0 overflow-hidden flex flex-col px-4 md:px-6 lg:px-8 pt-4 pb-0">
+        <header ref={headerRef} className="space-y-4">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-primary/10">
@@ -191,88 +209,31 @@ return (
         </header>
 
         {/* Контейнер для карты */}
-        <div className="w-full flex justify-center">
-            <main 
-                ref={mapContainerRef} 
-                className="w-full max-w-7xl h-[calc(85vh-220px)] relative border-2 border-border rounded-xl overflow-hidden shadow-lg bg-gradient-to-br from-background to-muted/20"
-            >
-                <TransformWrapper
-                    initialScale={1}
-                    minScale={0.5}
-                    maxScale={3}
-                    limitToBounds={false}
-                    doubleClick={{ step: 0.5 }}
-                    wheel={{ step: 0.1 }}
-                >
-                    {({ zoomIn, zoomOut, resetTransform, setTransform }) => {
-                        // Эффект для центрирования карты при первой загрузке
-                        useEffect(() => {
-                            if (character && gameData && mapContainerRef.current) {
-                                const currentLocation = gameData.locations.find(loc => loc.id === character.location);
-                                if (!currentLocation) return;
+        <div className="w-full flex-1 min-h-0 flex justify-center mt-3">
+    <main 
+        ref={mapContainerRef} 
+                className="w-full max-w-none relative border-2 border-border rounded-xl overflow-hidden overscroll-contain shadow-lg bg-gradient-to-br from-background to-muted/20"
+                style={{
+                    height: availableHeight ? `${availableHeight}px` : undefined,
+                    maxHeight: availableHeight ? `${availableHeight}px` : undefined,
+                    minHeight: availableHeight ? `${availableHeight}px` : undefined,
+                }}
+    >
+                {/* WorldMap includes its own zoom/pan and tooltips */}
+                <WorldMap
+                    currentCity={character.location}
+                    locations={filteredLocations}
+                    onLocationClick={handleMapLocationClick}
+                />
 
-                                const mapWidth = 2048; // Ширина SVG из world-map.tsx
-                                const mapHeight = 1489; // Высота SVG из world-map.tsx
-
-                                const targetX = mapWidth * (currentLocation.coords.x / 100);
-                                const targetY = mapHeight * (currentLocation.coords.y / 100);
-
-                                const containerWidth = mapContainerRef.current.offsetWidth;
-                                const containerHeight = mapContainerRef.current.offsetHeight;
-
-                                // Вычисляем смещение, чтобы цель оказалась в центре
-                                const positionX = (containerWidth / 2) - targetX;
-                                const positionY = (containerHeight / 2) - targetY;
-
-                                // Плавно перемещаем карту
-                                setTransform(positionX, positionY, 1, 300, "easeOut");
-                            }
-                        // eslint-disable-next-line react-hooks/exhaustive-deps
-                        }, [character, gameData]); // Запускаем только при появлении данных
-
-                        return (
-                            <>
-                                <div className="absolute top-4 right-4 z-10 flex flex-col gap-2 bg-background/80 backdrop-blur-sm p-2 rounded-lg border border-border shadow-lg">
-                                    <Button 
-                                        size="icon" 
-                                        variant="ghost"
-                                        onClick={() => zoomIn()} 
-                                        aria-label="Приблизить"
-                                        className="hover:bg-primary/10"
-                                    >
-                                        <LucideIcons.ZoomIn className="h-4 w-4" />
-                                    </Button>
-                                    <Button 
-                                        size="icon" 
-                                        variant="ghost"
-                                        onClick={() => zoomOut()} 
-                                        aria-label="Отдалить"
-                                        className="hover:bg-primary/10"
-                                    >
-                                        <LucideIcons.ZoomOut className="h-4 w-4" />
-                                    </Button>
-                                    <Button 
-                                        size="icon" 
-                                        variant="ghost"
-                                        onClick={() => resetTransform()} 
-                                        aria-label="Сбросить"
-                                        className="hover:bg-primary/10"
-                                    >
-                                        <LucideIcons.RotateCcw className="h-4 w-4" />
-                                    </Button>
-                                </div>
-
-                                <TransformComponent>
-                                    <WorldMap
-                                        currentCity={character.location}
-                                        locations={filteredLocations}
-                                        onLocationClick={handleMapLocationClick}
-                                    />
-                                </TransformComponent>
-                            </>
-                        );
-                    }}
-                </TransformWrapper>
+                {/* Легенда уровня опасности */}
+                <div className="absolute top-4 left-4 z-10 bg-background/80 backdrop-blur-sm p-3 rounded-lg border border-border shadow-lg">
+                    <div className="text-xs font-semibold mb-2">Уровень опасности</div>
+                    <div className="flex items-center gap-2 text-xs"><span className="inline-block w-3 h-3 rounded-full bg-green-500" /> Безопасно (0-19%)</div>
+                    <div className="flex items-center gap-2 text-xs mt-1"><span className="inline-block w-3 h-3 rounded-full bg-yellow-500" /> Умеренная (20-39%)</div>
+                    <div className="flex items-center gap-2 text-xs mt-1"><span className="inline-block w-3 h-3 rounded-full bg-orange-500" /> Опасно (40-69%)</div>
+                    <div className="flex items-center gap-2 text-xs mt-1"><span className="inline-block w-3 h-3 rounded-full bg-red-500" /> Очень опасно (70-100%)</div>
+                </div>
             </main>
         </div>
 
@@ -307,12 +268,26 @@ return (
                         </div>
                         
                         <div>
-                            <div className="font-semibold text-sm text-foreground mb-1">Безопасность</div>
-                            <div className="text-sm flex items-center gap-2 text-muted-foreground">
-                                {selectedLocation?.isSafe ? (
-                                    <><Icon name="ShieldCheck" className="h-4 w-4 text-green-500" /> Безопасная зона</>
+                            <div className="font-semibold text-sm text-foreground mb-1">Опасность</div>
+                            <div className="text-sm flex items-center gap-2">
+                                {typeof selectedLocation?.dangerLevel === 'number' ? (
+                                    <>
+                                        <span className={
+                                            selectedLocation.dangerLevel >= 70 ? "text-red-500 font-semibold" :
+                                            selectedLocation.dangerLevel >= 40 ? "text-orange-500 font-semibold" :
+                                            selectedLocation.dangerLevel >= 20 ? "text-yellow-500" :
+                                            "text-green-500"
+                                        }>
+                                            {selectedLocation.dangerLevel}%
+                                        </span>
+                                        <span className="text-muted-foreground text-xs">
+                                            {selectedLocation.dangerLevel >= 70 ? 'Очень опасно' :
+                                             selectedLocation.dangerLevel >= 40 ? 'Опасно' :
+                                             selectedLocation.dangerLevel >= 20 ? 'Умеренная опасность' : 'Безопасно'}
+                                        </span>
+                                    </>
                                 ) : (
-                                    <><Icon name="Skull" className="h-4 w-4 text-red-500" /> Опасная территория</>
+                                    <span className="text-muted-foreground">Безопасная зона</span>
                                 )}
                             </div>
                         </div>

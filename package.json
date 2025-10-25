@@ -19,6 +19,8 @@
     "migrate:from-neon": "tsx scripts/migrate-from-neon.ts",
     "migrate:game-data": "tsx scripts/migrate-game-data.ts",
     "seed:thoughts": "tsx scripts/seed-thoughts.ts",
+    "check:danger": "tsx scripts/check-danger-levels.ts",
+    "check:resources": "tsx scripts/check-resource-nodes.ts",
     "test": "vitest run"
   },
   "dependencies": {

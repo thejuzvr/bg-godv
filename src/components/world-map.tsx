@@ -41,6 +41,8 @@ const LocationIcon = memo(function LocationIcon({ type, className }: { type: Loc
       return <TowerControl className={finalClassName} />;
     case 'camp':
       return <Tent className={finalClassName} />;
+    case 'outskirts':
+      return <LandPlot className={finalClassName} />;
     default:
       return <div className="w-2 h-2 rounded-full bg-white" />;
   }
@@ -60,6 +62,8 @@ export function WorldMap({
   const MAP_HEIGHT = 1489;
 
   const [svgContent, setSvgContent] = useState<string>("");
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [fitScale, setFitScale] = useState<number>(1);
   const [dragging, setDragging] = useState<{
     id: string;
     startClientX: number;
@@ -90,15 +94,36 @@ export function WorldMap({
     outskirts: "Окраины",
   }), []);
 
+  // Recompute scale-to-fit on resize
+  useEffect(() => {
+    const updateFit = () => {
+      const w = wrapperRef.current?.clientWidth || 1;
+      const h = wrapperRef.current?.clientHeight || 1;
+      const scale = Math.min(w / MAP_WIDTH, h / MAP_HEIGHT);
+      const rounded = Math.max(0.001, Number(scale.toFixed(5)));
+      setFitScale(rounded);
+    };
+    updateFit();
+    const ro = new ResizeObserver(updateFit);
+    if (wrapperRef.current) ro.observe(wrapperRef.current);
+    window.addEventListener('resize', updateFit);
+    return () => {
+      window.removeEventListener('resize', updateFit);
+      ro.disconnect();
+    };
+  }, []);
+
   return (
     <TooltipProvider>
       <TransformWrapper
-        minScale={0.6}
+        wrapperClass="w-full h-full overflow-hidden"
+        minScale={fitScale}
+        initialScale={fitScale}
         maxScale={3}
         wheel={{ step: 0.12 }}
         doubleClick={{ step: 0.9 }}
         panning={{ velocityDisabled: false }}
-        initialScale={0.9}
+        limitToBounds={true}
         centerOnInit={true}
       >
         {(api) => {
@@ -137,8 +162,17 @@ export function WorldMap({
               window.removeEventListener('mouseup', handleUp);
             };
           }, [dragging, s.scale]);
+          // Center content when fitScale changes
+          useEffect(() => {
+            const w = wrapperRef.current?.clientWidth || 0;
+            const h = wrapperRef.current?.clientHeight || 0;
+            const x = (w - MAP_WIDTH * fitScale) / 2;
+            const y = (h - MAP_HEIGHT * fitScale) / 2;
+            if (!Number.isNaN(x) && !Number.isNaN(y)) setTransform(x, y, fitScale, 0);
+          }, [fitScale, setTransform]);
+
           return (
-          <div className="relative w-[2048px] h-[1489px] bg-background overflow-hidden">
+          <div ref={wrapperRef} className="relative w-full h-full bg-background overflow-hidden" style={{ touchAction: 'none' }}>
             {/* Zoom controls */}
             <div className="absolute top-3 right-3 z-10 flex flex-col shadow-sm">
               <button
@@ -185,6 +219,35 @@ export function WorldMap({
                     dangerouslySetInnerHTML={{ __html: svgContent }}
                   />
                 </div>
+
+                {/* Danger zone overlays for outskirts */}
+                {visibleLocations.filter((l) => l.type === 'outskirts').map((loc) => {
+                  const diameter = 260; // px on base map canvas
+                  const color = loc.dangerLevel !== undefined && loc.dangerLevel >= 70
+                    ? { fill: 'rgba(239,68,68,0.18)', stroke: 'rgba(239,68,68,0.55)' }
+                    : loc.dangerLevel !== undefined && loc.dangerLevel >= 40
+                    ? { fill: 'rgba(249,115,22,0.18)', stroke: 'rgba(249,115,22,0.55)' }
+                    : loc.dangerLevel !== undefined && loc.dangerLevel >= 20
+                    ? { fill: 'rgba(234,179,8,0.18)', stroke: 'rgba(234,179,8,0.55)' }
+                    : { fill: 'rgba(34,197,94,0.18)', stroke: 'rgba(34,197,94,0.55)' };
+                  return (
+                    <div
+                      key={`${loc.id}-zone`}
+                      className="absolute rounded-full"
+                      style={{
+                        top: `${loc.coords.y}%`,
+                        left: `${loc.coords.x}%`,
+                        width: `${diameter}px`,
+                        height: `${diameter}px`,
+                        transform: 'translate(-50%, -50%)',
+                        backgroundColor: color.fill,
+                        boxShadow: `0 0 0 2px ${color.stroke}`,
+                        zIndex: 1,
+                        pointerEvents: 'none',
+                      }}
+                    />
+                  );
+                })}
 
                 {/* Markers */}
                 {visibleLocations.map((loc) => (
@@ -235,7 +298,7 @@ export function WorldMap({
                       {/* Danger level indicator for outskirts and dangerous zones */}
                       {loc.dangerLevel !== undefined && (
                         <div className="mt-1 text-xs">
-                          <span className="text-muted-foreground">Уровень опасности: </span>
+                          <span className="text-muted-foreground">Опасность: </span>
                           <span className={
                             loc.dangerLevel >= 70 ? "text-red-500 font-semibold" :
                             loc.dangerLevel >= 40 ? "text-orange-500 font-semibold" :
@@ -243,6 +306,11 @@ export function WorldMap({
                             "text-green-500"
                           }>
                             {loc.dangerLevel}%
+                          </span>
+                          <span className="ml-1 text-muted-foreground">
+                            {loc.dangerLevel >= 70 ? '— Очень опасно' :
+                             loc.dangerLevel >= 40 ? '— Опасно' :
+                             loc.dangerLevel >= 20 ? '— Умеренная' : '— Безопасно'}
                           </span>
                         </div>
                       )}
