@@ -399,8 +399,24 @@ export const initialItems: BaseItem[] = [
   { id: 'ore_moonstone', name: 'Лунный камень', weight: 0.5, type: 'misc', rarity: 'rare' },
   { id: 'ore_malachite', name: 'Малахит', weight: 0.8, type: 'misc', rarity: 'rare' },
   { id: 'ore_orichalcum', name: 'Орихалк', weight: 1, type: 'misc', rarity: 'uncommon' },
+  
+  // === INGOTS (СЛИТКИ) ===
+  { id: 'ingot_iron', name: 'Железный слиток', weight: 1, type: 'misc', rarity: 'common' },
+  { id: 'ingot_steel', name: 'Стальной слиток', weight: 1, type: 'misc', rarity: 'common' },
+  { id: 'ingot_silver', name: 'Серебряный слиток', weight: 1, type: 'misc', rarity: 'uncommon' },
+  { id: 'ingot_gold', name: 'Золотой слиток', weight: 1, type: 'misc', rarity: 'uncommon' },
+  { id: 'ingot_corundum', name: 'Корундовый слиток', weight: 1, type: 'misc', rarity: 'uncommon' },
+  { id: 'ingot_quicksilver', name: 'Ртутный слиток', weight: 1, type: 'misc', rarity: 'uncommon' },
+  { id: 'ingot_orichalcum', name: 'Орихалковый слиток', weight: 1, type: 'misc', rarity: 'uncommon' },
+  { id: 'ingot_moonstone', name: 'Рафинированный лунный камень', weight: 0.5, type: 'misc', rarity: 'rare' },
+  { id: 'ingot_malachite', name: 'Рафинированный малахит', weight: 0.8, type: 'misc', rarity: 'rare' },
+  { id: 'ingot_ebony', name: 'Эбонитовый слиток', weight: 1, type: 'misc', rarity: 'rare' },
+  { id: 'ingot_dwarven', name: 'Двемерский слиток', weight: 1, type: 'misc', rarity: 'rare' },
+  
+  // === LEATHER & PELTS ===
   { id: 'leather_strips', name: 'Кожаные полоски', weight: 0.5, type: 'misc', rarity: 'common' },
   { id: 'leather', name: 'Кожа', weight: 1, type: 'misc', rarity: 'common' },
+  { id: 'animal_pelt', name: 'Звериная шкура', weight: 2, type: 'misc', rarity: 'common' },
   { id: 'wolf_pelt', name: 'Волчья шкура', weight: 2, type: 'misc', rarity: 'common' },
   { id: 'bear_pelt', name: 'Медвежья шкура', weight: 3, type: 'misc', rarity: 'uncommon' },
   { id: 'sabre_cat_pelt', name: 'Шкура саблезуба', weight: 2.5, type: 'misc', rarity: 'uncommon' },
@@ -418,4 +434,42 @@ export const initialItems: BaseItem[] = [
   { id: 'poison_ingredient_deathbell', name: 'Колокольчик смерти', weight: 0.1, type: 'misc', rarity: 'rare' },
   { id: 'poison_ingredient_venom', name: 'Яд', weight: 0.2, type: 'misc', rarity: 'uncommon' },
   { id: 'poison_ingredient_spider_venom', name: 'Паучий яд', weight: 0.1, type: 'misc', rarity: 'common' },
+  
+  // === ALCHEMY HERBS ===
+  { id: 'herb_red', name: 'Красная трава', weight: 0.1, type: 'misc', rarity: 'common' },
+  { id: 'herb_green', name: 'Зелёная трава', weight: 0.1, type: 'misc', rarity: 'common' },
+  { id: 'herb_blue', name: 'Синяя трава', weight: 0.1, type: 'misc', rarity: 'uncommon' },
+  
+  // === FOOD INGREDIENTS ===
+  { id: 'meat_raw', name: 'Сырое мясо', weight: 1, type: 'food', rarity: 'common', effect: { type: 'heal', stat: 'health', amount: 3 } },
+  { id: 'salt', name: 'Соль', weight: 0.2, type: 'misc', rarity: 'common' },
+  { id: 'food_stew', name: 'Тушёное мясо', weight: 1, type: 'food', rarity: 'common', effect: { type: 'heal', stat: 'health', amount: 15 } },
+  
+  // === SOUL GEMS ===
+  { id: 'soul_gem_petty', name: 'Малый камень душ', weight: 0.3, type: 'misc', rarity: 'common' },
+  { id: 'soul_gem_lesser', name: 'Малый камень душ (заполненный)', weight: 0.3, type: 'misc', rarity: 'uncommon' },
+  { id: 'soul_gem_common', name: 'Обычный камень душ', weight: 0.5, type: 'misc', rarity: 'uncommon' },
+  { id: 'soul_gem_greater', name: 'Большой камень душ', weight: 0.8, type: 'misc', rarity: 'rare' },
+  
+  // === ENCHANTED ITEMS ===
+  { id: 'weapon_sword_iron_enchanted', name: 'Зачарованный железный меч', weight: 9, type: 'weapon', rarity: 'uncommon', damage: 9, damageDice: '1d8', equipmentSlot: 'weapon' },
+  
+  // === MISC CRAFTING ===
+  { id: 'misc_thief_tools', name: 'Воровские инструменты', weight: 0.5, type: 'misc', rarity: 'uncommon' },
+  { id: 'misc_healing_potion', name: 'Зелье лечения', weight: 0.5, type: 'potion', rarity: 'common', effect: { type: 'heal', stat: 'health', amount: 50 } },
+  { id: 'misc_spell_tome_heal', name: 'Том заклинаний: Исцеление', weight: 1, type: 'spell_tome', rarity: 'common', spellId: 'healing_touch' },
+  { id: 'misc_inkwell', name: 'Чернильница', weight: 0.3, type: 'misc', rarity: 'common' },
+  { id: 'armor_prison_rags', name: 'Тюремные лохмотья', weight: 1, type: 'armor', rarity: 'common', armor: 0, equipmentSlot: 'torso' },
+  { id: 'misc_contract', name: 'Контракт наёмника', weight: 0.1, type: 'misc', rarity: 'uncommon' },
+  { id: 'armor_pilgrim_robes', name: 'Одеяния пилигрима', weight: 2, type: 'armor', rarity: 'common', armor: 2, equipmentSlot: 'torso' },
+  { id: 'misc_holy_symbol', name: 'Священный символ', weight: 0.2, type: 'misc', rarity: 'uncommon' },
+  { id: 'misc_blessed_water', name: 'Святая вода', weight: 0.5, type: 'misc', rarity: 'uncommon' },
+  { id: 'misc_rope', name: 'Верёвка', weight: 0.8, type: 'misc', rarity: 'common' },
+  { id: 'misc_water_skin', name: 'Бурдюк с водой', weight: 0.5, type: 'misc', rarity: 'common' },
+  { id: 'misc_bandage', name: 'Бинт', weight: 0.1, type: 'misc', rarity: 'common' },
+  { id: 'misc_mead', name: 'Мёд', weight: 0.5, type: 'food', rarity: 'common', effect: { type: 'heal', stat: 'stamina', amount: 10 } },
+  { id: 'misc_gold_ring', name: 'Золотое кольцо', weight: 0.1, type: 'armor', rarity: 'uncommon', armor: 0, equipmentSlot: 'ring' },
+  { id: 'armor_leather', name: 'Кожаная броня', weight: 10, type: 'armor', rarity: 'common', armor: 12, equipmentSlot: 'torso' },
+  { id: 'weapon_greatsword_ebony', name: 'Эбонитовый двуручный меч', weight: 22, type: 'weapon', rarity: 'legendary', damage: 24, equipmentSlot: 'weapon' },
+  { id: 'ingredient_frost_salts', name: 'Ледяные соли', weight: 0.1, type: 'misc', rarity: 'uncommon' },
 ];

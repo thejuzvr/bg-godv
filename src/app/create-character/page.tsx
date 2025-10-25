@@ -80,11 +80,43 @@ export default function CharacterCreationPage() {
     backstory: "",
     patronDeity: "" as DivinityId,
   });
+  
+  // Стартовые характеристики и навыки
+  const STARTING_ATTRIBUTES = { strength: 10, agility: 10, intelligence: 10, endurance: 10 };
+  const STARTING_SKILLS = { oneHanded: 15, block: 15, heavyArmor: 15, lightArmor: 15, persuasion: 15, alchemy: 15 };
+  const ATTRIBUTE_POINTS = 5;
+  const SKILL_POINTS = 10;
+  
+  const [attributes, setAttributes] = useState(STARTING_ATTRIBUTES);
+  const [skills, setSkills] = useState(STARTING_SKILLS);
+  const [remainingAttrPoints, setRemainingAttrPoints] = useState(ATTRIBUTE_POINTS);
+  const [remainingSkillPoints, setRemainingSkillPoints] = useState(SKILL_POINTS);
+  
   const [isCreating, setIsCreating] = useState(false);
   const { user, loading: isAuthLoading } = useAuth(true);
 
-  const handleNext = () => setStep((prev) => Math.min(prev + 1, 4));
+  const handleNext = () => setStep((prev) => Math.min(prev + 1, 5));
   const handleBack = () => setStep((prev) => Math.max(prev - 1, 1));
+
+  const handleAttributeChange = (key: keyof typeof attributes, delta: 1 | -1) => {
+    if (delta === 1 && remainingAttrPoints > 0) {
+      setAttributes({ ...attributes, [key]: attributes[key] + 1 });
+      setRemainingAttrPoints(remainingAttrPoints - 1);
+    } else if (delta === -1 && attributes[key] > STARTING_ATTRIBUTES[key]) {
+      setAttributes({ ...attributes, [key]: attributes[key] - 1 });
+      setRemainingAttrPoints(remainingAttrPoints + 1);
+    }
+  };
+
+  const handleSkillChange = (key: keyof typeof skills, delta: 1 | -1) => {
+    if (delta === 1 && remainingSkillPoints > 0) {
+      setSkills({ ...skills, [key]: skills[key] + 1 });
+      setRemainingSkillPoints(remainingSkillPoints - 1);
+    } else if (delta === -1 && skills[key] > STARTING_SKILLS[key]) {
+      setSkills({ ...skills, [key]: skills[key] - 1 });
+      setRemainingSkillPoints(remainingSkillPoints + 1);
+    }
+  };
 
   const handleCreate = async () => {
     if (!user) {
@@ -118,8 +150,8 @@ export default function CharacterCreationPage() {
         stamina: { current: 100, max: 100 },
         fatigue: { current: 0, max: 100 },
       },
-      attributes: { strength: 10, agility: 10, intelligence: 10, endurance: 10 },
-      skills: { oneHanded: 15, block: 15, heavyArmor: 15, lightArmor: 15, persuasion: 15, alchemy: 15 },
+      attributes: attributes,
+      skills: skills,
       points: { attribute: 0, skill: 0 },
       location: 'whiterun',
       inventory: [{ id: 'gold', name: 'Золото', weight: 0, quantity: 50, type: 'gold' }],
@@ -189,7 +221,23 @@ export default function CharacterCreationPage() {
     }
   };
 
-  const progressValue = (step / 4) * 100;
+  const progressValue = (step / 5) * 100;
+  
+  const attributeInfo: Record<keyof typeof attributes, { name: string; icon: string; description: string }> = {
+    strength: { name: "Сила", icon: "Sword", description: "Увеличивает урон в ближнем бою и переносимый вес." },
+    agility: { name: "Ловкость", icon: "Feather", description: "Повышает шанс уворота и критического удара." },
+    intelligence: { name: "Интеллект", icon: "BrainCircuit", description: "Увеличивает урон от заклинаний и максимальный запас магии." },
+    endurance: { name: "Выносливость", icon: "Heart", description: "Повышает максимальный запас здоровья и сопротивляемость." },
+  };
+
+  const skillInfo: Record<keyof typeof skills, { name: string; icon: string; description: string }> = {
+    oneHanded: { name: "Одноручное", icon: "Sword", description: "Эффективность атак одноручным оружием." },
+    block: { name: "Блок", icon: "Shield", description: "Уменьшает получаемый урон при блокировании." },
+    heavyArmor: { name: "Тяжелая броня", icon: "ShieldCheck", description: "Эффективность ношения тяжелых доспехов." },
+    lightArmor: { name: "Легкая броня", icon: "Shirt", description: "Улучшает уворот и эффективность легких доспехов." },
+    persuasion: { name: "Убеждение", icon: "MessageSquare", description: "Шанс получить лучшие цены и доступ к уникальным диалогам." },
+    alchemy: { name: "Алхимия", icon: "FlaskConical", description: "Усиливает эффекты от выпитых зелий." },
+  };
   
   if (isAuthLoading) {
       return <div className="flex items-center justify-center min-h-screen font-headline text-xl">Проверка аутентификации...</div>;
@@ -314,6 +362,102 @@ export default function CharacterCreationPage() {
             </div>
           )}
           {step === 4 && (
+            <div className="space-y-6 animate-in fade-in-0 zoom-in-95">
+              <div className="text-center">
+                <h3 className="text-2xl font-headline text-primary">Распределение очков</h3>
+                <p className="text-muted-foreground mt-2">Определите сильные стороны вашего героя</p>
+              </div>
+              
+              <div className="grid md:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="font-headline flex items-center justify-between">
+                      Характеристики
+                      <Badge variant="default" className="text-lg">{remainingAttrPoints} очков</Badge>
+                    </CardTitle>
+                    <CardDescription>Базовые атрибуты вашего героя</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {Object.entries(attributes).map(([key, value]) => {
+                      const info = attributeInfo[key as keyof typeof attributes];
+                      return (
+                        <div key={key} className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Icon name={info.icon as any} className="w-5 h-5 text-primary" />
+                            <div>
+                              <p className="font-semibold text-sm">{info.name}</p>
+                              <p className="text-xs text-muted-foreground">{info.description}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="icon" 
+                              className="h-7 w-7" 
+                              onClick={() => handleAttributeChange(key as keyof typeof attributes, -1)} 
+                              disabled={value <= STARTING_ATTRIBUTES[key as keyof typeof attributes]}
+                            >-</Button>
+                            <span className="text-base font-bold w-6 text-center">{value}</span>
+                            <Button 
+                              variant="outline" 
+                              size="icon" 
+                              className="h-7 w-7" 
+                              onClick={() => handleAttributeChange(key as keyof typeof attributes, 1)} 
+                              disabled={remainingAttrPoints === 0}
+                            >+</Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="font-headline flex items-center justify-between">
+                      Навыки
+                      <Badge variant="secondary" className="text-lg">{remainingSkillPoints} очков</Badge>
+                    </CardTitle>
+                    <CardDescription>Начальные умения персонажа</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {Object.entries(skills).map(([key, value]) => {
+                      const info = skillInfo[key as keyof typeof skills];
+                      return (
+                        <div key={key} className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Icon name={info.icon as any} className="w-5 h-5 text-secondary-foreground" />
+                            <div>
+                              <p className="font-semibold text-sm">{info.name}</p>
+                              <p className="text-xs text-muted-foreground">{info.description}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="icon" 
+                              className="h-7 w-7" 
+                              onClick={() => handleSkillChange(key as keyof typeof skills, -1)} 
+                              disabled={value <= STARTING_SKILLS[key as keyof typeof skills]}
+                            >-</Button>
+                            <span className="text-base font-bold w-6 text-center">{value}</span>
+                            <Button 
+                              variant="outline" 
+                              size="icon" 
+                              className="h-7 w-7" 
+                              onClick={() => handleSkillChange(key as keyof typeof skills, 1)} 
+                              disabled={remainingSkillPoints === 0}
+                            >+</Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          )}
+          {step === 5 && (
             <div className="animate-in fade-in-0 zoom-in-95">
                 <h3 className="text-2xl font-headline text-primary text-center">Божественное покровительство</h3>
                 <p className="text-muted-foreground text-center mb-4">Выберите божество, которое будет направлять вас на вашем пути.</p>
@@ -347,8 +491,13 @@ export default function CharacterCreationPage() {
               <ArrowLeft className="mr-2 h-4 w-4" /> Назад
             </Button>
           ) : <div></div>}
-          {step < 4 ? (
-            <Button onClick={handleNext} disabled={ (step === 1 && (!character.name || !character.gender)) || (step === 2 && !character.race) || (step === 3 && !character.backstory) }>
+          {step < 5 ? (
+            <Button onClick={handleNext} disabled={ 
+              (step === 1 && (!character.name || !character.gender)) || 
+              (step === 2 && !character.race) || 
+              (step === 3 && !character.backstory) ||
+              (step === 4 && (remainingAttrPoints > 0 || remainingSkillPoints > 0))
+            }>
               Далее <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           ) : (
