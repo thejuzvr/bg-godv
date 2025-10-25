@@ -615,6 +615,9 @@ export const quests = pgTable('quests', {
     randomItemRewards?: Array<{ rarity: string; type: string; quantity: number }>;
   }>(),
   progress: integer('progress').notNull().default(0), // 0-100
+  priority: integer('priority').notNull().default(50), // 0-100, higher = more important
+  isActive: boolean('is_active').notNull().default(false), // Only one quest can be active per character
+  canAutoComplete: boolean('can_auto_complete').notNull().default(true), // AI can auto-complete this quest
   metadata: jsonb('metadata').$type<Record<string, any>>(),
   expiresAt: bigint('expires_at', { mode: 'number' }),
   createdAt: timestamp('created_at').defaultNow().notNull(),

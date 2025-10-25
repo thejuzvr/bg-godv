@@ -74,24 +74,43 @@ export async function updateQuestProgress(questId: string, progress: number) {
 export async function setTaskStatus(taskId: string, status: 'pending' | 'in-progress' | 'completed' | 'failed', progress?: number) {
   const patch: any = { status, updatedAt: new Date() };
   if (typeof progress === 'number') patch.progress = Math.max(0, Math.min(100, Math.floor(progress)));
-  if (status === 'completed') patch.completedAt = new Date();
+  if (status === 'completed') {
+    patch.completedAt = new Date();
+    patch.progress = 100;
+  }
   const [row] = await db.update(schema.questTasks).set(patch).where(eq(schema.questTasks.id, taskId)).returning();
+  
+  // Automatically sync quest progress when task changes
+  if (row) {
+    await syncQuestProgress(row.questId);
+  }
+  
   return row;
 }
 
-export async function acceptQuest(questId: string): Promise<{ ok: boolean; error?: string; quest?: any }> {
+export async function acceptQuest(questId: string, setAsActive: boolean = false): Promise<{ ok: boolean; error?: string; quest?: any }> {
   const [quest] = await db.select().from(schema.quests).where(eq(schema.quests.id, questId)).limit(1);
   if (!quest) return { ok: false, error: 'Quest not found' };
   if ((quest as any).status !== 'available') return { ok: false, error: 'Quest is not available' };
   
-  // Check if character already has an active quest
-  const [activeQuest] = await db.select().from(schema.quests)
-    .where(and(eq(schema.quests.characterId, (quest as any).characterId), eq(schema.quests.status, 'in-progress' as any)))
-    .limit(1);
-  if (activeQuest) return { ok: false, error: 'Character already has an active quest' };
+  // No longer restricting to one in-progress quest - characters can have multiple quests
+  // But only one can be active at a time
+  
+  const patch: any = { status: 'in-progress' as any, updatedAt: new Date() };
+  
+  if (setAsActive) {
+    // If setting as active, first deactivate all other quests for this character
+    await db.update(schema.quests)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(and(
+        eq(schema.quests.characterId, (quest as any).characterId),
+        eq(schema.quests.isActive, true)
+      ));
+    patch.isActive = true;
+  }
   
   const [updated] = await db.update(schema.quests)
-    .set({ status: 'in-progress' as any, updatedAt: new Date() })
+    .set(patch)
     .where(eq(schema.quests.id, questId))
     .returning();
   return { ok: true, quest: updated };
@@ -101,7 +120,13 @@ export async function completeQuest(questId: string) {
   const [quest] = await db.select().from(schema.quests).where(eq(schema.quests.id, questId)).limit(1);
   if (!quest) return null;
   const [updated] = await db.update(schema.quests)
-    .set({ status: 'completed', progress: 100, updatedAt: new Date(), completedAt: new Date() })
+    .set({ 
+      status: 'completed', 
+      progress: 100, 
+      isActive: false, // Deactivate when completed
+      updatedAt: new Date(), 
+      completedAt: new Date() 
+    })
     .where(eq(schema.quests.id, questId))
     .returning();
   return updated;
@@ -158,6 +183,150 @@ export async function createQuestFromTemplate(character: Character, template: Qu
     status: autoAccept ? 'in-progress' : 'available',
   });
   return created;
+}
+
+// === Quest priority and active quest management ===
+
+/**
+ * Get the currently active quest for a character
+ */
+export async function getActiveQuest(characterId: string) {
+  const [quest] = await db.select()
+    .from(schema.quests)
+    .where(and(
+      eq(schema.quests.characterId, characterId),
+      eq(schema.quests.isActive, true),
+      eq(schema.quests.status, 'in-progress' as any)
+    ))
+    .limit(1);
+  
+  if (!quest) return null;
+  
+  // Get tasks for this quest
+  const tasks = await db.select()
+    .from(schema.questTasks)
+    .where(eq(schema.questTasks.questId, quest.id))
+    .orderBy(asc(schema.questTasks.idx));
+  
+  return { quest, tasks };
+}
+
+/**
+ * Set a quest as the active quest for a character
+ * Automatically deactivates other quests
+ */
+export async function setActiveQuest(characterId: string, questId: string): Promise<{ ok: boolean; error?: string; quest?: any }> {
+  // Verify quest belongs to character and is in-progress
+  const [quest] = await db.select()
+    .from(schema.quests)
+    .where(and(
+      eq(schema.quests.id, questId),
+      eq(schema.quests.characterId, characterId)
+    ))
+    .limit(1);
+  
+  if (!quest) return { ok: false, error: 'Quest not found' };
+  if ((quest as any).status !== 'in-progress') {
+    return { ok: false, error: 'Only in-progress quests can be set as active' };
+  }
+  
+  // Deactivate all other quests for this character
+  await db.update(schema.quests)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(and(
+      eq(schema.quests.characterId, characterId),
+      eq(schema.quests.isActive, true)
+    ));
+  
+  // Activate the selected quest
+  const [updated] = await db.update(schema.quests)
+    .set({ isActive: true, updatedAt: new Date() })
+    .where(eq(schema.quests.id, questId))
+    .returning();
+  
+  return { ok: true, quest: updated };
+}
+
+/**
+ * Calculate quest progress based on tasks
+ * For quests with tasks: progress = weighted average of task progress
+ * For quests without tasks: use quest.progress directly
+ */
+export async function calculateQuestProgress(questId: string): Promise<number> {
+  const [quest] = await db.select().from(schema.quests).where(eq(schema.quests.id, questId)).limit(1);
+  if (!quest) return 0;
+  
+  const tasks = await db.select()
+    .from(schema.questTasks)
+    .where(eq(schema.questTasks.questId, questId))
+    .orderBy(asc(schema.questTasks.idx));
+  
+  // If no tasks, return quest progress directly (simple quest)
+  if (tasks.length === 0) {
+    return (quest as any).progress || 0;
+  }
+  
+  // Calculate progress based on tasks (multi-step quest)
+  const totalTasks = tasks.length;
+  const completedTasks = tasks.filter(t => t.status === 'completed').length;
+  const inProgressTasks = tasks.filter(t => t.status === 'in-progress');
+  
+  // Base progress from completed tasks
+  let progress = (completedTasks / totalTasks) * 100;
+  
+  // Add partial progress from in-progress tasks
+  inProgressTasks.forEach(task => {
+    progress += (task.progress / 100) * (1 / totalTasks) * 100;
+  });
+  
+  return Math.min(100, Math.floor(progress));
+}
+
+/**
+ * Update quest progress based on its tasks
+ * Call this after updating any task to keep quest.progress in sync
+ */
+export async function syncQuestProgress(questId: string) {
+  const progress = await calculateQuestProgress(questId);
+  await db.update(schema.quests)
+    .set({ progress, updatedAt: new Date() })
+    .where(eq(schema.quests.id, questId));
+  return progress;
+}
+
+/**
+ * Get all in-progress quests for a character, sorted by priority
+ */
+export async function listInProgressQuests(characterId: string) {
+  return await db.select()
+    .from(schema.quests)
+    .where(and(
+      eq(schema.quests.characterId, characterId),
+      eq(schema.quests.status, 'in-progress' as any)
+    ))
+    .orderBy(desc(schema.quests.priority), desc(schema.quests.createdAt));
+}
+
+/**
+ * Automatically select and activate the next quest based on priority
+ * Called when active quest is completed or cancelled
+ */
+export async function autoSelectNextQuest(characterId: string): Promise<{ ok: boolean; quest?: any }> {
+  const inProgress = await listInProgressQuests(characterId);
+  
+  if (inProgress.length === 0) {
+    return { ok: false };
+  }
+  
+  // Select highest priority quest that can be auto-completed
+  const nextQuest = inProgress.find(q => (q as any).canAutoComplete);
+  
+  if (!nextQuest) {
+    return { ok: false };
+  }
+  
+  const result = await setActiveQuest(characterId, nextQuest.id);
+  return result;
 }
 
 // === Backfill helpers ===

@@ -185,13 +185,20 @@ export default function DashboardPage() {
                 const gData = await fetchGameData();
                 setGameData(gData);
                 try {
-                  const resp = await fetch(`/api/quests/active?characterId=${encodeURIComponent(char.id)}`);
-                  const data = await resp.json();
-                  if (data.ok && data.quest) {
-                    setActiveQuest({ id: data.quest.id, title: data.quest.title, progress: data.quest.progress, tasks: data.tasks });
-                  } else {
-                    setActiveQuest(null);
-                  }
+                const resp = await fetch(`/api/quests/active?characterId=${encodeURIComponent(char.id)}`);
+                const data = await resp.json();
+                if (data.ok && data.quest) {
+                  setActiveQuest({ 
+                    id: data.quest.id, 
+                    title: data.quest.title, 
+                    progress: data.quest.progress,
+                    priority: data.quest.priority,
+                    type: data.quest.type,
+                    tasks: data.tasks 
+                  });
+                } else {
+                  setActiveQuest(null);
+                }
                 } catch {}
             } else {
                 router.push('/create-character');
