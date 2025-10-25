@@ -1232,8 +1232,19 @@ const progressGeneratedQuestAction: Action = {
         if (step.type === 'travel') {
             const dest = gameData.locations.find(l => l.id === (step.target || '')) || gameData.locations.find(l => l.id === 'bleak_falls_barrow');
             if (!dest) return { character: updatedChar, logMessage: "Герой хотел отправиться, но путь не найден." };
+            
+            // Calculate travel duration for quest travel
+            const isDestinationDiscovered = dest.isStartingLocation || updatedChar.visitedLocations.includes(dest.id);
+            const weatherModifiers: Record<Weather, number> = {
+                Clear: 1.0, Cloudy: 1.0, Rain: 1.2, Snow: 1.3, Fog: 1.25
+            };
+            const weatherMod = weatherModifiers[updatedChar.weather] || 1.0;
+            const discoveryMod = isDestinationDiscovered ? 1.0 : 2.5;
+            const baseDuration = step.duration ?? ((dest.travelDistance || 100) * 1000);
+            const travelDuration = Math.floor(baseDuration * weatherMod * discoveryMod);
+            
             updatedChar.status = 'busy';
-            updatedChar.currentAction = { type: 'travel', name: `Путешествие в ${dest.name}`, description: step.description, startedAt: Date.now(), duration: step.duration ?? (2 * 60 * 1000), destinationId: dest.id } as any;
+            updatedChar.currentAction = { type: 'travel', name: `Путешествие в ${dest.name}`, description: step.description, startedAt: Date.now(), duration: travelDuration, destinationId: dest.id } as any;
             (updatedChar.currentAction as any).originalDuration = (updatedChar.currentAction as any).duration;
             updatedChar = addToActionHistory(updatedChar, 'travel');
             return { character: updatedChar, logMessage: `Герой отправляется: ${step.description}` };
@@ -2043,13 +2054,37 @@ const travelAction: Action = {
             return { character, logMessage: "Герою некуда идти. Он остался на месте."};
         }
 
+        // Calculate travel duration based on discovery status and weather
+        const currentLocation = locations.find(l => l.id === character.location);
+        const isDestinationDiscovered = destination.isStartingLocation || updatedChar.visitedLocations.includes(destination.id);
+        
+        // Base duration from travelDistance (1 unit = ~1 second)
+        const baseDuration = (destination.travelDistance || 100) * 1000; // Convert to milliseconds
+        
+        // Apply weather modifier
+        const weatherModifiers: Record<Weather, number> = {
+            Clear: 1.0,
+            Cloudy: 1.0,
+            Rain: 1.2,
+            Snow: 1.3,
+            Fog: 1.25
+        };
+        const weatherMod = weatherModifiers[updatedChar.weather] || 1.0;
+        
+        // Apply discovery modifier - undiscovered locations take 2.5x longer
+        const discoveryMod = isDestinationDiscovered ? 1.0 : 2.5;
+        
+        const travelDuration = Math.floor(baseDuration * weatherMod * discoveryMod);
+        
         updatedChar.status = 'busy';
         updatedChar.currentAction = { 
             type: 'travel', 
             name: `Путешествие в ${destination.name}`, 
-            description: `Герой идет пешком в ${destination.name}.`, 
+            description: isDestinationDiscovered 
+                ? `Герой идет пешком в ${destination.name}.`
+                : `Герой прокладывает путь через неизведанные земли к ${destination.name}.`, 
             startedAt: Date.now(), 
-            duration: 3 * 60 * 1000, 
+            duration: travelDuration, 
             destinationId: destination.id 
         };
         updatedChar.currentAction.originalDuration = updatedChar.currentAction.duration;
@@ -2404,13 +2439,23 @@ const travelToCryptAction: Action = {
         const currentLocationName = locations.find(l => l.id === character.location)?.name || 'неизвестного места';
         const destination = locations.find(l => l.id === 'forgotten_crypt')!;
 
+        // Calculate travel duration for dragon claw quest
+        const isDestinationDiscovered = destination.isStartingLocation || updatedChar.visitedLocations.includes(destination.id);
+        const weatherModifiers: Record<Weather, number> = {
+            Clear: 1.0, Cloudy: 1.0, Rain: 1.2, Snow: 1.3, Fog: 1.25
+        };
+        const weatherMod = weatherModifiers[updatedChar.weather] || 1.0;
+        const discoveryMod = isDestinationDiscovered ? 1.0 : 2.5;
+        const baseDuration = (destination.travelDistance || 120) * 1000;
+        const travelDuration = Math.floor(baseDuration * weatherMod * discoveryMod);
+        
         updatedChar.status = 'busy';
         updatedChar.currentAction = { 
             type: 'travel', 
             name: `Путешествие в ${destination.name}`, 
             description: `Древний коготь зовет героя. Он отправляется к ${destination.name}.`, 
             startedAt: Date.now(), 
-            duration: 3 * 60 * 1000, 
+            duration: travelDuration, 
             destinationId: destination.id 
         };
         updatedChar.currentAction.originalDuration = updatedChar.currentAction.duration;

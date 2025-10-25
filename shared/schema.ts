@@ -224,6 +224,8 @@ export const gameLocations = pgTable('game_locations', {
   coordY: real('coord_y').notNull(), // percentage 0-100
   isSafe: boolean('is_safe').notNull().default(true),
   dangerLevel: integer('danger_level').default(0), // 0-100, уровень опасности (для окраин и опасных зон)
+  isStartingLocation: boolean('is_starting_location').notNull().default(false), // Открыта ли локация с начала игры
+  travelDistance: integer('travel_distance').default(100), // Базовое расстояние для расчёта времени в пути (условные единицы)
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
