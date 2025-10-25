@@ -430,6 +430,13 @@ async function processActionCompletion(character: Character, gameData: GameData,
         case 'travel':
             updatedChar.location = currentAction.destinationId!;
             const destination = gameData.locations.find(l=>l.id === currentAction.destinationId);
+            
+            // Add location to visited locations if not already there
+            if (destination && !updatedChar.visitedLocations.includes(destination.id)) {
+                updatedChar.visitedLocations = [...updatedChar.visitedLocations, destination.id];
+                logs.push(`${updatedChar.name} впервые посетил ${destination.name}! Локация открыта на карте.`);
+            }
+            
             // Arrival log dedupe: protect against concurrent workers/rapid replays
             try {
                 const arrivalKey = `arrival_log:${destination?.id || 'unknown'}`;
@@ -778,12 +785,40 @@ function processTravelEvents(character: Character, gameData: GameData): { char: 
         return { char: character, logs };
     }
     
-    const allEvents = gameData.events.filter(event => {
+    // Check if destination is discovered
+    const destinationId = updatedChar.currentAction?.destinationId;
+    const destination = gameData.locations.find(l => l.id === destinationId);
+    const isDestinationDiscovered = destination && (
+        destination.isStartingLocation || 
+        updatedChar.visitedLocations.includes(destination.id)
+    );
+    
+    // Base events from game data
+    const baseEvents = gameData.events.filter(event => {
         if (event.seasons && !event.seasons.includes(updatedChar.season)) {
             return false;
         }
         return true;
     });
+    
+    // Add dangerous travel events for undiscovered locations
+    let allEvents = [...baseEvents];
+    if (!isDestinationDiscovered && destination) {
+        // Import travel encounter events
+        try {
+            const { travelEncounterEvents } = require('@/data/travel-events');
+            // Increase encounter chance based on danger level
+            const dangerMultiplier = destination.dangerLevel ? 1 + (destination.dangerLevel / 100) : 1.2;
+            const modifiedEncounters = travelEncounterEvents.map((e: any) => ({
+                ...e,
+                chance: Math.min(e.chance * dangerMultiplier, 0.6) // Cap at 60%
+            }));
+            allEvents = [...allEvents, ...modifiedEncounters];
+        } catch (err) {
+            // Fallback if module not found
+            console.warn('Travel events module not found, using base events only');
+        }
+    }
 
     // Limit to maximum 1 event per travel tick to prevent spam
     const shuffledEvents = [...allEvents].sort(() => Math.random() - 0.5);

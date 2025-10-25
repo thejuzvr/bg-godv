@@ -2,7 +2,7 @@
 "use client";
 
 import { WorldMap } from "@/components/world-map";
-import { Map as MapIcon } from "lucide-react";
+import { Map as MapIcon, Clock, AlertTriangle } from "lucide-react";
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from "next/navigation";
 import type { Character } from "@/types/character";
@@ -14,6 +14,8 @@ import { suggestTravel } from "../actions";
 import { Button } from "@/components/ui/button";
 import * as LucideIcons from "lucide-react";
 import type { Location, LocationType } from "@/types/location";
+import { MapWeatherHud } from "@/components/map-weather-hud";
+import { calculateTravelTime } from "@/lib/travel-calculator";
 // Removed parent TransformWrapper to avoid nested transform with WorldMap
 import {
     Dialog,
@@ -101,7 +103,9 @@ export default function MapPage() {
         const location = gameData?.locations.find(l => l.id === locationId);
         if (!location) return;
         
-        setSelectedLocation(location);
+        // Mark location with discovery status
+        const isDiscovered = location.isStartingLocation || character?.visitedLocations.includes(locationId) || character?.location === locationId;
+        setSelectedLocation({ ...location, isDiscovered });
         setIsModalOpen(true);
     };
 
@@ -163,6 +167,23 @@ export default function MapPage() {
         return gameData.locations.filter(loc => activeFilters.includes(loc.type));
     }, [gameData, activeFilters]);
     
+    // Calculate travel info for selected location
+    const travelInfo = useMemo(() => {
+        if (!selectedLocation || !character || !gameData) return null;
+        
+        const originLocation = gameData.locations.find(l => l.id === character.location);
+        if (!originLocation) return null;
+        
+        const isDiscovered = selectedLocation.isStartingLocation || character.visitedLocations.includes(selectedLocation.id);
+        
+        return calculateTravelTime(
+            originLocation,
+            selectedLocation,
+            character.weather,
+            isDiscovered || false
+        );
+    }, [selectedLocation, character, gameData]);
+    
     if (authLoading || isLoading) {
         return (
             <div className="flex items-center justify-center h-screen w-full">
@@ -223,8 +244,14 @@ return (
                 <WorldMap
                     currentCity={character.location}
                     locations={filteredLocations}
+                    visitedLocations={character.visitedLocations}
                     onLocationClick={handleMapLocationClick}
                 />
+
+                {/* Weather HUD */}
+                <div className="absolute top-4 right-4 z-10">
+                    <MapWeatherHud character={character} />
+                </div>
 
                 {/* Легенда уровня опасности */}
                 <div className="absolute top-4 left-4 z-10 bg-background/80 backdrop-blur-sm p-3 rounded-lg border border-border shadow-lg">
@@ -295,12 +322,47 @@ return (
                         <div>
                             <div className="font-semibold text-sm text-foreground mb-1">Описание</div>
                             <div className="text-sm text-muted-foreground">
-                                {selectedLocation?.isSafe 
-                                    ? `${selectedLocation.name} — место, где можно отдохнуть, пополнить запасы и принять новые задания. Здесь герой в безопасности.`
-                                    : `${selectedLocation?.name} — опасное место, полное враждебных существ и ловушек. Герой должен быть готов к бою.`
-                                }
+                                {selectedLocation?.isDiscovered ? (
+                                    selectedLocation?.isSafe 
+                                        ? `${selectedLocation.name} — место, где можно отдохнуть, пополнить запасы и принять новые задания. Здесь герой в безопасности.`
+                                        : `${selectedLocation?.name} — опасное место, полное враждебных существ и ловушек. Герой должен быть готов к бою.`
+                                ) : (
+                                    "Неизведанная территория. Герой ещё не был здесь, путешествие будет долгим и опасным."
+                                )}
                             </div>
                         </div>
+
+                        {/* Travel time and warnings */}
+                        {travelInfo && character?.location !== selectedLocation?.id && (
+                            <div className="space-y-2">
+                                <div className="flex items-center gap-2 p-3 bg-muted/40 rounded-md">
+                                    <Clock className="h-4 w-4 text-muted-foreground" />
+                                    <div>
+                                        <div className="text-sm font-semibold text-foreground">
+                                            Время в пути: {travelInfo.displayTime}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                            {travelInfo.weatherModifier > 1 && "Погода замедляет путешествие"}
+                                            {travelInfo.discoveryModifier > 1 && " • Неизведанный путь"}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                {travelInfo.warnings.length > 0 && (
+                                    <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-md space-y-1">
+                                        <div className="flex items-center gap-2 text-sm font-semibold text-yellow-600 dark:text-yellow-500">
+                                            <AlertTriangle className="h-4 w-4" />
+                                            Предупреждения
+                                        </div>
+                                        {travelInfo.warnings.map((warning, i) => (
+                                            <div key={i} className="text-xs text-muted-foreground pl-6">
+                                                • {warning}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {character?.location === selectedLocation?.id && (
                             <div className="p-3 bg-accent/10 border border-accent rounded-md">

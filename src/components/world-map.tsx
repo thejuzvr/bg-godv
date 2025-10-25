@@ -17,6 +17,7 @@ import type { ReactZoomPanPinchRef } from "react-zoom-pan-pinch";
 type WorldMapProps = {
   currentCity: string;
   locations: Location[];
+  visitedLocations: string[];
   onLocationClick: (locationId: string) => void;
   // Debug controls (optional)
   debugMode?: boolean;
@@ -51,6 +52,7 @@ const LocationIcon = memo(function LocationIcon({ type, className }: { type: Loc
 export function WorldMap({
   currentCity,
   locations,
+  visitedLocations,
   onLocationClick,
   debugMode = false,
   debugMarkers = [],
@@ -250,21 +252,28 @@ export function WorldMap({
                 })}
 
                 {/* Markers */}
-                {visibleLocations.map((loc) => (
+                {visibleLocations.map((loc) => {
+                  // Check if location is discovered
+                  const isDiscovered = loc.isStartingLocation || visitedLocations.includes(loc.id) || loc.id === currentCity;
+                  const isUndiscovered = !isDiscovered;
+                  
+                  return (
                   <Tooltip key={loc.id}>
                     <TooltipTrigger asChild>
                       <div
                         tabIndex={0}
                         role="button"
-                        aria-label={`${loc.name}. ${typeLabel[loc.type]}. Нажмите, чтобы открыть.`}
+                        aria-label={`${isUndiscovered ? '???' : loc.name}. ${typeLabel[loc.type]}. Нажмите, чтобы открыть.`}
                         className={cn(
-                          "absolute flex items-center justify-center w-8 h-8 p-1.5 -translate-x-1/2 -translate-y-1/2 transition-transform duration-200 cursor-pointer bg-background/60 backdrop-blur-sm rounded-full border-2 hover:scale-110 hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                          // Danger level border color
-                          loc.dangerLevel !== undefined && loc.dangerLevel >= 70 ? "border-red-500/50" :
-                          loc.dangerLevel !== undefined && loc.dangerLevel >= 40 ? "border-orange-500/50" :
-                          loc.dangerLevel !== undefined && loc.dangerLevel >= 20 ? "border-yellow-500/50" :
-                          loc.dangerLevel !== undefined ? "border-green-500/50" :
-                          "border-primary/30"
+                          "absolute flex items-center justify-center w-8 h-8 p-1.5 -translate-x-1/2 -translate-y-1/2 transition-transform duration-200 cursor-pointer backdrop-blur-sm rounded-full border-2 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                          // Undiscovered locations are faded and have special styling
+                          isUndiscovered ? "bg-background/30 border-dashed border-muted-foreground/30 opacity-60 hover:opacity-80" : "bg-background/60 hover:border-accent",
+                          // Danger level border color (only for discovered locations)
+                          !isUndiscovered && loc.dangerLevel !== undefined && loc.dangerLevel >= 70 ? "border-red-500/50" :
+                          !isUndiscovered && loc.dangerLevel !== undefined && loc.dangerLevel >= 40 ? "border-orange-500/50" :
+                          !isUndiscovered && loc.dangerLevel !== undefined && loc.dangerLevel >= 20 ? "border-yellow-500/50" :
+                          !isUndiscovered && loc.dangerLevel !== undefined ? "border-green-500/50" :
+                          !isUndiscovered ? "border-primary/30" : ""
                         )}
                         style={{
                           top: `${loc.coords.y}%`,
@@ -280,23 +289,31 @@ export function WorldMap({
                           }
                         }}
                       >
-                        <LocationIcon
-                          type={loc.type}
-                          className={cn(
-                            "text-primary-foreground drop-shadow-lg",
-                            loc.id === currentCity && "text-accent animate-pulse"
-                          )}
-                        />
+                        {isUndiscovered ? (
+                          <div className="text-muted-foreground text-xl font-bold">?</div>
+                        ) : (
+                          <LocationIcon
+                            type={loc.type}
+                            className={cn(
+                              "text-primary-foreground drop-shadow-lg",
+                              loc.id === currentCity && "text-accent animate-pulse"
+                            )}
+                          />
+                        )}
                         {loc.id === currentCity && (
                           <div className="absolute inset-0 rounded-full ring-2 ring-accent ring-offset-2 ring-offset-background/50" />
                         )}
                       </div>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p className="font-headline">{loc.name}</p>
-                      <p className="text-xs text-muted-foreground capitalize">{typeLabel[loc.type]}</p>
-                      {/* Danger level indicator for outskirts and dangerous zones */}
-                      {loc.dangerLevel !== undefined && (
+                      <p className="font-headline">{isUndiscovered ? '???' : loc.name}</p>
+                      {isUndiscovered ? (
+                        <p className="text-xs text-muted-foreground">Неизведанная территория</p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground capitalize">{typeLabel[loc.type]}</p>
+                      )}
+                      {/* Danger level indicator for outskirts and dangerous zones (only for discovered) */}
+                      {!isUndiscovered && loc.dangerLevel !== undefined && (
                         <div className="mt-1 text-xs">
                           <span className="text-muted-foreground">Опасность: </span>
                           <span className={
@@ -314,12 +331,13 @@ export function WorldMap({
                           </span>
                         </div>
                       )}
-                      {!loc.dangerLevel && (
+                      {!isUndiscovered && !loc.dangerLevel && (
                         <div className="mt-1 text-xs text-muted-foreground">Безопасная зона</div>
                       )}
                     </TooltipContent>
                   </Tooltip>
-                ))}
+                  );
+                })}
 
                 {/* Debug markers */}
                 {debugMode && (debugMarkers || []).map((m) => (
