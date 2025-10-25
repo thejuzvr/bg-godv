@@ -12,7 +12,7 @@ import { DragonIcon } from "@/components/icons";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { register, login } from "@/services/authService";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 
 export default function AuthenticationPage() {
   const router = useRouter();
@@ -144,6 +144,14 @@ export default function AuthenticationPage() {
             <p className="text-balance text-muted-foreground font-body">
               Ваша эпическая история начинается здесь. Войдите или создайте своего героя.
             </p>
+            <div className="mt-2">
+              <Link href="/theme-preview">
+                <Button variant="outline" size="sm" className="text-xs">
+                  <Sparkles className="h-3 w-3 mr-1" />
+                  New Theme Preview
+                </Button>
+              </Link>
+            </div>
           </div>
           <Tabs defaultValue="login" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
