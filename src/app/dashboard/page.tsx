@@ -217,6 +217,38 @@ export default function DashboardPage() {
     loadData();
   }, [user, router, toast]);
 
+  // Quest progress polling - обновление прогресса квеста каждые 3 секунды
+  useEffect(() => {
+    if (!character?.id) return;
+
+    const pollQuestProgress = async () => {
+      try {
+        const resp = await fetch(`/api/quests/active?characterId=${encodeURIComponent(character.id)}`);
+        const data = await resp.json();
+        if (data.ok && data.quest) {
+          setActiveQuest({ 
+            id: data.quest.id, 
+            title: data.quest.title, 
+            progress: data.quest.progress,
+            priority: data.quest.priority,
+            type: data.quest.type,
+            tasks: data.tasks 
+          });
+        } else {
+          setActiveQuest(null);
+        }
+      } catch (error) {
+        console.error("Failed to poll quest progress:", error);
+      }
+    };
+
+    // Опрашиваем каждые 3 секунды
+    const intervalId = setInterval(pollQuestProgress, 3000);
+
+    // Очищаем интервал при размонтировании
+    return () => clearInterval(intervalId);
+  }, [character?.id]);
+
   const handleIntervention = async (type: 'bless' | 'punish') => {
     if (!character || !user) return;
     const INTERVENTION_COST = 50;

@@ -90,6 +90,17 @@ export default function QuestsPage() {
         loadData();
     }, [user, router, toast]);
 
+    // Auto-refresh quests every 5 seconds
+    useEffect(() => {
+        if (!character?.id) return;
+
+        const intervalId = setInterval(() => {
+            loadQuests(character.id);
+        }, 5000);
+
+        return () => clearInterval(intervalId);
+    }, [character?.id]);
+
     const loadQuests = async (characterId: string) => {
         try {
             // Load active quest
