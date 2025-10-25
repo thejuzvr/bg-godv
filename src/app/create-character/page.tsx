@@ -37,6 +37,7 @@ import { createCharacter } from "./actions";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { allDivinities, type DivinityId } from "@/data/divinities";
+import { fetchCharacter } from "@/app/dashboard/shared-actions";
 import * as LucideIcons from "lucide-react";
 
 const Icon = ({ name, ...props }: { name: string } & LucideIcons.LucideProps) => {
@@ -95,6 +96,41 @@ export default function CharacterCreationPage() {
   
   const [isCreating, setIsCreating] = useState(false);
   const { user, loading: isAuthLoading } = useAuth(true);
+
+  // Проверка на существование персонажа и сброс состояния
+  useEffect(() => {
+    const checkExistingCharacter = async () => {
+      if (!user) return;
+      
+      const existingChar = await fetchCharacter(user.userId);
+      if (existingChar) {
+        // Персонаж уже существует - редирект на dashboard
+        toast({
+          title: "Персонаж уже создан",
+          description: "У вас уже есть персонаж. Переход на панель управления...",
+        });
+        router.push('/dashboard');
+        return;
+      }
+    };
+
+    // Сброс состояния формы
+    setStep(1);
+    setCharacter({
+      name: "",
+      gender: "",
+      race: "",
+      backstory: "",
+      patronDeity: "" as DivinityId,
+    });
+    setAttributes(STARTING_ATTRIBUTES);
+    setSkills(STARTING_SKILLS);
+    setRemainingAttrPoints(ATTRIBUTE_POINTS);
+    setRemainingSkillPoints(SKILL_POINTS);
+    setIsCreating(false);
+
+    checkExistingCharacter();
+  }, [user, router, toast]); // Зависимости: user, router, toast
 
   const handleNext = () => setStep((prev) => Math.min(prev + 1, 5));
   const handleBack = () => setStep((prev) => Math.max(prev - 1, 1));

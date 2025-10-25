@@ -8,6 +8,11 @@ import { addChronicleEntry } from '@/services/chronicleService';
 
 export async function createCharacter(userId: string, character: Character) {
   try {
+    console.log('[CREATE CHARACTER] Starting character creation for userId:', userId);
+    console.log('[CREATE CHARACTER] Initial attributes:', character.attributes);
+    console.log('[CREATE CHARACTER] Initial skills:', character.skills);
+    console.log('[CREATE CHARACTER] Initial perks:', character.unlockedPerks);
+    
     // Load items from database for backstory-specific inventory
     const allItems = await gameDataService.getAllItems();
     
@@ -180,8 +185,15 @@ export async function createCharacter(userId: string, character: Character) {
     // Create welcome message based on backstory
     const welcomeMessage = createWelcomeMessage(character);
     
+    console.log('[CREATE CHARACTER] Final attributes before save:', character.attributes);
+    console.log('[CREATE CHARACTER] Final skills before save:', character.skills);
+    console.log('[CREATE CHARACTER] Final perks before save:', character.unlockedPerks);
+    console.log('[CREATE CHARACTER] Final points before save:', character.points);
+    
     // Сначала сохраняем персонажа (FK на chronicle требует существования записи)
     await saveCharacterToDb(userId, character);
+
+    console.log('[CREATE CHARACTER] Character saved successfully');
 
     // Затем пишем событие в летопись
     await addChronicleEntry(userId, { 
