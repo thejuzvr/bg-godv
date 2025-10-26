@@ -157,3 +157,117 @@ export async function setTelegramSubscriptionActive(id: string, active: boolean)
     return { success: false, error: e?.message || 'Failed to update subscription' };
   }
 }
+
+// Admin Stats
+export interface AdminStats {
+  totalUsers: number;
+  activeUsers: number;
+  totalCharacters: number;
+  avgLevel: number;
+  maxLevel: number;
+  maxLevelCharacter: string;
+  telegramSubs: number;
+  activeTelegramSubs: number;
+  totalEvents: number;
+  totalDeaths: number;
+  totalCombats: number;
+  recentCharacters: Array<{
+    name: string;
+    level: number;
+    race: string;
+    class: string;
+    createdAt: number;
+  }>;
+}
+
+export async function fetchAdminStats(): Promise<{ success: boolean; stats?: AdminStats; error?: string }> {
+  try {
+    const { eq, gte, sql, and, desc } = await import('drizzle-orm');
+    const { users, characters: charactersTable, offlineEvents, telegramSubscriptions } = await import('../../../shared/schema');
+
+    // Total users
+    const totalUsersResult = await db.select({ count: sql<number>`count(*)::int` }).from(users);
+    const totalUsers = totalUsersResult[0]?.count || 0;
+
+    // Active users (logged in last 7 days)
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const activeUsersResult = await db.select({ count: sql<number>`count(*)::int` }).from(users)
+      .where(gte(users.lastLogin, sevenDaysAgo));
+    const activeUsers = activeUsersResult[0]?.count || 0;
+
+    // Total characters
+    const totalCharsResult = await db.select({ count: sql<number>`count(*)::int` }).from(charactersTable);
+    const totalCharacters = totalCharsResult[0]?.count || 0;
+
+    // Average level
+    const avgLevelResult = await db.select({ avg: sql<number>`avg(level)::int` }).from(charactersTable);
+    const avgLevel = avgLevelResult[0]?.avg || 0;
+
+    // Max level character
+    const maxLevelChar = await db.select({
+      level: charactersTable.level,
+      name: charactersTable.name,
+    }).from(charactersTable).orderBy(desc(charactersTable.level)).limit(1);
+    const maxLevel = maxLevelChar[0]?.level || 0;
+    const maxLevelCharacter = maxLevelChar[0]?.name || 'N/A';
+
+    // Telegram subscriptions
+    const telegramSubsResult = await db.select({ count: sql<number>`count(*)::int` }).from(telegramSubscriptions);
+    const telegramSubs = telegramSubsResult[0]?.count || 0;
+
+    const activeTelegramSubsResult = await db.select({ count: sql<number>`count(*)::int` })
+      .from(telegramSubscriptions)
+      .where(eq(telegramSubscriptions.isActive, true));
+    const activeTelegramSubs = activeTelegramSubsResult[0]?.count || 0;
+
+    // Total events (last 24h)
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    const totalEventsResult = await db.select({ count: sql<number>`count(*)::int` })
+      .from(offlineEvents)
+      .where(gte(offlineEvents.timestamp, oneDayAgo));
+    const totalEvents = totalEventsResult[0]?.count || 0;
+
+    // Total deaths and combats
+    const deathsResult = await db.select({ count: sql<number>`count(*)::int` })
+      .from(offlineEvents)
+      .where(eq(offlineEvents.type, 'death'));
+    const totalDeaths = deathsResult[0]?.count || 0;
+
+    const combatsResult = await db.select({ count: sql<number>`count(*)::int` })
+      .from(offlineEvents)
+      .where(and(
+        eq(offlineEvents.type, 'combat'),
+        gte(offlineEvents.timestamp, Date.now() - 7 * 24 * 60 * 60 * 1000)
+      ));
+    const totalCombats = combatsResult[0]?.count || 0;
+
+    // Recent characters
+    const recentChars = await db.select({
+      name: charactersTable.name,
+      level: charactersTable.level,
+      race: charactersTable.race,
+      class: charactersTable.class,
+      createdAt: charactersTable.createdAt,
+    }).from(charactersTable).orderBy(desc(charactersTable.createdAt)).limit(10);
+
+    const stats: AdminStats = {
+      totalUsers,
+      activeUsers,
+      totalCharacters,
+      avgLevel,
+      maxLevel,
+      maxLevelCharacter,
+      telegramSubs,
+      activeTelegramSubs,
+      totalEvents,
+      totalDeaths,
+      totalCombats,
+      recentCharacters: recentChars,
+    };
+
+    return { success: true, stats };
+  } catch (error: any) {
+    console.error("Error fetching admin stats:", error);
+    return { success: false, error: error.message };
+  }
+}
