@@ -33,11 +33,11 @@ import { Button } from '@/components/ui/button';
 import { logout } from '@/services/authService';
 
 const adminNavItems = [
-  { href: '/admin', icon: ShieldCheck, label: 'Админ-панель' },
-  { href: '/admin/data', icon: Database, label: 'Данные' },
-  { href: '/admin/telegram', icon: MessageSquare, label: 'Telegram' },
-  { href: '/admin/realms', icon: Shield, label: 'Реалмы' },
-
+  { href: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
+  { href: '/admin/data-manager', icon: Database, label: 'Data Manager' },
+  { href: '/admin/telegram', icon: MessageSquare, label: 'Telegram Bot' },
+  { href: '/admin/drizzle-studio', icon: Database, label: 'Drizzle Studio' },
+  { href: '/admin/test-utils', icon: ShieldCheck, label: 'Test Utils' },
 ];
 
 function AdminSidebar() {
