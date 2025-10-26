@@ -46,6 +46,15 @@ import {
 import { ShopManagement } from "@/components/dashboard/shop-management";
 import { companionTemplates } from "@/data/companions";
 import type { CompanionTemplate } from "@/types/companion";
+import type { CharacterCompanionDB } from "@/../shared/schema";
+import { 
+    hireCompanionAction, 
+    activateCompanionAction, 
+    deactivateCompanionAction, 
+    dismissCompanionAction,
+    getCompanionsAction,
+    getActiveCompanionAction 
+} from "@/actions/companion-actions";
 
 const Icon = ({ name, ...props }: { name: keyof typeof LucideIcons } & LucideIcons.LucideProps) => {
     const LucideIcon = LucideIcons[name] as React.ElementType;
@@ -87,6 +96,12 @@ export default function SocialPage() {
     const [typeFilter, setTypeFilter] = useState<string>("all");
     const [selectedNPC, setSelectedNPC] = useState<NPC | null>(null);
     const [isInteracting, setIsInteracting] = useState(false);
+    
+    // Companion state
+    const [hiredCompanions, setHiredCompanions] = useState<CharacterCompanionDB[]>([]);
+    const [activeCompanion, setActiveCompanion] = useState<CharacterCompanionDB | null>(null);
+    const [isHiring, setIsHiring] = useState(false);
+    const [companionsLoading, setCompanionsLoading] = useState(true);
 
     useEffect(() => {
         if (!user) return;
@@ -103,6 +118,26 @@ export default function SocialPage() {
                 
                 if (char) {
                     setCharacter(char);
+                    
+                    // Load companions
+                    try {
+                        const [companionsResult, activeResult] = await Promise.all([
+                            getCompanionsAction(user.userId),
+                            getActiveCompanionAction(user.userId)
+                        ]);
+                        
+                        if (companionsResult.success) {
+                            setHiredCompanions(companionsResult.companions);
+                        }
+                        
+                        if (activeResult.success && activeResult.companion) {
+                            setActiveCompanion(activeResult.companion);
+                        }
+                    } catch (error) {
+                        console.error('Error loading companions:', error);
+                    } finally {
+                        setCompanionsLoading(false);
+                    }
                 } else {
                     router.push('/create-character');
                 }
@@ -274,6 +309,144 @@ export default function SocialPage() {
             });
         } finally {
             setIsInteracting(false);
+        }
+    };
+
+    const handleHireCompanion = async (templateId: string) => {
+        if (!character || !user) return;
+        
+        setIsHiring(true);
+        try {
+            const result = await hireCompanionAction(user.userId, templateId);
+            if (result.success) {
+                const updatedChar = await fetchCharacter(user.userId);
+                if (updatedChar) setCharacter(updatedChar);
+                
+                // Обновить список компаньонов
+                const companionsResult = await getCompanionsAction(user.userId);
+                if (companionsResult.success) {
+                    setHiredCompanions(companionsResult.companions);
+                }
+                
+                toast({
+                    title: "Компаньон нанят!",
+                    description: result.message,
+                });
+            } else {
+                toast({
+                    title: "Ошибка",
+                    description: result.error,
+                    variant: "destructive",
+                });
+            }
+        } catch (error) {
+            toast({
+                title: "Ошибка",
+                description: "Не удалось нанять компаньона",
+                variant: "destructive",
+            });
+        } finally {
+            setIsHiring(false);
+        }
+    };
+
+    const handleActivateCompanion = async (companionId: string) => {
+        if (!user) return;
+        
+        try {
+            const result = await activateCompanionAction(user.userId, companionId);
+            if (result.success) {
+                const activeResult = await getActiveCompanionAction(user.userId);
+                if (activeResult.success) {
+                    setActiveCompanion(activeResult.companion);
+                }
+                
+                toast({
+                    title: "Компаньон активирован",
+                    description: result.message,
+                });
+            } else {
+                toast({
+                    title: "Ошибка",
+                    description: result.error,
+                    variant: "destructive",
+                });
+            }
+        } catch (error) {
+            toast({
+                title: "Ошибка",
+                description: "Не удалось активировать компаньона",
+                variant: "destructive",
+            });
+        }
+    };
+
+    const handleDeactivateCompanion = async () => {
+        if (!user) return;
+        
+        try {
+            const result = await deactivateCompanionAction(user.userId);
+            if (result.success) {
+                setActiveCompanion(null);
+                
+                toast({
+                    title: "Компаньон деактивирован",
+                    description: result.message,
+                });
+            } else {
+                toast({
+                    title: "Ошибка",
+                    description: result.error,
+                    variant: "destructive",
+                });
+            }
+        } catch (error) {
+            toast({
+                title: "Ошибка",
+                description: "Не удалось деактивировать компаньона",
+                variant: "destructive",
+            });
+        }
+    };
+
+    const handleDismissCompanion = async (companionId: string) => {
+        if (!user) return;
+        
+        if (!confirm('Вы уверены, что хотите уволить этого компаньона? Это действие необратимо.')) {
+            return;
+        }
+        
+        try {
+            const result = await dismissCompanionAction(user.userId, companionId);
+            if (result.success) {
+                // Обновить список компаньонов
+                const companionsResult = await getCompanionsAction(user.userId);
+                if (companionsResult.success) {
+                    setHiredCompanions(companionsResult.companions);
+                }
+                
+                // Если это был активный компаньон, сбросить
+                if (activeCompanion?.id === companionId) {
+                    setActiveCompanion(null);
+                }
+                
+                toast({
+                    title: "Компаньон уволен",
+                    description: result.message,
+                });
+            } else {
+                toast({
+                    title: "Ошибка",
+                    description: result.error,
+                    variant: "destructive",
+                });
+            }
+        } catch (error) {
+            toast({
+                title: "Ошибка",
+                description: "Не удалось уволить компаньона",
+                variant: "destructive",
+            });
         }
     };
 
@@ -488,17 +661,126 @@ export default function SocialPage() {
 
                 {/* Companions Tab */}
                 <TabsContent value="companions" className="space-y-4">
+                    {/* Нанятые компаньоны */}
+                    {hiredCompanions.length > 0 && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Ваш отряд</CardTitle>
+                                <CardDescription>
+                                    Нанятые компаньоны. Активируйте одного для участия в приключениях.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid gap-4 md:grid-cols-2">
+                                    {hiredCompanions.map((companion) => {
+                                        const stats = companion.stats as any;
+                                        const skills = companion.skills as any;
+                                        const isActive = companion.id === activeCompanion?.id;
+                                        
+                                        return (
+                                            <Card key={companion.id} className={`${isActive ? 'border-2 border-primary shadow-lg' : ''}`}>
+                                                <CardHeader>
+                                                    <div className="flex items-start justify-between">
+                                                        <div>
+                                                            <CardTitle className="flex items-center gap-2 text-lg">
+                                                                {companion.class === 'warrior' && <Icon name="Swords" className="h-5 w-5" />}
+                                                                {companion.class === 'mage' && <Icon name="Sparkles" className="h-5 w-5" />}
+                                                                {companion.class === 'rogue' && <Icon name="Eye" className="h-5 w-5" />}
+                                                                {companion.class === 'healer' && <Icon name="Heart" className="h-5 w-5" />}
+                                                                {companion.class === 'ranger' && <Icon name="Crosshair" className="h-5 w-5" />}
+                                                                {companion.name}
+                                                            </CardTitle>
+                                                            <CardDescription>
+                                                                Уровень {companion.level} • {
+                                                                    companion.class === 'warrior' ? 'Воин' :
+                                                                    companion.class === 'mage' ? 'Маг' :
+                                                                    companion.class === 'rogue' ? 'Разбойник' :
+                                                                    companion.class === 'healer' ? 'Целитель' : 'Следопыт'
+                                                                }
+                                                            </CardDescription>
+                                                        </div>
+                                                        {isActive && (
+                                                            <Badge variant="default" className="bg-green-600">
+                                                                Активен
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </CardHeader>
+                                                <CardContent className="space-y-3">
+                                                    <div className="grid grid-cols-2 gap-2 text-sm">
+                                                        <div>
+                                                            <span className="text-muted-foreground">❤️ HP:</span>
+                                                            <span className="ml-1 font-medium">{stats.health.current}/{stats.health.max}</span>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-muted-foreground">⚔️ Урон:</span>
+                                                            <span className="ml-1 font-medium">{stats.damage}</span>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-muted-foreground">🛡️ Броня:</span>
+                                                            <span className="ml-1 font-medium">{stats.armor}</span>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-muted-foreground">💪 Бой:</span>
+                                                            <span className="ml-1 font-medium">{skills.combat}</span>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <Separator />
+                                                    
+                                                    <div className="space-y-2">
+                                                        {isActive ? (
+                                                            <Button 
+                                                                variant="secondary" 
+                                                                className="w-full" 
+                                                                onClick={handleDeactivateCompanion}
+                                                            >
+                                                                Отправить в лагерь
+                                                            </Button>
+                                                        ) : (
+                                                            <Button 
+                                                                variant="default" 
+                                                                className="w-full" 
+                                                                onClick={() => handleActivateCompanion(companion.id)}
+                                                            >
+                                                                Активировать
+                                                            </Button>
+                                                        )}
+                                                        <Button 
+                                                            variant="destructive" 
+                                                            size="sm" 
+                                                            className="w-full"
+                                                            onClick={() => handleDismissCompanion(companion.id)}
+                                                        >
+                                                            Уволить
+                                                        </Button>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        );
+                                    })}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+                    
+                    {/* Доступные для найма */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>Доступные компаньоны</CardTitle>
+                            <CardTitle>Доступные для найма</CardTitle>
                             <CardDescription>
                                 Нанимайте спутников для помощи в приключениях. Они помогают в бою, путешествиях и социальных взаимодействиях.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            {(() => {
+                            {companionsLoading ? (
+                                <div className="flex items-center justify-center py-12">
+                                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                </div>
+                            ) : (() => {
                                 const availableCompanions = companionTemplates.filter(t => 
-                                    t.availableAt.includes(character.location)
+                                    t.availableAt.includes(character.location) &&
+                                    !hiredCompanions.some(h => h.npcId === t.id)
                                 );
                                 
                                 if (availableCompanions.length === 0) {
@@ -507,7 +789,9 @@ export default function SocialPage() {
                                             <Sword className="h-12 w-12 text-muted-foreground mb-4" />
                                             <p className="text-muted-foreground">Нет доступных компаньонов</p>
                                             <p className="text-sm text-muted-foreground mt-2">
-                                                В этой локации нет компаньонов для найма. Попробуйте другие города.
+                                                {hiredCompanions.length > 0 
+                                                    ? 'Вы уже наняли всех доступных компаньонов в этой локации.'
+                                                    : 'В этой локации нет компаньонов для найма. Попробуйте другие города.'}
                                             </p>
                                         </div>
                                     );
@@ -597,17 +881,27 @@ export default function SocialPage() {
                                                                 <p className="text-muted-foreground">Стоимость найма</p>
                                                                 <p className="font-semibold text-amber-600">{template.recruitCost} 🪙</p>
                                                             </div>
-                                                            <Button size="sm" disabled>
-                                                                <UserPlus className="h-4 w-4 mr-1" />
+                                                            <Button 
+                                                                size="sm" 
+                                                                onClick={() => handleHireCompanion(template.id)}
+                                                                disabled={isHiring || playerGold < template.recruitCost}
+                                                            >
+                                                                {isHiring ? (
+                                                                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                                                ) : (
+                                                                    <UserPlus className="h-4 w-4 mr-1" />
+                                                                )}
                                                                 Нанять
                                                             </Button>
                                                         </div>
                                                         <p className="text-xs text-muted-foreground">
                                                             Содержание: {template.upkeepCost} 🪙/день, {template.foodConsumption} 🍖/день
                                                         </p>
-                                                        <p className="text-xs text-muted-foreground italic">
-                                                            💡 Функционал найма будет доступен после интеграции с базой данных
-                                                        </p>
+                                                        {playerGold < template.recruitCost && (
+                                                            <p className="text-xs text-red-500 italic">
+                                                                ⚠️ Недостаточно золота
+                                                            </p>
+                                                        )}
                                                     </div>
                                                 </CardContent>
                                             </Card>
