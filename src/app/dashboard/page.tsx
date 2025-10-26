@@ -43,6 +43,9 @@ import { allDivinities } from '@/data/divinities';
 import { QuestProgressPanel } from '@/components/dashboard/quest-progress-panel';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { ActiveCompanionPanel } from '@/components/dashboard/active-companion-panel';
+import { getActiveCompanionAction } from '@/actions/companion-actions';
+import type { CharacterCompanionDB } from '@/../shared/schema';
 
 const Icon = ({ name, ...props }: { name: string } & LucideIcons.LucideProps) => {
   const LucideIcon = (LucideIcons as any)[name];
@@ -131,6 +134,7 @@ export default function DashboardPage() {
   const [msgCooldownUntil, setMsgCooldownUntil] = useState<number>(0);
   const [logLimit, setLogLimit] = useState<number>(10);
   const [activeQuest, setActiveQuest] = useState<any | null>(null);
+  const [activeCompanion, setActiveCompanion] = useState<CharacterCompanionDB | null>(null);
 
   // Load saved log limit from localStorage on mount
   useEffect(() => {
@@ -200,6 +204,16 @@ export default function DashboardPage() {
                   setActiveQuest(null);
                 }
                 } catch {}
+                
+                // Load active companion
+                try {
+                  const companionResult = await getActiveCompanionAction(char.id);
+                  if (companionResult.success && companionResult.companion) {
+                    setActiveCompanion(companionResult.companion);
+                  }
+                } catch (error) {
+                  console.error('Failed to load companion:', error);
+                }
             } else {
                 router.push('/create-character');
             }
@@ -393,6 +407,7 @@ export default function DashboardPage() {
                     <EquipmentPanel character={character} />
                     <EffectsPanel effects={character.effects} />
                     <SpellsPanel character={character} />
+                    <ActiveCompanionPanel companion={activeCompanion} />
                     <TempleProgressPanel character={character} />
                     <DivineFavorPanel character={character} />
                 </CardContent>
