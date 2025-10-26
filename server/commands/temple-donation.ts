@@ -3,6 +3,8 @@ import type { Character } from '@/types/character';
 import * as storage from '../storage';
 import { allFactions } from '@/data/factions';
 import { allDivinities } from '@/data/divinities';
+import { allItems } from '@/data/items';
+import type { ReputationTier } from '@/types/faction';
 import { 
   executeCommand, 
   validateCharacterOwnership, 
@@ -21,6 +23,93 @@ export interface DonateToFactionOutput {
   message: string;
   templeProgress?: number;
   factionReputation?: number;
+  rankUp?: {
+    factionName: string;
+    newRank: ReputationTier;
+    rewards: Array<{ type: string; id: string; name: string; description: string }>;
+  };
+}
+
+/**
+ * Helper: Check if character achieved new faction rank and grant rewards
+ */
+function checkAndGrantFactionRankRewards(
+  character: Character, 
+  factionId: string, 
+  oldReputation: number, 
+  newReputation: number
+): { rankUp: boolean; newRank?: ReputationTier; rewards?: Array<any> } {
+  const faction = allFactions.find(f => f.id === factionId);
+  if (!faction) return { rankUp: false };
+
+  const sortedTiers = [...faction.reputationTiers].sort((a, b) => a.level - b.level);
+  
+  // Find old and new tiers
+  let oldTier: ReputationTier | null = null;
+  let newTier: ReputationTier | null = null;
+  
+  for (const tier of sortedTiers) {
+    if (oldReputation >= tier.level) {
+      oldTier = tier;
+    }
+    if (newReputation >= tier.level) {
+      newTier = tier;
+    }
+  }
+
+  // Check if rank increased
+  if (!newTier || !oldTier || newTier.level <= oldTier.level) {
+    return { rankUp: false };
+  }
+
+  // Grant rewards for the new tier
+  const rewardsGranted: Array<any> = [];
+  
+  for (const reward of newTier.rewards) {
+    switch (reward.type) {
+      case 'item':
+        // Add item to inventory
+        const item = allItems.find(i => i.id === reward.id);
+        if (item) {
+          const existingItem = character.inventory.find(i => i.id === reward.id);
+          if (existingItem) {
+            existingItem.quantity = (existingItem.quantity || 0) + 1;
+          } else {
+            character.inventory.push({
+              id: item.id,
+              name: item.name,
+              type: item.type,
+              quantity: 1,
+              weight: item.weight,
+            });
+          }
+          rewardsGranted.push(reward);
+        }
+        break;
+        
+      case 'perk':
+        // Add perk to unlocked perks
+        if (!character.unlockedPerks) {
+          character.unlockedPerks = [];
+        }
+        if (!character.unlockedPerks.includes(reward.id)) {
+          character.unlockedPerks.push(reward.id);
+          rewardsGranted.push(reward);
+        }
+        break;
+        
+      case 'title':
+        // Titles are just for display, mark as granted
+        rewardsGranted.push(reward);
+        break;
+    }
+  }
+
+  return {
+    rankUp: true,
+    newRank: newTier,
+    rewards: rewardsGranted,
+  };
 }
 
 /**
@@ -72,6 +161,7 @@ export async function donateToFaction(
       const events: Array<{ type: string; payload: any }> = [];
       let templeProgress: number | undefined;
       let factionReputation: number | undefined;
+      let rankUpData: DonateToFactionOutput['rankUp'] | undefined;
 
       if (factionId.startsWith('deity_')) {
         // Temple donation
@@ -108,11 +198,52 @@ export async function donateToFaction(
           updatedChar.factions[factionId] = { reputation: 0 };
         }
         
+        const oldReputation = updatedChar.factions[factionId]!.reputation;
         const reputationGain = Math.floor(amount / 10);
-        updatedChar.factions[factionId]!.reputation += reputationGain;
-        factionReputation = updatedChar.factions[factionId]!.reputation;
+        const newReputation = oldReputation + reputationGain;
+        updatedChar.factions[factionId]!.reputation = newReputation;
+        factionReputation = newReputation;
         
-        logMessage = `Герой пожертвовал ${amount} золота фракции "${factionInfo.name}", улучшив свою репутацию. Текущая репутация: ${factionReputation}.`;
+        // Check for rank up
+        const rankUpResult = checkAndGrantFactionRankRewards(updatedChar, factionId, oldReputation, newReputation);
+        
+        if (rankUpResult.rankUp && rankUpResult.newRank) {
+          logMessage = `🎉 Герой достиг нового ранга во фракции "${factionInfo.name}"! Новый ранг: ${rankUpResult.newRank.title}. Репутация: ${factionReputation}.`;
+          
+          // Add rewards description
+          if (rankUpResult.rewards && rankUpResult.rewards.length > 0) {
+            const rewardsList = rankUpResult.rewards.map(r => r.name).join(', ');
+            logMessage += ` Получены награды: ${rewardsList}.`;
+          }
+          
+          // Store rank up data for return
+          rankUpData = {
+            factionName: factionInfo.name,
+            newRank: rankUpResult.newRank,
+            rewards: rankUpResult.rewards || [],
+          };
+          
+          // Add chronicle entry for rank up
+          try {
+            await storage.addChronicleEntry(ctx.characterId, {
+              type: 'faction_rank',
+              title: `Повышение в ${factionInfo.name}`,
+              description: `${updatedChar.name} достиг звания "${rankUpResult.newRank.title}" во фракции "${factionInfo.name}".`,
+              icon: 'Shield',
+              data: {
+                factionId,
+                factionName: factionInfo.name,
+                rankTitle: rankUpResult.newRank.title,
+                reputation: factionReputation,
+                rewards: rankUpResult.rewards?.map(r => r.name) || [],
+              },
+            });
+          } catch (error) {
+            console.error('Failed to add chronicle entry:', error);
+          }
+        } else {
+          logMessage = `Герой пожертвовал ${amount} золота фракции "${factionInfo.name}", улучшив свою репутацию. Текущая репутация: ${factionReputation}.`;
+        }
       }
 
       // Save character
@@ -181,6 +312,7 @@ export async function donateToFaction(
           message: logMessage,
           templeProgress,
           factionReputation,
+          rankUp: rankUpData,
         },
         events,
       };

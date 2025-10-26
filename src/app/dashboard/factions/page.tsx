@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
-import { Shield, Lock, Star, Coins, Loader2 } from 'lucide-react';
+import { Shield, Lock, Star, Coins, Loader2, Gift, ShoppingBag, Zap } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import * as LucideIcons from "lucide-react";
@@ -75,7 +75,16 @@ export default function FactionsPage() {
         setIsDonating(true);
         const result = await donateToFaction(user.userId, factionId, amount);
         if(result.success) {
-            toast({ title: "Пожертвование принято", description: result.message });
+            // Check for rank up notification
+            if (result.message.includes('🎉')) {
+                toast({ 
+                    title: "🎊 Повышение ранга!", 
+                    description: result.message,
+                    duration: 6000,
+                });
+            } else {
+                toast({ title: "Пожертвование принято", description: result.message });
+            }
             await loadCharacterData(user.userId);
         } else {
             toast({ title: "Ошибка", description: result.message, variant: "destructive" });
@@ -185,13 +194,21 @@ export default function FactionsPage() {
                 )}
 
                 <div className="grid md:grid-cols-2 gap-8 items-start">
-                    {allFactions.map((faction) => {
+                    {allFactions.map((faction, index) => {
                         const reputation = character.factions[faction.id]?.reputation || 0;
                         const isJoinable = !faction.joinRestrictions || !faction.joinRestrictions.includes(character.backstory);
                         const { currentTier, nextTier, progress } = getReputationDetails(reputation, faction.reputationTiers);
 
                         return (
-                            <Card key={faction.id} className={cn("flex flex-col", !isJoinable && "opacity-60")}>
+                            <Card 
+                                key={faction.id} 
+                                className={cn(
+                                    "flex flex-col transition-all duration-300 hover:shadow-xl hover:scale-[1.02] hover:border-primary/50",
+                                    !isJoinable && "opacity-60",
+                                    "animate-in fade-in slide-in-from-bottom-4"
+                                )}
+                                style={{ animationDelay: `${index * 100}ms` }}
+                            >
                                 <CardHeader>
                                     <div className="flex justify-between items-start">
                                         <div className="flex items-center gap-3">
@@ -199,7 +216,7 @@ export default function FactionsPage() {
                                                 <TooltipProvider>
                                                     <Tooltip>
                                                         <TooltipTrigger>
-                                                            <Lock className="w-5 h-5 text-destructive" />
+                                                            <Lock className="w-5 h-5 text-destructive animate-pulse" />
                                                         </TooltipTrigger>
                                                         <TooltipContent>
                                                             <p>Ваша предыстория не позволяет присоединиться к этой фракции.</p>
@@ -209,78 +226,215 @@ export default function FactionsPage() {
                                             )}
                                             <CardTitle className="font-headline text-primary">{faction.name}</CardTitle>
                                         </div>
-                                        <Badge variant="outline" className="font-mono text-sm">{reputation} rep</Badge>
+                                        <Badge variant="outline" className="font-mono text-sm bg-primary/10">{reputation} rep</Badge>
                                     </div>
-                                    <CardDescription>{faction.description}</CardDescription>
+                                    <CardDescription className="text-base">{faction.description}</CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-4 flex-1 flex flex-col">
-                                    <div className="space-y-2">
+                                    <div className="space-y-2 p-3 rounded-lg bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20">
                                         <div className="flex justify-between text-sm font-medium">
-                                            <span className="text-primary">{currentTier.title}</span>
-                                            {nextTier && <span className="text-muted-foreground">След. ранг: {nextTier.title} ({nextTier.level} rep)</span>}
+                                            <span className="text-primary flex items-center gap-2">
+                                                <Star className="h-4 w-4 fill-primary" />
+                                                {currentTier.title}
+                                            </span>
+                                            {nextTier && <span className="text-muted-foreground text-xs">След: {nextTier.title}</span>}
                                         </div>
-                                        <Progress value={progress} />
-                                        <p className="text-xs text-muted-foreground">
-                                            {reputation} / {nextTier ? nextTier.level : currentTier.level} репутации
-                                        </p>
+                                        <Progress value={progress} className="h-2 bg-primary/10" />
+                                        <div className="flex justify-between text-xs">
+                                            <span className="text-muted-foreground">{reputation} rep</span>
+                                            <span className="text-muted-foreground">{nextTier ? `${nextTier.level} rep` : 'MAX'}</span>
+                                        </div>
                                     </div>
                                     
                                     {isJoinable && (
                                         <>
                                             <Separator />
                                             <div className="space-y-2">
-                                                <p className="text-sm font-medium">Быстрое пожертвование</p>
+                                                <p className="text-sm font-medium flex items-center gap-2">
+                                                    <Coins className="h-4 w-4 text-amber-500" />
+                                                    Быстрое пожертвование
+                                                </p>
                                                 <div className="flex gap-2">
                                                     <Button 
                                                         size="sm" 
                                                         variant="outline"
                                                         onClick={() => handleDonation(faction.id, 50)}
                                                         disabled={isDonating || (character.inventory.find(i => i.id === 'gold')?.quantity || 0) < 50}
-                                                        className="flex-1"
+                                                        className="flex-1 hover:bg-primary/10 hover:border-primary transition-all"
                                                     >
-                                                        +5 rep (50g)
+                                                        {isDonating ? <Loader2 className="animate-spin h-4 w-4" /> : "+5 rep (50g)"}
                                                     </Button>
                                                     <Button 
                                                         size="sm" 
                                                         variant="outline"
                                                         onClick={() => handleDonation(faction.id, 100)}
                                                         disabled={isDonating || (character.inventory.find(i => i.id === 'gold')?.quantity || 0) < 100}
-                                                        className="flex-1"
+                                                        className="flex-1 hover:bg-primary/10 hover:border-primary transition-all"
                                                     >
-                                                        +10 rep (100g)
+                                                        {isDonating ? <Loader2 className="animate-spin h-4 w-4" /> : "+10 rep (100g)"}
                                                     </Button>
                                                 </div>
                                             </div>
                                         </>
                                     )}
                                     
-                                    <Accordion type="single" collapsible className="w-full">
-                                    <AccordionItem value="item-1">
-                                        <AccordionTrigger>Ранги и награды</AccordionTrigger>
-                                        <AccordionContent>
-                                            <div className="space-y-3">
-                                                {faction.reputationTiers.map((tier) => {
-                                                    const isUnlocked = reputation >= tier.level;
-                                                    return (
-                                                    <div key={tier.level} className={cn("p-3 rounded-lg border", isUnlocked ? "border-primary/30 bg-primary/10" : "border-dashed")}>
-                                                        <h4 className={cn("font-bold", isUnlocked ? "text-primary" : "text-muted-foreground")}>{tier.title} <span className="text-xs font-normal">({tier.level} rep)</span></h4>
-                                                        <div className="mt-2 space-y-2 pl-4 border-l ml-2">
-                                                        {tier.rewards.map((reward) => (
-                                                            <div key={reward.id} className={cn("flex items-start gap-3 text-sm", !isUnlocked && "opacity-50")}>
-                                                                <Icon name={reward.icon} className="h-4 w-4 mt-1 shrink-0" />
-                                                                <div>
-                                                                    <p className="font-semibold">{reward.name}</p>
-                                                                    <p className="text-xs text-muted-foreground">{reward.description}</p>
+                                    <Accordion type="multiple" className="w-full">
+                                    {/* Passive Bonuses Section */}
+                                    {faction.passiveBonuses && faction.passiveBonuses.length > 0 && (
+                                        <AccordionItem value="bonuses" className="border-none">
+                                            <AccordionTrigger className="hover:no-underline hover:text-primary transition-colors">
+                                                <span className="flex items-center gap-2">
+                                                    <Zap className="h-4 w-4" />
+                                                    Пассивные бонусы
+                                                </span>
+                                            </AccordionTrigger>
+                                            <AccordionContent>
+                                                <div className="space-y-2 mt-2">
+                                                    {faction.passiveBonuses.map((bonus, idx) => {
+                                                        const isUnlocked = reputation >= bonus.requiredRank;
+                                                        return (
+                                                            <div 
+                                                                key={idx}
+                                                                className={cn(
+                                                                    "p-3 rounded-lg border transition-all",
+                                                                    isUnlocked ? "border-green-500/40 bg-green-500/10" : "border-dashed opacity-60"
+                                                                )}
+                                                            >
+                                                                <div className="flex items-start justify-between gap-3">
+                                                                    <div className="flex-1">
+                                                                        <div className="flex items-center gap-2 mb-1">
+                                                                            {isUnlocked && <Gift className="h-4 w-4 text-green-500" />}
+                                                                            <h5 className="font-semibold text-sm">{bonus.name}</h5>
+                                                                            {bonus.value && <Badge variant="outline" className="text-xs">+{bonus.value}%</Badge>}
+                                                                        </div>
+                                                                        <p className="text-xs text-muted-foreground">{bonus.description}</p>
+                                                                    </div>
+                                                                    <Badge variant={isUnlocked ? "default" : "outline"} className="text-xs shrink-0">
+                                                                        {bonus.requiredRank} rep
+                                                                    </Badge>
                                                                 </div>
                                                             </div>
-                                                        ))}
+                                                        );
+                                                    })}
+                                                </div>
+                                            </AccordionContent>
+                                        </AccordionItem>
+                                    )}
+                                    
+                                    <AccordionItem value="item-1" className="border-none">
+                                        <AccordionTrigger className="hover:no-underline hover:text-primary transition-colors">
+                                            <span className="flex items-center gap-2">
+                                                <Shield className="h-4 w-4" />
+                                                Ранги и награды
+                                            </span>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                            <div className="space-y-3 mt-2">
+                                                {faction.reputationTiers.map((tier, tierIndex) => {
+                                                    const isUnlocked = reputation >= tier.level;
+                                                    const isCurrent = currentTier.level === tier.level;
+                                                    return (
+                                                    <div 
+                                                        key={tier.level} 
+                                                        className={cn(
+                                                            "p-4 rounded-lg border transition-all duration-300",
+                                                            isUnlocked && "border-primary/40 bg-gradient-to-r from-primary/15 to-primary/5 shadow-sm",
+                                                            !isUnlocked && "border-dashed border-muted-foreground/30",
+                                                            isCurrent && "ring-2 ring-primary/50"
+                                                        )}
+                                                    >
+                                                        <div className="flex items-center justify-between mb-3">
+                                                            <h4 className={cn(
+                                                                "font-bold text-base flex items-center gap-2",
+                                                                isUnlocked ? "text-primary" : "text-muted-foreground"
+                                                            )}>
+                                                                {isUnlocked && <Star className="h-4 w-4 fill-primary" />}
+                                                                {tier.title}
+                                                            </h4>
+                                                            <Badge variant={isUnlocked ? "default" : "outline"} className="text-xs">
+                                                                {tier.level} rep
+                                                            </Badge>
                                                         </div>
+                                                        {tier.rewards.length > 0 && (
+                                                            <div className="space-y-2 pl-4 border-l-2 border-primary/30 ml-1">
+                                                                {tier.rewards.map((reward) => (
+                                                                    <div 
+                                                                        key={reward.id} 
+                                                                        className={cn(
+                                                                            "flex items-start gap-3 text-sm transition-all",
+                                                                            !isUnlocked && "opacity-40"
+                                                                        )}
+                                                                    >
+                                                                        <Icon name={reward.icon} className={cn(
+                                                                            "h-5 w-5 mt-0.5 shrink-0",
+                                                                            isUnlocked && "text-primary"
+                                                                        )} />
+                                                                        <div className="flex-1">
+                                                                            <p className="font-semibold">{reward.name}</p>
+                                                                            <p className="text-xs text-muted-foreground mt-0.5">{reward.description}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                     )
                                                 })}
                                             </div>
                                         </AccordionContent>
                                     </AccordionItem>
+                                    
+                                    {/* Faction Shop Section */}
+                                    {faction.shopItems && faction.shopItems.length > 0 && (
+                                        <AccordionItem value="shop" className="border-none">
+                                            <AccordionTrigger className="hover:no-underline hover:text-primary transition-colors">
+                                                <span className="flex items-center gap-2">
+                                                    <ShoppingBag className="h-4 w-4" />
+                                                    Магазин фракции
+                                                </span>
+                                            </AccordionTrigger>
+                                            <AccordionContent>
+                                                <div className="space-y-2 mt-2">
+                                                    <p className="text-xs text-muted-foreground mb-3">
+                                                        Эксклюзивные товары доступны членам фракции. Цены зависят от вашего ранга.
+                                                    </p>
+                                                    {faction.shopItems.map((shopItem, idx) => {
+                                                        const canPurchase = reputation >= shopItem.requiredRank;
+                                                        const discount = shopItem.priceModifier ? Math.round((1 - shopItem.priceModifier) * 100) : 0;
+                                                        return (
+                                                            <div 
+                                                                key={idx}
+                                                                className={cn(
+                                                                    "p-3 rounded-lg border transition-all",
+                                                                    canPurchase ? "border-blue-500/40 bg-blue-500/10" : "border-dashed opacity-60"
+                                                                )}
+                                                            >
+                                                                <div className="flex items-start justify-between gap-3">
+                                                                    <div className="flex-1">
+                                                                        <div className="flex items-center gap-2 mb-1">
+                                                                            {canPurchase && <ShoppingBag className="h-4 w-4 text-blue-500" />}
+                                                                            <h5 className="font-semibold text-sm">{shopItem.itemId}</h5>
+                                                                            {discount > 0 && (
+                                                                                <Badge variant="outline" className="text-xs bg-green-500/10 text-green-600">
+                                                                                    -{discount}%
+                                                                                </Badge>
+                                                                            )}
+                                                                        </div>
+                                                                        <p className="text-xs text-muted-foreground">
+                                                                            {canPurchase ? 'Доступно для покупки' : 'Требуется выше ранг'}
+                                                                        </p>
+                                                                    </div>
+                                                                    <Badge variant={canPurchase ? "default" : "outline"} className="text-xs shrink-0">
+                                                                        {shopItem.requiredRank} rep
+                                                                    </Badge>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </AccordionContent>
+                                        </AccordionItem>
+                                    )}
                                     </Accordion>
 
                                 </CardContent>

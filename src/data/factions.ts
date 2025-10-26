@@ -20,7 +20,17 @@ export const allFactions: FactionInfo[] = [
             { level: 500, title: "Предвестник", rewards: [
                  { type: 'title', id: 'title_harbinger', name: "Титул Предвестника", description: "Ваше имя будут помнить веками.", icon: 'Crown' }
             ]},
-        ]
+        ],
+        passiveBonuses: [
+            { type: 'discount', name: 'Скидка кузнецов', description: 'Скидка 10% на все услуги кузнецов Скайрима', value: 10, requiredRank: 50 },
+            { type: 'ability', name: 'Боевой клич', description: 'Способность вдохновлять союзников в бою (+5% урона спутникам)', requiredRank: 150 },
+            { type: 'access', name: 'Небесная кузница', description: 'Доступ к легендарной Небесной кузнице для создания уникального оружия', requiredRank: 150 },
+        ],
+        shopItems: [
+            { itemId: 'weapon_steel_sword', requiredRank: 0, priceModifier: 0.9 },
+            { itemId: 'armor_steel_helmet', requiredRank: 50, priceModifier: 0.85 },
+            { itemId: 'weapon_skyforge_sword', requiredRank: 150, priceModifier: 1.0 },
+        ],
     },
     { 
         id: "college_of_winterhold", 
@@ -40,7 +50,17 @@ export const allFactions: FactionInfo[] = [
             { level: 500, title: "Архимаг", rewards: [
                 { type: 'title', id: 'title_archmage', name: "Титул Архимага", description: "Вы становитесь главой Коллегии.", icon: 'GraduationCap' }
             ]},
-        ]
+        ],
+        passiveBonuses: [
+            { type: 'discount', name: 'Скидка на заклинания', description: 'Скидка 15% на все томы заклинаний в Коллегии', value: 15, requiredRank: 50 },
+            { type: 'ability', name: 'Магическая регенерация', description: 'Магия восстанавливается на 10% быстрее', requiredRank: 150 },
+            { type: 'access', name: 'Аркане', description: 'Доступ к запретной библиотеке Аркане с редкими заклинаниями', requiredRank: 300 },
+        ],
+        shopItems: [
+            { itemId: 'potion_mana_minor', requiredRank: 0, priceModifier: 0.8 },
+            { itemId: 'tome_oakflesh', requiredRank: 50, priceModifier: 0.7 },
+            { itemId: 'tome_fireball', requiredRank: 150, priceModifier: 0.75 },
+        ],
     },
     { 
         id: "thieves_guild", 
@@ -61,7 +81,17 @@ export const allFactions: FactionInfo[] = [
             { level: 500, title: "Мастер Гильдии", rewards: [
                  { type: 'title', id: 'title_guildmaster', name: "Титул Мастера Гильдии", description: "Вся теневая сеть Рифтена в вашем распоряжении.", icon: 'KeyRound' }
             ]},
-        ]
+        ],
+        passiveBonuses: [
+            { type: 'discount', name: 'Черный рынок', description: 'Скидка 20% на все услуги ограды и контрабандистов', value: 20, requiredRank: 50 },
+            { type: 'ability', name: 'Незаметность', description: 'Шанс избежать обнаружения при кражах увеличен на 15%', requiredRank: 150 },
+            { type: 'access', name: 'Теневая сеть', description: 'Доступ к сети информаторов по всему Скайриму для получения редких заданий', requiredRank: 300 },
+        ],
+        shopItems: [
+            { itemId: 'misc_lockpicks', requiredRank: 0, priceModifier: 0.5 },
+            { itemId: 'armor_thieves_hood', requiredRank: 50, priceModifier: 0.7 },
+            { itemId: 'potion_invisibility', requiredRank: 150, priceModifier: 0.8 },
+        ],
     },
     { 
         id: "dark_brotherhood", 
@@ -82,6 +112,16 @@ export const allFactions: FactionInfo[] = [
             { level: 500, title: "Слышащий", rewards: [
                 { type: 'title', id: 'title_listener', name: "Титул Слышащего", description: "Вы - единственный, кто слышит голос Матери Ночи.", icon: 'Ear' }
             ]},
-        ]
+        ],
+        passiveBonuses: [
+            { type: 'discount', name: 'Контракты убийц', description: 'Получение дополнительной награды за выполнение контрактов (+25% золота)', value: 25, requiredRank: 50 },
+            { type: 'ability', name: 'Смертельный удар', description: 'Критический урон кинжалами увеличен на 15%', requiredRank: 150 },
+            { type: 'access', name: 'Святилище', description: 'Доступ к Темному Святилищу с уникальными заданиями и оборудованием', requiredRank: 150 },
+        ],
+        shopItems: [
+            { itemId: 'item_poison_deadly', requiredRank: 50, priceModifier: 0.6 },
+            { itemId: 'weapon_dagger_elven', requiredRank: 150, priceModifier: 0.75 },
+            { itemId: 'armor_shrouded_hood', requiredRank: 300, priceModifier: 0.8 },
+        ],
     },
 ];
