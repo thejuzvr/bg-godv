@@ -21,18 +21,36 @@ export function getRedis(): Redis {
     connectTimeout,
     retryStrategy(times) {
       // exponential backoff up to 30s
-      return Math.min(30000, retryBase * Math.max(1, times));
+      const delay = Math.min(30000, retryBase * Math.max(1, times));
+      console.log(`[Redis] Retry ${times}, waiting ${delay}ms`);
+      return delay;
     },
     reconnectOnError(err) {
       const msg = err?.message || '';
       // Reconnect on transient errors
-      return msg.includes('READONLY') || msg.includes('ECONNRESET') || msg.includes('ETIMEDOUT');
+      if (msg.includes('READONLY')) {
+        console.error('[Redis] ERROR: Redis is in READONLY mode. Cannot write. Check Redis configuration.');
+        return false; // Don't reconnect on READONLY - it won't help
+      }
+      return msg.includes('ECONNRESET') || msg.includes('ETIMEDOUT');
     },
     tls: useSsl ? { rejectUnauthorized } as any : undefined,
   });
 
   client.on('error', (err) => {
-    console.error('[Redis] Client error:', err);
+    const msg = err?.message || '';
+    if (msg.includes('READONLY')) {
+      console.error('[Redis] CRITICAL: Redis is in READ-ONLY mode!');
+      console.error('[Redis] Solution 1: Use local Redis: REDIS_URL=redis://localhost:6379');
+      console.error('[Redis] Solution 2: Disable BullMQ: FEATURE_BULLMQ=false');
+      console.error('[Redis] Solution 3: Fix Redis server config to allow writes');
+    } else {
+      console.error('[Redis] Client error:', err);
+    }
+  });
+  
+  client.on('ready', () => {
+    console.log('[Redis] Connected successfully to', url.replace(/:[^:]*@/, ':****@'));
   });
 
   return client;

@@ -319,7 +319,6 @@ export default function DataManagerPage() {
                       <TableHead>Имя</TableHead>
                       <TableHead>Уровень</TableHead>
                       <TableHead>Раса</TableHead>
-                      <TableHead>Класс</TableHead>
                       <TableHead>Последнее обновление</TableHead>
                       <TableHead className="text-right">Действия</TableHead>
                     </TableRow>
@@ -330,7 +329,6 @@ export default function DataManagerPage() {
                         <TableCell className="font-medium">{char.name}</TableCell>
                         <TableCell>{char.level}</TableCell>
                         <TableCell>{char.race}</TableCell>
-                        <TableCell>{char.class}</TableCell>
                         <TableCell>
                           {new Date(char.lastUpdatedAt).toLocaleString('ru-RU')}
                         </TableCell>

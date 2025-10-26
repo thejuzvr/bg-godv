@@ -101,7 +101,10 @@ npm run db:studio
 
 После запуска доступен по адресу: https://local.drizzle.studio
 
-**Важно:** Страница автоматически определяет, запущен ли Drizzle Studio, и показывает статус.
+**Важно:** 
+- Drizzle Studio использует специальный домен `local.drizzle.studio`
+- Откройте его в браузере ПОСЛЕ запуска команды
+- Порт по умолчанию: 4983
 
 ### 5. Test Utils (`/admin/test-utils`)
 

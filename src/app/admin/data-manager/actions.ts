@@ -17,7 +17,6 @@ export interface AdminCharacterView {
   name: string;
   level: number;
   race: string;
-  class: string;
   lastUpdatedAt: number;
 }
 
@@ -31,9 +30,18 @@ export async function fetchAllUsers(): Promise<{ success: boolean; users?: Admin
       createdAt: users.createdAt,
     }).from(users).orderBy(desc(users.createdAt));
 
+    // Преобразуем Date объекты в numbers для сериализации через Server Actions
+    const usersWithNumbers = allUsers.map(user => ({
+      id: user.id,
+      email: user.email,
+      isAdmin: user.isAdmin,
+      lastLogin: user.lastLogin ? new Date(user.lastLogin).getTime() : undefined,
+      createdAt: new Date(user.createdAt).getTime(),
+    }));
+
     return { 
       success: true, 
-      users: allUsers as AdminUserView[]
+      users: usersWithNumbers as AdminUserView[]
     };
   } catch (error: any) {
     console.error("Error fetching all users:", error);
@@ -48,13 +56,21 @@ export async function fetchAllCharacters(): Promise<{ success: boolean; characte
       name: characters.name,
       level: characters.level,
       race: characters.race,
-      class: characters.class,
       lastUpdatedAt: characters.lastUpdatedAt,
     }).from(characters).orderBy(desc(characters.lastUpdatedAt));
 
+    // Преобразуем bigint в number для сериализации через Server Actions
+    const charactersWithNumbers = allCharacters.map(char => ({
+      id: char.id,
+      name: char.name,
+      level: char.level,
+      race: char.race,
+      lastUpdatedAt: Number(char.lastUpdatedAt),
+    }));
+
     return { 
       success: true, 
-      characters: allCharacters as AdminCharacterView[]
+      characters: charactersWithNumbers as AdminCharacterView[]
     };
   } catch (error: any) {
     console.error("Error fetching all characters:", error);

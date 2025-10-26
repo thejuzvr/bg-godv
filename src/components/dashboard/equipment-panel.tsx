@@ -39,12 +39,12 @@ export const EquipmentPanel = ({ character }: { character: Character }) => {
         return itemId ? character.inventory.find(i => i.id === itemId) : null;
     };
 
-    const totalArmor = 5 + Object.entries(character.equippedItems)
+    const totalArmor = 5 + (character.equippedItems ? Object.entries(character.equippedItems)
         .filter(([slot, itemId]) => ['head', 'torso', 'legs', 'hands', 'feet'].includes(slot as EquipmentSlot) && itemId)
         .reduce((sum, [, itemId]) => {
             const item = character.inventory.find(i => i.id === itemId);
             return sum + (item?.armor || 0);
-        }, 0);
+        }, 0) : 0);
 
     const equippedWeapon = getEquippedItem('weapon');
     const totalAttack = equippedWeapon?.damage || 1; // Base unarmed damage

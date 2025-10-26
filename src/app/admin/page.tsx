@@ -27,11 +27,18 @@ export default function AdminDashboard() {
     const loadStats = async () => {
       if (!loading && user?.isAdmin) {
         setIsLoading(true);
-        const result = await fetchAdminStats();
-        if (result.success && result.stats) {
-          setStats(result.stats);
+        try {
+          const result = await fetchAdminStats();
+          if (result.success && result.stats) {
+            setStats(result.stats);
+          } else {
+            console.error('Failed to load stats:', result.error);
+          }
+        } catch (error) {
+          console.error('Error loading stats:', error);
+        } finally {
+          setIsLoading(false);
         }
-        setIsLoading(false);
       }
     };
 
@@ -187,7 +194,7 @@ export default function AdminDashboard() {
                     <div>
                       <p className="font-medium">{char.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        Уровень {char.level} • {char.race} {char.class}
+                        Уровень {char.level} • {char.race}
                       </p>
                     </div>
                     <div className="text-right">
@@ -202,9 +209,26 @@ export default function AdminDashboard() {
           </Card>
         </>
       ) : (
-        <div className="text-center py-12 text-muted-foreground">
-          Не удалось загрузить статистику
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-amber-500">⚠️ Не удалось загрузить статистику</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-muted-foreground">
+              Возможные причины:
+            </p>
+            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-2">
+              <li>Проблемы с подключением к базе данных</li>
+              <li>Redis в режиме read-only (проверьте логи)</li>
+              <li>Недостаточно прав доступа</li>
+            </ul>
+            <div className="pt-4">
+              <Button onClick={() => window.location.reload()} variant="outline">
+                Перезагрузить страницу
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Quick Actions */}

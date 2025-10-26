@@ -300,7 +300,7 @@ export default function ProfilePage() {
                                 <CardTitle className="font-headline">Навыки</CardTitle>
                             </CardHeader>
                             <CardContent className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                {Object.entries(character.skills).map(([name, value]) => (
+                                {character.skills && Object.entries(character.skills).map(([name, value]) => (
                                     <div key={name} className="rounded-md border p-3">
                                         <div className="flex items-center justify-between text-sm">
                                             <span className="capitalize">{name}</span>

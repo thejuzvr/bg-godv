@@ -42,12 +42,21 @@ export interface ButtonProps
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp: any = asChild ? Slot : m.button
+    if (asChild) {
+      return (
+        <Slot
+          className={cn(buttonVariants({ variant, size, className }))}
+          ref={ref}
+          {...props}
+        />
+      )
+    }
+    
     return (
-      <Comp
+      <m.button
         className={cn(buttonVariants({ variant, size, className }))}
-        whileHover={asChild ? undefined : { scale: 1.02 }}
-        whileTap={asChild ? undefined : { scale: 0.98 }}
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
         ref={ref}
         {...props}
       />

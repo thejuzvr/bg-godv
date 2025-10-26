@@ -433,6 +433,7 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
     // Computes armor class gained from equipped armor pieces.
     // Rule: every 5 points of armor on gear gives +1 to armor class.
     const computeEquipmentArmorClass = (char: Character): number => {
+        if (!char.equippedItems) return 0;
         const equippedArmorSum = Object.entries(char.equippedItems)
             .filter(([slot]) => ['head', 'torso', 'legs', 'hands', 'feet'].includes(slot as any))
             .reduce((sum, [, itemId]) => {

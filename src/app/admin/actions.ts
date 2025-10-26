@@ -175,7 +175,6 @@ export interface AdminStats {
     name: string;
     level: number;
     race: string;
-    class: string;
     createdAt: number;
   }>;
 }
@@ -190,9 +189,11 @@ export async function fetchAdminStats(): Promise<{ success: boolean; stats?: Adm
     const totalUsers = totalUsersResult[0]?.count || 0;
 
     // Active users (logged in last 7 days)
+    // users.lastLogin is a timestamp(Date) column → compare with Date, not number
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const sevenDaysAgoDate = new Date(sevenDaysAgo);
     const activeUsersResult = await db.select({ count: sql<number>`count(*)::int` }).from(users)
-      .where(gte(users.lastLogin, sevenDaysAgo));
+      .where(gte(users.lastLogin, sevenDaysAgoDate));
     const activeUsers = activeUsersResult[0]?.count || 0;
 
     // Total characters
@@ -246,7 +247,6 @@ export async function fetchAdminStats(): Promise<{ success: boolean; stats?: Adm
       name: charactersTable.name,
       level: charactersTable.level,
       race: charactersTable.race,
-      class: charactersTable.class,
       createdAt: charactersTable.createdAt,
     }).from(charactersTable).orderBy(desc(charactersTable.createdAt)).limit(10);
 
@@ -262,7 +262,13 @@ export async function fetchAdminStats(): Promise<{ success: boolean; stats?: Adm
       totalEvents,
       totalDeaths,
       totalCombats,
-      recentCharacters: recentChars,
+      recentCharacters: recentChars.map(char => ({
+        name: char.name,
+        level: char.level,
+        race: char.race,
+        // Явное преобразование bigint в number для сериализации через Server Actions
+        createdAt: Number(char.createdAt)
+      })),
     };
 
     return { success: true, stats };
