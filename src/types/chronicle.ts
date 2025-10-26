@@ -11,6 +11,7 @@ export type ChronicleEntryType =
   | 'discovery_dungeon'
   | 'achievement'
   | 'divine_message'
+  | 'faction_rank'
   | 'system';
 
 export interface ChronicleEntry {
