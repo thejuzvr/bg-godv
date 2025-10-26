@@ -190,6 +190,7 @@ export interface ActiveAction {
     // Optional context for different action types
     destinationId?: string;
     questId?: string;
+    questTaskId?: string; // For multi-step quests
     sovngardeQuestId?: string;
 }
 

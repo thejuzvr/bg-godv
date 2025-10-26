@@ -371,6 +371,15 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
     let enemy = updatedChar.combat.enemy;
     const baseEnemyDef = gameData.enemies.find(e => e.id === updatedChar.combat!.enemyId);
     
+    // Safety check: if enemy definition not found, end combat
+    if (!baseEnemyDef) {
+        console.error(`[Combat] Enemy definition not found for ID: ${updatedChar.combat.enemyId}`);
+        updatedChar.status = 'idle';
+        updatedChar.combat = null;
+        logMessages.push('Противник исчез в тумане войны. Бой окончен.');
+        return updatedChar;
+    }
+    
     // Initialize combat tracking on first round
     if (!updatedChar.combat.characterHealthStart) {
         updatedChar.combat.characterHealthStart = updatedChar.stats.health.current;
@@ -527,7 +536,7 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
     if (!updatedChar.combat) return updatedChar;
     
     updatedChar.combat.initiative = { hero: heroInitiative, enemy: enemyInitiative, acting: heroActsFirst ? 'hero' : 'enemy' };
-    logMessages.push(`Инициатива — Герой: ${heroInitiative}, ${enemy.name}: ${enemyInitiative}. Первый ход: ${heroActsFirst ? 'герой' : enemy.name}.`);
+    logMessages.push(`Инициатива — ${character.name}: ${heroInitiative}, ${enemy.name}: ${enemyInitiative}. Первый ход: ${heroActsFirst ? character.name : enemy.name}.`);
 
     // Advantage state snapshot
     const heroAdv = getHeroAdvantage();
@@ -572,7 +581,7 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             }
             const healAmount = healingPotion.effect?.amount || 30;
             updatedChar.stats.health.current = Math.min(updatedChar.stats.health.max, updatedChar.stats.health.current + healAmount);
-            logMessages.push(`⚗️ Критическое состояние! Герой быстро выпивает ${healingPotion.name}, восстанавливая ${healAmount} здоровья.`);
+            logMessages.push(`⚗️ Критическое состояние! ${updatedChar.name} быстро выпивает ${healingPotion.name}, восстанавливая ${healAmount} здоровья.`);
             
             // Update combat enemy state before returning.
             if (updatedChar.combat) {
@@ -823,10 +832,10 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
         } else if (enemyRoll === 1) {
             logMessages.push(`🎲 Критический провал! ${enemy.name} спотыкается и падает, не нанося урона.`);
         } else if (enemySuccess) {
-            let damageTaken = Math.max(1, (baseEnemyDef!.damage + (baseEnemyDef?.damageBonus || 0)));
+            let damageTaken = Math.max(1, (baseEnemyDef.damage + (baseEnemyDef.damageBonus || 0)));
             if (defendApplies) {
                 damageTaken = Math.floor(damageTaken / 2);
-                logMessages.push("Герой успешно блокирует, получив лишь половину урона!");
+                logMessages.push(`${updatedChar.name} успешно блокирует, получив лишь половину урона!`);
             }
             updatedChar.stats.health.current -= damageTaken;
             updatedChar.combat!.totalDamageTaken = (updatedChar.combat!.totalDamageTaken || 0) + damageTaken;
@@ -834,7 +843,7 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             // Attempt to infect on successful hit
             updatedChar = tryApplyInfection(updatedChar, baseEnemyDef, logMessages);
         } else {
-            logMessages.push("Герой ловко уворачивается от атаки!");
+            logMessages.push(`${updatedChar.name} ловко уворачивается от атаки!`);
         }
         return updatedChar;
     };
@@ -972,12 +981,19 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
                     let completed = 0;
                     for (const t of data.tasks) if (t.status === 'completed') completed++;
                     
-                    // Find and complete the first uncompleted combat task
-                    const combatTask = data.tasks.find((t: any) => t.type === 'combat' && t.status !== 'completed');
-                    if (combatTask) {
-                        await setTaskStatus(combatTask.id, 'completed', 100);
+                    // Find and complete the CURRENT uncompleted task (must be in order by idx)
+                    const sortedTasks = data.tasks.sort((a: any, b: any) => a.idx - b.idx);
+                    const currentTask = sortedTasks.find((t: any) => t.status !== 'completed');
+                    
+                    // Only complete combat task if it's the CURRENT task (respecting order)
+                    if (currentTask && currentTask.type === 'combat') {
+                        await setTaskStatus(currentTask.id, 'completed', 100);
                         completed += 1;
-                        logMessages.push('[adventure] ✅ Этап квеста выполнен: Победить врага.');
+                        logMessages.push(`[adventure] ✅ Этап квеста выполнен: ${currentTask.title}.`);
+                    } else if (currentTask) {
+                        // Combat happened but current task is not combat - this shouldn't happen
+                        // but if it does, log a warning
+                        console.warn(`Quest ${questId}: Combat completed but current task is ${currentTask.type}, not combat`);
                     }
                     
                     const progressPct = Math.floor((completed / total) * 100);
@@ -1232,8 +1248,19 @@ const progressGeneratedQuestAction: Action = {
         if (step.type === 'travel') {
             const dest = gameData.locations.find(l => l.id === (step.target || '')) || gameData.locations.find(l => l.id === 'bleak_falls_barrow');
             if (!dest) return { character: updatedChar, logMessage: "Герой хотел отправиться, но путь не найден." };
+            
+            // Calculate travel duration for quest travel
+            const isDestinationDiscovered = dest.isStartingLocation || updatedChar.visitedLocations.includes(dest.id);
+            const weatherModifiers: Record<Weather, number> = {
+                Clear: 1.0, Cloudy: 1.0, Rain: 1.2, Snow: 1.3, Fog: 1.25
+            };
+            const weatherMod = weatherModifiers[updatedChar.weather] || 1.0;
+            const discoveryMod = isDestinationDiscovered ? 1.0 : 2.5;
+            const baseDuration = step.duration ?? ((dest.travelDistance || 100) * 1000);
+            const travelDuration = Math.floor(baseDuration * weatherMod * discoveryMod);
+            
             updatedChar.status = 'busy';
-            updatedChar.currentAction = { type: 'travel', name: `Путешествие в ${dest.name}`, description: step.description, startedAt: Date.now(), duration: step.duration ?? (2 * 60 * 1000), destinationId: dest.id } as any;
+            updatedChar.currentAction = { type: 'travel', name: `Путешествие в ${dest.name}`, description: step.description, startedAt: Date.now(), duration: travelDuration, destinationId: dest.id } as any;
             (updatedChar.currentAction as any).originalDuration = (updatedChar.currentAction as any).duration;
             updatedChar = addToActionHistory(updatedChar, 'travel');
             return { character: updatedChar, logMessage: `Герой отправляется: ${step.description}` };
@@ -1359,7 +1386,8 @@ const takeQuestAction: Action = {
                 
                 // Continue working on the active quest
                 // Check current task to determine what action to take
-                const tasks = activeQuestData.tasks || [];
+                // Tasks must be completed in order (by idx)
+                const tasks = (activeQuestData.tasks || []).sort((a: any, b: any) => a.idx - b.idx);
                 const currentTask = tasks.find((t: any) => t.status !== 'completed');
                 
                 let initialLog = `Пора продолжить задание "${activeQuest.title}". Героя ничто не остановит!`;
@@ -1367,6 +1395,21 @@ const takeQuestAction: Action = {
                 // If there's a current task, act based on its type
                 if (currentTask) {
                     const taskType = currentTask.type;
+                    
+                    // Check if current task is travel but we're already at destination
+                    if (taskType === 'travel' && currentTask.data?.location === updatedChar.location) {
+                        // Auto-complete travel task if already at destination
+                        try {
+                            const { setTaskStatus } = svc as any;
+                            await setTaskStatus(currentTask.id, 'completed', 100);
+                            return { 
+                                character: updatedChar, 
+                                logMessage: `${initialLog} Герой уже находится в нужном месте. Этап "${currentTask.title}" выполнен автоматически.` 
+                            };
+                        } catch (err) {
+                            console.error('Failed to auto-complete travel task:', err);
+                        }
+                    }
                     
                     if (taskType === 'combat') {
                         // Combat task - initiate battle
@@ -2043,13 +2086,37 @@ const travelAction: Action = {
             return { character, logMessage: "Герою некуда идти. Он остался на месте."};
         }
 
+        // Calculate travel duration based on discovery status and weather
+        const currentLocation = locations.find(l => l.id === character.location);
+        const isDestinationDiscovered = destination.isStartingLocation || updatedChar.visitedLocations.includes(destination.id);
+        
+        // Base duration from travelDistance (1 unit = ~1 second)
+        const baseDuration = (destination.travelDistance || 100) * 1000; // Convert to milliseconds
+        
+        // Apply weather modifier
+        const weatherModifiers: Record<Weather, number> = {
+            Clear: 1.0,
+            Cloudy: 1.0,
+            Rain: 1.2,
+            Snow: 1.3,
+            Fog: 1.25
+        };
+        const weatherMod = weatherModifiers[updatedChar.weather] || 1.0;
+        
+        // Apply discovery modifier - undiscovered locations take 2.5x longer
+        const discoveryMod = isDestinationDiscovered ? 1.0 : 2.5;
+        
+        const travelDuration = Math.floor(baseDuration * weatherMod * discoveryMod);
+        
         updatedChar.status = 'busy';
         updatedChar.currentAction = { 
             type: 'travel', 
             name: `Путешествие в ${destination.name}`, 
-            description: `Герой идет пешком в ${destination.name}.`, 
+            description: isDestinationDiscovered 
+                ? `Герой идет пешком в ${destination.name}.`
+                : `Герой прокладывает путь через неизведанные земли к ${destination.name}.`, 
             startedAt: Date.now(), 
-            duration: 3 * 60 * 1000, 
+            duration: travelDuration, 
             destinationId: destination.id 
         };
         updatedChar.currentAction.originalDuration = updatedChar.currentAction.duration;
@@ -2404,13 +2471,23 @@ const travelToCryptAction: Action = {
         const currentLocationName = locations.find(l => l.id === character.location)?.name || 'неизвестного места';
         const destination = locations.find(l => l.id === 'forgotten_crypt')!;
 
+        // Calculate travel duration for dragon claw quest
+        const isDestinationDiscovered = destination.isStartingLocation || updatedChar.visitedLocations.includes(destination.id);
+        const weatherModifiers: Record<Weather, number> = {
+            Clear: 1.0, Cloudy: 1.0, Rain: 1.2, Snow: 1.3, Fog: 1.25
+        };
+        const weatherMod = weatherModifiers[updatedChar.weather] || 1.0;
+        const discoveryMod = isDestinationDiscovered ? 1.0 : 2.5;
+        const baseDuration = (destination.travelDistance || 120) * 1000;
+        const travelDuration = Math.floor(baseDuration * weatherMod * discoveryMod);
+        
         updatedChar.status = 'busy';
         updatedChar.currentAction = { 
             type: 'travel', 
             name: `Путешествие в ${destination.name}`, 
             description: `Древний коготь зовет героя. Он отправляется к ${destination.name}.`, 
             startedAt: Date.now(), 
-            duration: 3 * 60 * 1000, 
+            duration: travelDuration, 
             destinationId: destination.id 
         };
         updatedChar.currentAction.originalDuration = updatedChar.currentAction.duration;

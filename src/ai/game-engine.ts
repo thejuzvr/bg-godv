@@ -17,15 +17,15 @@ type OutboxChronicle = OutboxChronicleEntry;
 export { buildWorldState };
 
 // Humorous victory line generator
-export async function getHumorousVictoryLine(enemyName: string, location?: string): Promise<string> {
+export async function getHumorousVictoryLine(enemyName: string, heroName: string, location?: string): Promise<string> {
     const loc = location ? ` в ${location}` : '';
     const jokes = [
-        `Герой так вежливо победил ${enemyName}, что тот извинился${loc}.`,
-        `Победа над ${enemyName} добыта честно: один удар, два шага стиля${loc}.`,
-        `${enemyName} попытался позвать маму... но получил урок истории${loc}.`,
-        `Герой победил ${enemyName} и забил поиск: 'как отстирать кровь'${loc}.`,
-        `${enemyName} понял, что сегодня — не его день. Герой — понял это раньше${loc}.`,
-        `Легенды говорят, что ${enemyName} исчез. На деле — его спрятала тень славы нашего героя${loc}.`,
+        `${heroName} так вежливо победил ${enemyName}, что тот извинился${loc}.`,
+        `Победа ${heroName} над ${enemyName} добыта честно: один удар, два шага стиля${loc}.`,
+        `${enemyName} попытался позвать маму... но получил урок истории от ${heroName}${loc}.`,
+        `${heroName} победил ${enemyName} и забил в поиск: 'как отстирать кровь'${loc}.`,
+        `${enemyName} понял, что сегодня — не его день. ${heroName} понял это раньше${loc}.`,
+        `Легенды говорят, что ${enemyName} исчез. На деле — его спрятала тень славы ${heroName}${loc}.`,
     ];
     return jokes[Math.floor(Math.random() * jokes.length)];
 }
@@ -250,7 +250,7 @@ async function processLevelUp(character: Character): Promise<{ char: Character, 
         updatedChar.points.attribute += 1;
         updatedChar.points.skill += 5;
 
-        logMessages += ` Уровень повышен! Герой теперь ${updatedChar.level} уровня! Получено 1 очко характеристик и 5 очков навыков.`;
+        logMessages += ` Уровень повышен! ${updatedChar.name} теперь ${updatedChar.level} уровня! Получено 1 очко характеристик и 5 очков навыков.`;
         // Chronicle entry will be emitted by worker
         const chronicle: OutboxChronicle = { type: 'level_up', title: `Достигнут ${updatedChar.level} уровень`, description: `Опыт, полученный в боях, сделал ${updatedChar.name} сильнее.`, icon: 'Award', data: { level: updatedChar.level } };
         // Return at the end
@@ -430,6 +430,13 @@ async function processActionCompletion(character: Character, gameData: GameData,
         case 'travel':
             updatedChar.location = currentAction.destinationId!;
             const destination = gameData.locations.find(l=>l.id === currentAction.destinationId);
+            
+            // Add location to visited locations if not already there
+            if (destination && !updatedChar.visitedLocations.includes(destination.id)) {
+                updatedChar.visitedLocations = [...updatedChar.visitedLocations, destination.id];
+                logs.push(`${updatedChar.name} впервые посетил ${destination.name}! Локация открыта на карте.`);
+            }
+            
             // Arrival log dedupe: protect against concurrent workers/rapid replays
             try {
                 const arrivalKey = `arrival_log:${destination?.id || 'unknown'}`;
@@ -474,7 +481,7 @@ async function processActionCompletion(character: Character, gameData: GameData,
                 updatedChar.visitedLocations.push(destination.id);
                 updatedChar.mood = Math.min(100, updatedChar.mood + 10);
                 updatedChar.xp.current += 100;
-                chronicles.push({ type: 'discovery_city', title: `Открыт город: ${destination.name}`, description: `Герой впервые добрался до одного из великих городов Скайрима. Получено 100 опыта.`, icon: 'MapPin' });
+                chronicles.push({ type: 'discovery_city', title: `Открыт город: ${destination.name}`, description: `${updatedChar.name} впервые добрался до одного из великих городов Скайрима. Получено 100 опыта.`, icon: 'MapPin' });
             }
             updatedChar.status = 'idle';
             // Align last action timestamp to completion moment
@@ -778,12 +785,40 @@ function processTravelEvents(character: Character, gameData: GameData): { char: 
         return { char: character, logs };
     }
     
-    const allEvents = gameData.events.filter(event => {
+    // Check if destination is discovered
+    const destinationId = updatedChar.currentAction?.destinationId;
+    const destination = gameData.locations.find(l => l.id === destinationId);
+    const isDestinationDiscovered = destination && (
+        destination.isStartingLocation || 
+        updatedChar.visitedLocations.includes(destination.id)
+    );
+    
+    // Base events from game data
+    const baseEvents = gameData.events.filter(event => {
         if (event.seasons && !event.seasons.includes(updatedChar.season)) {
             return false;
         }
         return true;
     });
+    
+    // Add dangerous travel events for undiscovered locations
+    let allEvents = [...baseEvents];
+    if (!isDestinationDiscovered && destination) {
+        // Import travel encounter events
+        try {
+            const { travelEncounterEvents } = require('@/data/travel-events');
+            // Increase encounter chance based on danger level
+            const dangerMultiplier = destination.dangerLevel ? 1 + (destination.dangerLevel / 100) : 1.2;
+            const modifiedEncounters = travelEncounterEvents.map((e: any) => ({
+                ...e,
+                chance: Math.min(e.chance * dangerMultiplier, 0.6) // Cap at 60%
+            }));
+            allEvents = [...allEvents, ...modifiedEncounters];
+        } catch (err) {
+            // Fallback if module not found
+            console.warn('Travel events module not found, using base events only');
+        }
+    }
 
     // Limit to maximum 1 event per travel tick to prevent spam
     const shuffledEvents = [...allEvents].sort(() => Math.random() - 0.5);
@@ -1591,7 +1626,7 @@ export async function processGameTick(
         updatedChar.mood = Math.min(100, updatedChar.mood + 25);
         updatedChar.sleepUntil = null;
         const wellRestedEffect: ActiveEffect = {
-            id: 'well_rested', name: 'Хороший отдых', description: 'Герой хорошо выспался и полон сил. Не хочет спать снова в ближайшее время.',
+            id: 'well_rested', name: 'Хороший отдых', description: `${updatedChar.name} хорошо выспался и полон сил. Не хочет спать снова в ближайшее время.`,
             icon: 'Bed', type: 'buff', expiresAt: Date.now() + 15 * 60 * 1000,
         };
         updatedChar.effects = updatedChar.effects.filter(e => e.id !== 'well_rested' && e.id !== 'rested');
@@ -1611,7 +1646,7 @@ export async function processGameTick(
         updatedChar.currentAction = { 
             type: 'travel', 
             name: `Путь в ${destinationName}`, 
-            description: `Герой продолжает свое путешествие.`, 
+            description: `${updatedChar.name} продолжает свое путешествие.`, 
             startedAt: Date.now(), 
             duration: updatedChar.pendingTravel.remainingDuration,
             originalDuration: updatedChar.pendingTravel.originalDuration,
@@ -1729,16 +1764,16 @@ export async function processGameTick(
                 if (here && here.type === 'tavern') {
                     // Short rest to change state
                     updatedChar.status = 'busy';
-                    updatedChar.currentAction = { type: 'rest', name: 'Короткий отдых', description: 'Герой собирается с мыслями и восстанавливает силы.', startedAt: nowTs, duration: 30 * 1000 } as any;
-                    adventureLog.push('Герой решил сделать короткий перерыв в таверне.');
+                    updatedChar.currentAction = { type: 'rest', name: 'Короткий отдых', description: `${updatedChar.name} собирается с мыслями и восстанавливает силы.`, startedAt: nowTs, duration: 30 * 1000 } as any;
+                    adventureLog.push(`${updatedChar.name} решил сделать короткий перерыв в таверне.`);
                 } else if (Array.isArray(locations)) {
                     const cities = locations.filter(l => l.type === 'city');
                     if (cities.length > 0) {
                         const candidates = cities.filter((c: any) => c.id !== updatedChar.location);
                         const dest = (candidates.length > 0 ? candidates : cities)[Math.floor(Math.random() * (candidates.length > 0 ? candidates.length : cities.length))];
                         updatedChar.status = 'busy';
-                        updatedChar.currentAction = { type: 'travel', name: `Путешествие в ${dest.name}`, description: 'Пора сменить обстановку и навести движ.', startedAt: nowTs, duration: 90 * 1000, destinationId: dest.id, originalDuration: 90 * 1000 } as any;
-                        adventureLog.push(`Герой решил сменить обстановку и направился в ${dest.name}.`);
+                        updatedChar.currentAction = { type: 'travel', name: `Путешествие в ${dest.name}`, description: `${updatedChar.name} решил сменить обстановку.`, startedAt: nowTs, duration: 90 * 1000, destinationId: dest.id, originalDuration: 90 * 1000 } as any;
+                        adventureLog.push(`${updatedChar.name} решил сменить обстановку и направился в ${dest.name}.`);
                     }
                 }
             } catch {}
@@ -1768,14 +1803,14 @@ export async function processGameTick(
                     // Add a short hero reaction line (context-aware)
                     const inCombat = updatedChar.status === 'in-combat';
                     const reactionsInCombat = [
-                        'Герой кивает, стараясь следовать совету посреди боя.',
-                        'Стиснув зубы, герой пытается воплотить наставление в драке.',
-                        '«Приму к сведению… если выживу», — бормочет герой.'
+                        `${updatedChar.name} кивает, стараясь следовать совету посреди боя.`,
+                        `Стиснув зубы, ${updatedChar.name} пытается воплотить наставление в драке.`,
+                        `«Приму к сведению… если выживу», — бормочет ${updatedChar.name}.`
                     ];
                     const reactionsIdle = [
-                        'Герой прислушивается и решает держаться плана.',
-                        '«Принято», — коротко откликается герой.',
-                        'Герой усмехается и готовится действовать.'
+                        `${updatedChar.name} прислушивается и решает держаться плана.`,
+                        `«Принято», — коротко откликается ${updatedChar.name}.`,
+                        `${updatedChar.name} усмехается и готовится действовать.`
                     ];
                     const reaction = (inCombat ? reactionsInCombat : reactionsIdle)[Math.floor(Math.random() * (inCombat ? reactionsInCombat.length : reactionsIdle.length))];
                     adventureLog.push(reaction);

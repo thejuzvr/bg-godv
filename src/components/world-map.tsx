@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { Location, LocationType } from "@/types/location";
-import { Building2, Castle, Tent, TowerControl, LandPlot, Plus, Minus } from "lucide-react";
+import { Building2, Castle, Tent, TowerControl, LandPlot, Plus, Minus, Navigation2 } from "lucide-react";
 import { memo } from "react";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import type { ReactZoomPanPinchRef } from "react-zoom-pan-pinch";
@@ -17,6 +17,7 @@ import type { ReactZoomPanPinchRef } from "react-zoom-pan-pinch";
 type WorldMapProps = {
   currentCity: string;
   locations: Location[];
+  visitedLocations: string[];
   onLocationClick: (locationId: string) => void;
   // Debug controls (optional)
   debugMode?: boolean;
@@ -51,6 +52,7 @@ const LocationIcon = memo(function LocationIcon({ type, className }: { type: Loc
 export function WorldMap({
   currentCity,
   locations,
+  visitedLocations,
   onLocationClick,
   debugMode = false,
   debugMarkers = [],
@@ -122,9 +124,13 @@ export function WorldMap({
         maxScale={3}
         wheel={{ step: 0.12 }}
         doubleClick={{ step: 0.9 }}
-        panning={{ velocityDisabled: false }}
-        limitToBounds={true}
-        centerOnInit={true}
+        panning={{ 
+          velocityDisabled: false,
+          disabled: false
+        }}
+        limitToBounds={false}
+        centerOnInit={false}
+        alignmentAnimation={{ disabled: true }}
       >
         {(api) => {
           const s = (api as any)?.state ?? (api as any)?.transformState ?? { scale: 1, positionX: 0, positionY: 0 };
@@ -162,14 +168,32 @@ export function WorldMap({
               window.removeEventListener('mouseup', handleUp);
             };
           }, [dragging, s.scale]);
-          // Center content when fitScale changes
+          
+          // Center on hero location on initial mount
+          const hasInitialized = useRef(false);
           useEffect(() => {
-            const w = wrapperRef.current?.clientWidth || 0;
-            const h = wrapperRef.current?.clientHeight || 0;
-            const x = (w - MAP_WIDTH * fitScale) / 2;
-            const y = (h - MAP_HEIGHT * fitScale) / 2;
-            if (!Number.isNaN(x) && !Number.isNaN(y)) setTransform(x, y, fitScale, 0);
-          }, [fitScale, setTransform]);
+            if (!hasInitialized.current && fitScale > 0 && currentCity) {
+              const heroLocation = locations.find(l => l.id === currentCity);
+              if (heroLocation) {
+                const w = wrapperRef.current?.clientWidth || 0;
+                const h = wrapperRef.current?.clientHeight || 0;
+                
+                // Calculate hero position in pixels
+                const heroX = (heroLocation.coords.x / 100) * MAP_WIDTH;
+                const heroY = (heroLocation.coords.y / 100) * MAP_HEIGHT;
+                
+                // Center viewport on hero with slight zoom
+                const initialZoom = Math.min(fitScale * 1.5, 1.0); // 1.5x zoom but max 1.0
+                const x = w / 2 - heroX * initialZoom;
+                const y = h / 2 - heroY * initialZoom;
+                
+                if (!Number.isNaN(x) && !Number.isNaN(y)) {
+                  setTransform(x, y, initialZoom, 0);
+                  hasInitialized.current = true;
+                }
+              }
+            }
+          }, [fitScale, setTransform, currentCity, locations]);
 
           return (
           <div ref={wrapperRef} className="relative w-full h-full bg-background overflow-hidden" style={{ touchAction: 'none' }}>
@@ -183,11 +207,31 @@ export function WorldMap({
                 <Plus className="w-4 h-4" />
               </button>
               <button
-                className="px-2 py-1 bg-secondary text-foreground rounded-b-md border-x border-b border-border hover:bg-secondary/80"
+                className="px-2 py-1 bg-secondary text-foreground border-x border-b border-border hover:bg-secondary/80"
                 onClick={() => zoomOut(0.15)}
                 aria-label="Отдалить"
               >
                 <Minus className="w-4 h-4" />
+              </button>
+              <button
+                className="px-2 py-1 bg-accent text-accent-foreground rounded-b-md border-x border-b border-border hover:bg-accent/90"
+                onClick={() => {
+                  const heroLocation = locations.find(l => l.id === currentCity);
+                  if (heroLocation) {
+                    const w = wrapperRef.current?.clientWidth || 0;
+                    const h = wrapperRef.current?.clientHeight || 0;
+                    const heroX = (heroLocation.coords.x / 100) * MAP_WIDTH;
+                    const heroY = (heroLocation.coords.y / 100) * MAP_HEIGHT;
+                    const zoom = s.scale || 1;
+                    const x = w / 2 - heroX * zoom;
+                    const y = h / 2 - heroY * zoom;
+                    setTransform(x, y, zoom, 300, "easeInOut");
+                  }
+                }}
+                aria-label="К герою"
+                title="Центрировать карту на герое"
+              >
+                <Navigation2 className="w-4 h-4" />
               </button>
               {debugMode && (
                 <button
@@ -250,21 +294,30 @@ export function WorldMap({
                 })}
 
                 {/* Markers */}
-                {visibleLocations.map((loc) => (
+                {visibleLocations.map((loc) => {
+                  // Check if location is discovered
+                  const isDiscovered = loc.isStartingLocation || visitedLocations.includes(loc.id) || loc.id === currentCity;
+                  const isUndiscovered = !isDiscovered;
+                  
+                  return (
                   <Tooltip key={loc.id}>
                     <TooltipTrigger asChild>
                       <div
                         tabIndex={0}
                         role="button"
-                        aria-label={`${loc.name}. ${typeLabel[loc.type]}. Нажмите, чтобы открыть.`}
+                        aria-label={`${isUndiscovered ? '???' : loc.name}. ${typeLabel[loc.type]}. Нажмите, чтобы открыть.`}
                         className={cn(
-                          "absolute flex items-center justify-center w-8 h-8 p-1.5 -translate-x-1/2 -translate-y-1/2 transition-transform duration-200 cursor-pointer bg-background/60 backdrop-blur-sm rounded-full border-2 hover:scale-110 hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                          // Danger level border color
-                          loc.dangerLevel !== undefined && loc.dangerLevel >= 70 ? "border-red-500/50" :
-                          loc.dangerLevel !== undefined && loc.dangerLevel >= 40 ? "border-orange-500/50" :
-                          loc.dangerLevel !== undefined && loc.dangerLevel >= 20 ? "border-yellow-500/50" :
-                          loc.dangerLevel !== undefined ? "border-green-500/50" :
-                          "border-primary/30"
+                          "absolute flex items-center justify-center w-10 h-10 -translate-x-1/2 -translate-y-1/2 transition-all duration-200 cursor-pointer rounded-full border-2 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                          // Undiscovered locations - gray circle with solid border
+                          isUndiscovered 
+                            ? "bg-gray-400/90 dark:bg-gray-500/90 border-gray-600 dark:border-gray-400 shadow-lg hover:bg-gray-500/90 dark:hover:bg-gray-400/90" 
+                            : "bg-background/60 backdrop-blur-sm hover:border-accent",
+                          // Danger level border color (only for discovered locations)
+                          !isUndiscovered && loc.dangerLevel !== undefined && loc.dangerLevel >= 70 ? "border-red-500/50" :
+                          !isUndiscovered && loc.dangerLevel !== undefined && loc.dangerLevel >= 40 ? "border-orange-500/50" :
+                          !isUndiscovered && loc.dangerLevel !== undefined && loc.dangerLevel >= 20 ? "border-yellow-500/50" :
+                          !isUndiscovered && loc.dangerLevel !== undefined ? "border-green-500/50" :
+                          !isUndiscovered ? "border-primary/30" : ""
                         )}
                         style={{
                           top: `${loc.coords.y}%`,
@@ -280,23 +333,33 @@ export function WorldMap({
                           }
                         }}
                       >
-                        <LocationIcon
-                          type={loc.type}
-                          className={cn(
-                            "text-primary-foreground drop-shadow-lg",
-                            loc.id === currentCity && "text-accent animate-pulse"
-                          )}
-                        />
+                        {isUndiscovered ? (
+                          <div className="text-gray-900 dark:text-black text-2xl font-black leading-none select-none">?</div>
+                        ) : (
+                          <div className="w-5 h-5">
+                            <LocationIcon
+                              type={loc.type}
+                              className={cn(
+                                "text-primary-foreground drop-shadow-lg w-full h-full",
+                                loc.id === currentCity && "text-accent animate-pulse"
+                              )}
+                            />
+                          </div>
+                        )}
                         {loc.id === currentCity && (
-                          <div className="absolute inset-0 rounded-full ring-2 ring-accent ring-offset-2 ring-offset-background/50" />
+                          <div className="absolute inset-0 rounded-full ring-2 ring-accent ring-offset-2 ring-offset-background/50 pointer-events-none" />
                         )}
                       </div>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p className="font-headline">{loc.name}</p>
-                      <p className="text-xs text-muted-foreground capitalize">{typeLabel[loc.type]}</p>
-                      {/* Danger level indicator for outskirts and dangerous zones */}
-                      {loc.dangerLevel !== undefined && (
+                      <p className="font-headline">{isUndiscovered ? '???' : loc.name}</p>
+                      {isUndiscovered ? (
+                        <p className="text-xs text-muted-foreground">Неизведанная территория</p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground capitalize">{typeLabel[loc.type]}</p>
+                      )}
+                      {/* Danger level indicator for outskirts and dangerous zones (only for discovered) */}
+                      {!isUndiscovered && loc.dangerLevel !== undefined && (
                         <div className="mt-1 text-xs">
                           <span className="text-muted-foreground">Опасность: </span>
                           <span className={
@@ -314,12 +377,13 @@ export function WorldMap({
                           </span>
                         </div>
                       )}
-                      {!loc.dangerLevel && (
+                      {!isUndiscovered && !loc.dangerLevel && (
                         <div className="mt-1 text-xs text-muted-foreground">Безопасная зона</div>
                       )}
                     </TooltipContent>
                   </Tooltip>
-                ))}
+                  );
+                })}
 
                 {/* Debug markers */}
                 {debugMode && (debugMarkers || []).map((m) => (

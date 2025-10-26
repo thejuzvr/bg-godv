@@ -102,7 +102,7 @@ export function QuestProgressPanel({ quest }: QuestProgressPanelProps) {
         {/* Simple quest description */}
         {!isMultiStep && (
           <div className="text-sm text-muted-foreground pt-2 border-t">
-            Герой выполняет задание. Прогресс обновляется автоматически.
+            Задание выполняется. Прогресс обновляется автоматически.
           </div>
         )}
       </CardContent>

@@ -57,7 +57,7 @@ export const SovngardeStatusPanel = ({ character, gameData }: { character: Chara
                     {character.currentAction?.type === 'sovngarde_quest' ? (
                        <ActionProgressPanel character={character} gameData={gameData} />
                     ) : (
-                        <p className="text-sm text-muted-foreground p-3 rounded-lg bg-secondary/50">Герой ищет, чем бы заняться, чтобы скоротать вечность.</p>
+                        <p className="text-sm text-muted-foreground p-3 rounded-lg bg-secondary/50">{character.name} ищет, чем бы заняться, чтобы скоротать вечность.</p>
                     )}
                  </div>
             </CardContent>
@@ -94,7 +94,7 @@ export const SleepingStatusPanel = ({ character }: { character: Character }) => 
                     <Bed className="h-6 w-6 text-secondary-foreground" />
                     <CardTitle className="font-headline text-secondary-foreground">Сон</CardTitle>
                 </div>
-                <CardDescription>Герой крепко спит в таверне, восстанавливая силы.</CardDescription>
+                <CardDescription>{character.name} крепко спит в таверне, восстанавливая силы.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                  <p className="text-muted-foreground text-center">"Тсс... не будите спящего драконорожденного."</p>
