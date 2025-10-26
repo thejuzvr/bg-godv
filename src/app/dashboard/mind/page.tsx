@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { LucideProps } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useGameLoop } from '@/hooks/use-game-loop';
+import { useRealtimeState } from '@/hooks/use-realtime-state';
 import { useAuth } from "@/hooks/use-auth";
 
 import type { Character, Weather } from "@/types/character";
@@ -158,8 +159,17 @@ export default function MindPage() {
     const [gameData, setGameData] = useState<GameData | null>(null);
     const [dataLoading, setDataLoading] = useState(true);
 
-    // Custom hook for the game loop
-    const { character } = useGameLoop(initialCharacter, gameData);
+    // Custom hook for the game loop (for adventure logs)
+    const { character: gameLoopChar } = useGameLoop(initialCharacter, gameData);
+    
+    // Real-time state hook (for instant updates)
+    const { character: realtimeChar, isConnected } = useRealtimeState(initialCharacter, {
+      characterId: user?.userId,
+      realmId: 'global',
+    });
+    
+    // Use real-time character if connected, fallback to game loop
+    const character = isConnected && realtimeChar ? realtimeChar : gameLoopChar;
 
     // Data loading effect
     useEffect(() => {

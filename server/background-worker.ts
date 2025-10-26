@@ -104,13 +104,105 @@ async function processCharacter(character: Character, gameData: GameData): Promi
     // Update last processed timestamp
     await storage.updateCharacterLastProcessed(character.id, Date.now());
     
-    // Publish realtime update (legacy mode) so clients receive WS events without BullMQ
+    // Publish real-time events via Event Bus
     try {
-      const pub = getRedis();
+      const { eventBus } = await import('./events/event-bus');
       const c: any = result.updatedCharacter as any;
+      const realmId = c.realmId || 'global';
+      const characterId = character.id;
+      
+      // Batch all events for this tick
+      const events: Array<{ type: any; payload: any; realmId: string; characterId: string }> = [];
+
+      // Stats update (always send)
+      events.push({
+        type: 'character:stats:updated',
+        payload: {
+          characterId,
+          stats: {
+            health: c.stats.health,
+            magicka: c.stats.magicka,
+            stamina: c.stats.stamina,
+            fatigue: c.stats.fatigue,
+          },
+        },
+        realmId,
+        characterId,
+      });
+
+      // Location change
+      if (character.location !== c.location) {
+        const { gameDataService } = await import('./game-data-service');
+        const location = await gameDataService.getLocationById(c.location);
+        events.push({
+          type: 'character:location:changed',
+          payload: {
+            characterId,
+            oldLocation: character.location,
+            newLocation: c.location,
+            locationName: location?.name || c.location,
+          },
+          realmId,
+          characterId,
+        });
+      }
+
+      // Status change
+      if (character.status !== c.status) {
+        events.push({
+          type: 'character:status:changed',
+          payload: {
+            characterId,
+            oldStatus: character.status,
+            newStatus: c.status,
+          },
+          realmId,
+          characterId,
+        });
+      }
+
+      // Level up
+      if (character.level !== c.level) {
+        events.push({
+          type: 'character:level:up',
+          payload: {
+            characterId,
+            characterName: c.name,
+            oldLevel: character.level,
+            newLevel: c.level,
+            attributePoints: c.points?.attribute || 0,
+            skillPoints: c.points?.skill || 0,
+          },
+          realmId,
+          characterId,
+        });
+      }
+
+      // Power update (if changed significantly)
+      const oldPower = character.interventionPower?.current || 0;
+      const newPower = c.interventionPower?.current || 0;
+      if (Math.abs(newPower - oldPower) > 0) {
+        events.push({
+          type: 'character:power:updated',
+          payload: {
+            characterId,
+            interventionPower: c.interventionPower,
+          },
+          realmId,
+          characterId,
+        });
+      }
+
+      // Batch publish all events
+      if (events.length > 0) {
+        await eventBus.publishBatch(events);
+      }
+
+      // Legacy mode: also publish to ws:tick for backward compatibility
+      const pub = getRedis();
       await pub.publish('ws:tick', JSON.stringify({
-        realmId: c.realmId || 'global',
-        characterId: character.id,
+        realmId,
+        characterId,
         tickAt: Date.now(),
         updatedAt: Date.now(),
         summary: {
@@ -119,7 +211,10 @@ async function processCharacter(character: Character, gameData: GameData): Promi
           hp: c.stats?.health?.current,
         },
       }));
-    } catch {}
+    } catch (error) {
+      console.error('[Background Worker] Error publishing events:', error);
+      // Don't fail the tick if event publishing fails
+    }
 
     // Update tracker with next tick time based on combat status
     const tracker = characterTrackers.get(character.id);

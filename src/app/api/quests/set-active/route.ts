@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { setActiveQuest } from '@/services/questService';
+import { setActiveQuest as setActiveQuestCmd } from '@/../server/commands/quest';
 
 /**
  * POST /api/quests/set-active
@@ -19,10 +19,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Set the quest as active
-    const result = await setActiveQuest(characterId, questId);
+    // Set the quest as active using command handler (with real-time events)
+    const result = await setActiveQuestCmd(characterId, { questId });
 
-    if (!result.ok) {
+    if (!result.success) {
       return new Response(
         JSON.stringify({ ok: false, error: result.error }),
         { status: 400, headers: { 'content-type': 'application/json' } }
@@ -32,8 +32,8 @@ export async function POST(request: NextRequest) {
     return new Response(
       JSON.stringify({
         ok: true,
-        quest: result.quest,
-        message: 'Quest set as active successfully'
+        quest: result.data?.quest,
+        message: result.data?.message || 'Quest set as active successfully'
       }),
       { status: 200, headers: { 'content-type': 'application/json' } }
     );

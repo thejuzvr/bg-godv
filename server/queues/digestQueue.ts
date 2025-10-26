@@ -21,7 +21,8 @@ export const digestQueue = new Queue<DigestJob>('digests', {
 });
 
 export async function enqueueDigest(job: DigestJob) {
-  const jobId = `${job.subscriptionId}:${job.sendAt}`;
+  // BullMQ doesn't allow ':' in custom job IDs, use '-' instead
+  const jobId = `${job.subscriptionId}-${job.sendAt}`;
   return digestQueue.add('digest', job, {
     jobId,
     delay: Math.max(0, job.sendAt - Date.now()),

@@ -26,7 +26,8 @@ export const tickQueue = new Queue<TickJob>('ticks', {
 // BullMQ v5: QueueScheduler no longer required; Queue handles delayed jobs internally
 
 export async function enqueueTick(job: TickJob) {
-  const jobId = `${job.realmId}:${job.characterId}:${job.tickAt}`;
+  // BullMQ doesn't allow ':' in custom job IDs, use '-' instead
+  const jobId = `${job.realmId}-${job.characterId}-${job.tickAt}`;
   return tickQueue.add('tick', job, {
     jobId,
     delay: Math.max(0, job.tickAt - Date.now()),

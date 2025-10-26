@@ -32,14 +32,47 @@ export class EconomyService {
 
   async applyTrade(trade: Trade): Promise<MarketRow> {
     const row = await this.ensureRow(trade.itemId);
+    const oldPrice = Number(row.price);
     const supply = Number(row.supply) + (trade.side === 'sell' ? trade.qty : 0);
     const demand = Number(row.demand) + (trade.side === 'buy' ? trade.qty : 0);
-    const price = nextPrice(Number(row.price), supply, demand);
+    const price = nextPrice(oldPrice, supply, demand);
     const [updated] = await db.update(schema.globalMarket)
       .set({ supply, demand, price, updatedAt: new Date() })
       .where(eq(schema.globalMarket.itemId, trade.itemId))
       .returning();
+    
+    // Publish real-time price update event if price changed significantly (>1%)
+    if (Math.abs(price - oldPrice) / oldPrice > 0.01) {
+      try {
+        const { publishMarketPriceUpdate } = await import('../../server/events/event-bus');
+        // Get item name
+        const item = await this.getItemName(trade.itemId);
+        await publishMarketPriceUpdate(
+          'global',
+          trade.itemId,
+          item || trade.itemId,
+          oldPrice,
+          price,
+          supply,
+          demand
+        );
+      } catch (err) {
+        console.error('[EconomyService] Failed to publish price update:', err);
+        // Don't fail the trade if event publishing fails
+      }
+    }
+    
     return updated as any;
+  }
+  
+  private async getItemName(itemId: string): Promise<string | null> {
+    try {
+      const { gameDataService } = await import('../../server/game-data-service');
+      const item = await gameDataService.getItemById(itemId);
+      return item?.name || null;
+    } catch {
+      return null;
+    }
   }
 
   async listMarket(): Promise<MarketRow[]> {

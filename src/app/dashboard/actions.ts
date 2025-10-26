@@ -5,10 +5,45 @@ import type { Character } from "@/types/character";
 import { allFactions } from "@/data/factions";
 import { addOfflineEvent } from "@/services/offlineEventsService";
 import { getRedis } from "../../../server/redis";
+import { performDivineIntervention } from "../../../server/commands/divine-intervention";
 
 const INTERVENTION_COST = 50;
 
 export async function performIntervention(
+    userId: string, 
+    type: 'bless' | 'punish'
+): Promise<{success: boolean; message: string; character?: Character}> {
+  if (!userId) {
+    return { success: false, message: "Высшие силы не могут найти вашу душу. Попробуйте войти снова." };
+  }
+
+  try {
+    // Use new command handler with real-time events
+    const result = await performDivineIntervention(userId, { type });
+    
+    if (!result.success) {
+      return { success: false, message: result.error || 'Unknown error' };
+    }
+
+    // Log offline event for visibility
+    await addOfflineEvent(userId, {
+      type: 'divine',
+      message: result.data!.actionDescription,
+    } as any);
+
+    return {
+      success: true,
+      message: result.data!.message,
+      character: result.data!.character,
+    };
+  } catch (error: any) {
+    console.error('[performIntervention] Error:', error);
+    return { success: false, message: error.message || "Произошла неведомая ошибка в божественных сферах." };
+  }
+}
+
+// Legacy implementation (kept for reference, can be removed later)
+async function performInterventionLegacy(
     userId: string, 
     type: 'bless' | 'punish'
 ): Promise<{success: boolean; message: string; character?: Character}> {
@@ -208,6 +243,27 @@ export async function performIntervention(
 }
 
 export async function donateToFaction(userId: string, factionId: string, amount: number): Promise<{success: boolean, message: string}> {
+  // Use new command handler with real-time events
+  try {
+    const { donateToFaction: donateCmd } = await import('../../../server/commands/temple-donation');
+    const result = await donateCmd(userId, { factionId, amount });
+    
+    if (!result.success) {
+      return { success: false, message: result.error || 'Unknown error' };
+    }
+
+    return {
+      success: true,
+      message: result.data!.message,
+    };
+  } catch (error: any) {
+    console.error('[donateToFaction] Error:', error);
+    return { success: false, message: error.message || "Транзакция не удалась. Силы небесные в смятении." };
+  }
+}
+
+// Legacy implementation
+async function donateToFactionLegacy(userId: string, factionId: string, amount: number): Promise<{success: boolean, message: string}> {
   if (!userId) {
     return { success: false, message: "Высшие силы не могут найти вашу душу. Попробуйте войти снова." };
   }

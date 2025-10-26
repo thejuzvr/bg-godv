@@ -54,6 +54,34 @@ export async function tradeWithNPC(
   itemId: string,
   quantity: number = 1
 ) {
+  // Use new command handler for real-time events
+  try {
+    const { tradeWithNPC: tradeCommand } = await import('../../server/commands/npc-trade');
+    const result = await tradeCommand(userId, { npcId, action, itemId, quantity });
+    
+    if (!result.success) {
+      return { success: false, error: result.error };
+    }
+    
+    return {
+      success: true,
+      message: result.data!.message,
+      relationshipChange: result.data!.relationshipChange,
+    };
+  } catch (error) {
+    console.error('Error trading with NPC:', error);
+    return { success: false, error: 'Failed to trade' };
+  }
+}
+
+// Legacy implementation (kept for reference)
+async function tradeWithNPCLegacy(
+  userId: string,
+  npcId: string,
+  action: 'buy' | 'sell',
+  itemId: string,
+  quantity: number = 1
+) {
   try {
     const character = await getCharacterById(userId);
     if (!character) {

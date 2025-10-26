@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useGameLoop } from '@/hooks/use-game-loop';
+import { useRealtimeState } from '@/hooks/use-realtime-state';
 import { useAuth } from "@/hooks/use-auth";
 
 import type { Character, Weather } from "@/types/character";
@@ -147,8 +148,35 @@ export default function DashboardPage() {
     } catch {}
   }, []);
   
-  // Custom hook for the game loop
-  const { character, adventureLog, combatLog, setCharacter, refreshOfflineEvents } = useGameLoop(initialCharacter, gameData, { adventureLimit: logLimit });
+  // Custom hook for the game loop (for adventure logs)
+  const { character: gameLoopChar, adventureLog, combatLog, setCharacter: setGameLoopChar, refreshOfflineEvents } = useGameLoop(initialCharacter, gameData, { adventureLimit: logLimit });
+  
+  // Real-time state hook (for instant updates)
+  const { character: realtimeChar, isConnected } = useRealtimeState(initialCharacter, {
+    characterId: user?.userId,
+    realmId: 'global',
+    onEvent: (type, data) => {
+      // Show toast notifications for important events
+      if (type === 'character:level:up') {
+        toast({ title: '🎉 Level Up!', description: `Новый уровень: ${data.newLevel}` });
+      }
+      if (type === 'divine:intervention:performed') {
+        toast({ title: '⚡ Божественное вмешательство', description: data.effect });
+      }
+      if (type === 'companion:hired') {
+        toast({ title: '🤝 Компаньон нанят', description: `${data.companionName} присоединился к отряду` });
+      }
+      if (type === 'quest:completed') {
+        toast({ title: '🎯 Квест выполнен', description: data.questTitle });
+      }
+    },
+  });
+  
+  // Use real-time character if connected, fallback to game loop
+  const character = isConnected && realtimeChar ? realtimeChar : gameLoopChar;
+  const setCharacter = (char: Character | null) => {
+    setGameLoopChar(char);
+  };
 
   const processedAdventureLog = useMemo(() => {
     if (!adventureLog) return [];
@@ -378,6 +406,23 @@ export default function DashboardPage() {
 
   return (
     <div className="w-full grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-8 p-4 md:p-8">
+        {/* Real-time Connection Indicator */}
+        <div className="lg:col-span-4 -mb-4">
+          <div className="flex items-center justify-end gap-2 text-xs">
+            {isConnected ? (
+              <span className="flex items-center gap-1 text-green-500">
+                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
+                Real-time подключён
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-muted-foreground">
+                <span className="h-2 w-2 rounded-full bg-gray-400"></span>
+                Polling mode
+              </span>
+            )}
+          </div>
+        </div>
+        
         {/* Left Column */}
         <div className="lg:col-span-1 flex flex-col gap-4 md:gap-8">
             <Card>

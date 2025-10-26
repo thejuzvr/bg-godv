@@ -13,6 +13,31 @@ export async function hireCompanionAction(
   userId: string,
   templateId: string
 ) {
+  // Use new command handler with real-time events
+  try {
+    const { hireCompanion } = await import('../../server/commands/companion');
+    const result = await hireCompanion(userId, { templateId });
+    
+    if (!result.success) {
+      return { success: false, error: result.error };
+    }
+    
+    return {
+      success: true,
+      message: result.data!.message,
+      companion: result.data!.companion,
+    };
+  } catch (error) {
+    console.error('Error hiring companion:', error);
+    return { success: false, error: 'Не удалось нанять компаньона' };
+  }
+}
+
+// Legacy implementation (kept for reference)
+async function hireCompanionActionLegacy(
+  userId: string,
+  templateId: string
+) {
   try {
     const character = await getCharacterById(userId);
     if (!character) {
@@ -95,16 +120,18 @@ export async function activateCompanionAction(
   userId: string,
   companionId: string
 ) {
+  // Use new command handler with real-time events
   try {
-    const result = await companionService.setActiveCompanion(userId, companionId);
+    const { activateCompanion } = await import('../../server/commands/companion');
+    const result = await activateCompanion(userId, { companionId });
     
-    if (!result.ok) {
-      return { success: false, error: result.error || 'Не удалось активировать компаньона' };
+    if (!result.success) {
+      return { success: false, error: result.error };
     }
 
     return {
       success: true,
-      message: 'Компаньон активирован и готов к приключениям!',
+      message: result.data!.message,
     };
   } catch (error) {
     console.error('Error activating companion:', error);
@@ -116,16 +143,18 @@ export async function activateCompanionAction(
  * Деактивировать компаньона (убрать из активных)
  */
 export async function deactivateCompanionAction(userId: string) {
+  // Use new command handler with real-time events
   try {
-    const result = await companionService.setActiveCompanion(userId, null);
+    const { deactivateCompanion } = await import('../../server/commands/companion');
+    const result = await deactivateCompanion(userId);
     
-    if (!result.ok) {
-      return { success: false, error: result.error || 'Не удалось деактивировать компаньона' };
+    if (!result.success) {
+      return { success: false, error: result.error };
     }
 
     return {
       success: true,
-      message: 'Компаньон отправлен в лагерь',
+      message: result.data!.message,
     };
   } catch (error) {
     console.error('Error deactivating companion:', error);
@@ -140,29 +169,18 @@ export async function dismissCompanionAction(
   userId: string,
   companionId: string
 ) {
+  // Use new command handler with real-time events
   try {
-    // Получаем имя компаньона перед удалением
-    const companions = await companionService.listCharacterCompanions(userId);
-    const companion = companions.find((c: any) => c.id === companionId);
+    const { dismissCompanion } = await import('../../server/commands/companion');
+    const result = await dismissCompanion(userId, { companionId });
     
-    const result = await companionService.dismissCompanion(userId, companionId);
-    
-    if (!result.ok) {
-      return { success: false, error: result.error || 'Не удалось уволить компаньона' };
-    }
-
-    // Записываем событие в журнал
-    if (companion) {
-      await companionLeftEvent(
-        userId,
-        companion.name,
-        'уволен игроком'
-      );
+    if (!result.success) {
+      return { success: false, error: result.error };
     }
 
     return {
       success: true,
-      message: 'Компаньон покинул отряд',
+      message: result.data!.message,
     };
   } catch (error) {
     console.error('Error dismissing companion:', error);

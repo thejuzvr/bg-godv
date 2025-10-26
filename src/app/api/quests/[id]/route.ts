@@ -1,5 +1,10 @@
 import { NextRequest } from 'next/server';
-import { completeQuest, getQuest, updateQuestProgress, setTaskStatus } from '@/services/questService';
+import { getQuest } from '@/services/questService';
+import { 
+  completeQuest as completeQuestCmd,
+  updateQuestProgress as updateQuestProgressCmd,
+  setTaskStatus as setTaskStatusCmd,
+} from '@/../server/commands/quest';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -12,18 +17,44 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const body = await req.json();
+    const { characterId } = body;
+    
+    if (!characterId) {
+      return new Response(JSON.stringify({ ok: false, error: 'characterId required' }), { status: 400 });
+    }
+
+    // Update progress
     if (typeof body.progress === 'number') {
-      const row = await updateQuestProgress(id, body.progress);
-      return new Response(JSON.stringify({ ok: true, quest: row }), { headers: { 'content-type': 'application/json' } });
+      const result = await updateQuestProgressCmd(characterId, { questId: id, progress: body.progress });
+      if (!result.success) {
+        return new Response(JSON.stringify({ ok: false, error: result.error }), { status: 400 });
+      }
+      return new Response(JSON.stringify({ ok: true, quest: result.data?.quest }), { headers: { 'content-type': 'application/json' } });
     }
+    
+    // Complete quest
     if (body.complete === true) {
-      const row = await completeQuest(id);
-      return new Response(JSON.stringify({ ok: true, quest: row }), { headers: { 'content-type': 'application/json' } });
+      const result = await completeQuestCmd(characterId, { questId: id });
+      if (!result.success) {
+        return new Response(JSON.stringify({ ok: false, error: result.error }), { status: 400 });
+      }
+      return new Response(JSON.stringify({ ok: true, quest: result.data?.quest }), { headers: { 'content-type': 'application/json' } });
     }
+    
+    // Set task status
     if (body.taskId && body.status) {
-      const task = await setTaskStatus(String(body.taskId), String(body.status) as any, typeof body.taskProgress === 'number' ? body.taskProgress : undefined);
-      return new Response(JSON.stringify({ ok: true, task }), { headers: { 'content-type': 'application/json' } });
+      const result = await setTaskStatusCmd(characterId, { 
+        questId: id, 
+        taskId: String(body.taskId), 
+        status: String(body.status) as any,
+        progress: typeof body.taskProgress === 'number' ? body.taskProgress : undefined,
+      });
+      if (!result.success) {
+        return new Response(JSON.stringify({ ok: false, error: result.error }), { status: 400 });
+      }
+      return new Response(JSON.stringify({ ok: true, task: result.data?.task }), { headers: { 'content-type': 'application/json' } });
     }
+    
     return new Response(JSON.stringify({ ok: false, error: 'No valid operation' }), { status: 400 });
   } catch (e: any) {
     return new Response(JSON.stringify({ ok: false, error: e?.message || 'Invalid payload' }), { status: 400 });
