@@ -1,0 +1,91 @@
+{
+	"common": {
+		"loading": "Loading...",
+		"error": "Error",
+		"success": "Success",
+		"save": "Save",
+		"cancel": "Cancel",
+		"delete": "Delete",
+		"edit": "Edit",
+		"close": "Close",
+		"confirm": "Confirm"
+	},
+	"auth": {
+		"login": "Login",
+		"register": "Register",
+		"logout": "Logout",
+		"email": "Email",
+		"password": "Password",
+		"confirmPassword": "Confirm Password"
+	},
+	"character": {
+		"name": "Name",
+		"level": "Level",
+		"health": "Health",
+		"magicka": "Magicka",
+		"stamina": "Stamina",
+		"strength": "Strength",
+		"agility": "Agility",
+		"intelligence": "Intelligence",
+		"endurance": "Endurance",
+		"race": "Race",
+		"gender": "Gender",
+		"backstory": "Backstory",
+		"location": "Location",
+		"status": "Status"
+	},
+	"inventory": {
+		"title": "Inventory",
+		"weight": "Weight",
+		"equipped": "Equipped",
+		"equip": "Equip",
+		"unequip": "Unequip",
+		"use": "Use",
+		"drop": "Drop"
+	},
+	"quests": {
+		"title": "Quests",
+		"active": "Active",
+		"completed": "Completed",
+		"inProgress": "In Progress",
+		"available": "Available",
+		"rewards": "Rewards",
+		"progress": "Progress"
+	},
+	"map": {
+		"title": "Map",
+		"travelTo": "Travel to",
+		"fastTravel": "Fast Travel",
+		"discovered": "Discovered",
+		"undiscovered": "Undiscovered"
+	},
+	"market": {
+		"title": "Market",
+		"buy": "Buy",
+		"sell": "Sell",
+		"price": "Price",
+		"quantity": "Quantity"
+	},
+	"crafting": {
+		"title": "Crafting",
+		"recipes": "Recipes",
+		"materials": "Materials",
+		"craft": "Craft",
+		"unlock": "Unlock"
+	},
+	"factions": {
+		"title": "Factions",
+		"reputation": "Reputation",
+		"rank": "Rank",
+		"donate": "Donate"
+	},
+	"dashboard": {
+		"title": "Dashboard",
+		"adventureLog": "Adventure Log",
+		"quickActions": "Quick Actions",
+		"stats": "Stats",
+		"intervention": "Divine Intervention",
+		"bless": "Bless",
+		"punish": "Punish"
+	}
+}

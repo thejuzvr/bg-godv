@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Elder Scrolls inspired styles */
+@layer base {
+	body {
+		@apply bg-base-100 text-base-content;
+	}
+}
+
+@layer components {
+	.skyrim-card {
+		@apply card bg-base-200 shadow-xl border border-skyrim-gold/20;
+	}
+
+	.skyrim-btn {
+		@apply btn bg-skyrim-blue hover:bg-skyrim-blue/80 text-white border-skyrim-gold/30;
+	}
+
+	.skyrim-badge {
+		@apply badge bg-skyrim-gold text-skyrim-dark;
+	}
+}
