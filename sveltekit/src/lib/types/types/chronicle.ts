@@ -1,0 +1,27 @@
+
+'use server';
+
+export type ChronicleEntryType =
+  | 'level_up'
+  | 'quest_complete'
+  | 'unique_kill'
+  | 'death'
+  | 'discovery_city'
+  | 'combat_victory'
+  | 'discovery_dungeon'
+  | 'achievement'
+  | 'divine_message'
+  | 'faction_rank'
+  | 'system';
+
+export interface ChronicleEntry {
+    id: string; // Firestore doc ID
+    timestamp: number;
+    type: ChronicleEntryType;
+    title: string;
+    description: string;
+    icon: string; // Lucide icon name
+    data?: Record<string, any>; // e.g., { level: 5 }, { questId: '...' }
+}
+
+export type OutboxChronicleEntry = Omit<ChronicleEntry, 'id' | 'timestamp'>;
