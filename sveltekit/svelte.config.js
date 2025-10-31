@@ -12,7 +12,8 @@ const config = {
 			$components: './src/lib/components',
 			$stores: './src/lib/stores',
 			$types: './src/lib/types',
-			$data: './src/lib/data'
+			$data: './src/lib/data',
+			'@': './src/lib'
 		}
 	}
 };
