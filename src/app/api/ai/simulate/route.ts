@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/services/authService';
 import { fetchGameData, type GameData } from '@/services/gameDataService';

@@ -473,3 +473,5 @@ export const initialItems: BaseItem[] = [
   { id: 'weapon_greatsword_ebony', name: 'Эбонитовый двуручный меч', weight: 22, type: 'weapon', rarity: 'legendary', damage: 24, equipmentSlot: 'weapon' },
   { id: 'ingredient_frost_salts', name: 'Ледяные соли', weight: 0.1, type: 'misc', rarity: 'uncommon' },
 ];
+
+export const allItems = initialItems;

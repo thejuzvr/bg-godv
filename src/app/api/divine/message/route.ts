@@ -1,4 +1,5 @@
-'use server';
+
+export const dynamic = 'force-dynamic';
 
 import { NextRequest } from 'next/server';
 import { sendDivineMessage } from '@/../server/commands/divine-intervention';

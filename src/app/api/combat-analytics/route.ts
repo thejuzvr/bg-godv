@@ -1,4 +1,5 @@
-'use server';
+
+export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { computeCombatSummary, getCombatAnalyticsFiltered, getCombatStatsSummary, getRecentCombatAnalytics } from '@/services/combatAnalyticsService';
