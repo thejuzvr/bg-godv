@@ -3,7 +3,7 @@ import type { Character } from '@/types/character';
 import * as storage from '../storage';
 import { allFactions } from '@/data/factions';
 import { allDivinities } from '@/data/divinities';
-import { allItems } from '@/data/items';
+import { allItems } from '../../src/data/items';
 import type { ReputationTier } from '@/types/faction';
 import { 
   executeCommand, 

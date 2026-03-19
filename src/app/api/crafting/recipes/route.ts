@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextRequest } from 'next/server';
 import { listRecipes } from '@/services/craftingService';
 import * as storage from '../../../../../server/storage';

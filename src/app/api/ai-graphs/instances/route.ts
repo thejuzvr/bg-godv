@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextRequest } from 'next/server';
 import { db } from '@/../server/storage';
 import * as schema from '@/../shared/schema';
