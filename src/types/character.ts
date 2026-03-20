@@ -3,6 +3,7 @@
 import type { ActiveSovngardeQuest } from "./sovngarde";
 import type { Rarity } from "./item";
 import type { DivinityId } from "./divinity";
+import type { PersonalityProfile } from "@/ai/personality";
 
 export type CharacterStatus = 'idle' | 'in-combat' | 'dead' | 'sleeping' | 'busy' | 'exploring';
 
@@ -296,6 +297,8 @@ export interface Character {
     currentStep: number;
     rewards: { gold?: number; xp?: number; items?: string[] };
   } | null;
+  // Dynamic Behavior
+  personality?: PersonalityProfile;
   // Companions
   companions?: string[]; // IDs of recruited companions (stored separately)
   activeCompanion?: string | null; // ID of currently active companion

@@ -9,7 +9,7 @@ import type { LootEntry } from "@/types/enemy";
 import { selectActionSimple } from './policy';
 import { USE_CONFIG_PRIORITY } from './config/constants';
 import { CATEGORY_BASE_MULTIPLIERS } from './config/constants';
-import { initPersonality, getPersonalityModifier } from '@/ai/personality';
+import { initPersonality, getPersonalityModifier, evolvePersonality } from '@/ai/personality';
 import { generateGoals, selectTopGoal } from '@/ai/goal-manager';
 import { computeActionScores } from './priority-engine';
 import { getActiveModifiers } from './modifiers';
@@ -3653,6 +3653,52 @@ async function determineNextAction(character: Character, gameData: GameData): Pr
         const recentTypeCount = countRecentActions(character, a.type, 8);
         const repMod = computeRepetitionModifier(recentTypeCount);
         const socialBoost = a.type === 'social' ? (1 + Math.max(0, socialNudge)) : 1.0;
+
+        // --- DYNAMIC BEHAVIOR MODIFIERS ---
+        let dynamicMod = 1.0;
+        const fatigueRatio = character.stats.fatigue.current / Math.max(1, character.stats.fatigue.max);
+
+        // 1. Tired or Sad: favor rest, social, and misc; avoid combat and quests
+        if (character.mood < 40 || fatigueRatio > 0.6) {
+            if (['rest', 'social', 'misc', 'explore'].includes(a.type)) {
+                dynamicMod *= 1.5;
+            }
+            if (['quest', 'combat'].includes(a.type)) {
+                dynamicMod *= 0.5;
+            }
+        }
+        // 2. Happy and Energetic: favor quests and social
+        else if (character.mood > 70 && fatigueRatio < 0.3) {
+            if (['quest', 'combat', 'social'].includes(a.type)) {
+                dynamicMod *= 1.3;
+            }
+        }
+
+        // --- LOGICAL SEQUENCING (Anti-Overlay) ---
+        // If character just arrived at location, prioritize local activity (quest/social)
+        const arrivalTime = character.lastLocationArrival || 0;
+        const timeSinceArrival = Date.now() - arrivalTime;
+        const justArrived = timeSinceArrival < 5 * 60 * 1000;
+
+        if (justArrived && !character.hasCompletedLocationActivity) {
+            if (a.type === 'quest' || a.type === 'social') {
+                dynamicMod *= 2.0;
+            }
+            if (a.type === 'travel') {
+                dynamicMod *= 0.2; // Don't leave immediately
+            }
+        }
+
+        // If character just finished an activity at location, discourage immediate re-questing
+        if (character.hasCompletedLocationActivity) {
+            if (a.type === 'quest') {
+                dynamicMod *= 0.2; // Stronger discouragement
+            }
+            if (['rest', 'social', 'travel'].includes(a.type)) {
+                dynamicMod *= 1.8; // Favor moving on or relaxing
+            }
+        }
+
         // Explicit Trader weighting: boost actions that look like trading/selling/buying when greed is high
         let tradeBoost = 1.0;
         try {
@@ -3660,7 +3706,20 @@ async function determineNextAction(character: Character, gameData: GameData): Pr
             const isTradeLike = /торгов|продать|купить|market|sell|buy/i.test(a.name);
             if (isTradeLike) tradeBoost = 1 + (greed / 100) * 0.4; // up to +40%
         } catch {}
-        return { action: a, weight: base * pMod * gMod * catMod * repMod * reactionMultiplier * socialBoost * tradeBoost };
+
+        // --- SEED-BASED RANDOMIZATION ---
+        // Use character ID and current timestamp (rounded to 10s) to create a deterministic but shifting seed
+        // This prevents the "memoryless" random from picking the same action too many times in a row
+        // while allowing variety over time.
+        const timeSeed = Math.floor(Date.now() / 10000);
+        const charSeed = character.id.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+        const combinedSeed = (timeSeed + charSeed) % 100;
+        const seedBonus = 1.0 + (combinedSeed / 5000); // Small 0-2% deterministic nudge
+
+        return {
+            action: a,
+            weight: base * pMod * gMod * catMod * repMod * reactionMultiplier * socialBoost * tradeBoost * dynamicMod * seedBonus
+        };
     }).filter(w => w.weight > 0.1);
 
     if (weighted.length === 0) return wanderAction;
@@ -3705,6 +3764,10 @@ export async function processCharacterTurn(
         finalChar.divineSuggestion = null;
         finalChar.divineDestinationId = null;
     }
+
+    // Evolve personality based on the action performed
+    const currentPersonality = finalChar.personality || initPersonality(finalChar.backstory);
+    finalChar.personality = evolvePersonality(currentPersonality, nextAction.type);
 
     // Add action to history for fatigue system (circular buffer) and persist fatigue
     if (!finalChar.actionHistory) {
