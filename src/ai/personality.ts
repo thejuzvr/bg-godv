@@ -72,8 +72,8 @@ export function getPersonalityModifier(profile: PersonalityProfile, actionType: 
   const traitKey = mapActionTypeToTrait(actionType);
   if (!traitKey) return 1.0;
   const v = clamp(profile.traits[traitKey], 0, 100);
-  // Map 0..100 to 0.8..1.4 (stable, less spiky)
-  return 0.8 + (v / 100) * 0.6;
+  // Map 0..100 to 0.7..1.5 (more influence from traits)
+  return 0.7 + (v / 100) * 0.8;
 }
 
 function mapBackstoryToArchetype(backstory: string): Archetype {

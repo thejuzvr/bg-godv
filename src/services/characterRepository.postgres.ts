@@ -55,6 +55,7 @@ export class PostgresCharacterRepository implements CharacterRepository {
       skills: charData.skills || { oneHanded: 15, block: 15, heavyArmor: 15, lightArmor: 15, persuasion: 15, alchemy: 15 },
       points: charData.points || { attribute: 0, skill: 0 },
       unlockedPerks: charData.unlockedPerks || [],
+      personality: charData.personality || undefined,
       preferences: { autoAssignPoints: false, autoEquip: true, ...charData.preferences },
       analytics: charData.analytics || { killedEnemies: {}, diceRolls: { d20: Array(21).fill(0) }, encounteredEnemies: [], epicPhrases: [] },
       actionHistory: charData.actionHistory || [],
