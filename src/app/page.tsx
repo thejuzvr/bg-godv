@@ -1,4 +1,3 @@
-
 "use client";
 
 import Image from "next/image";
@@ -8,11 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { DragonIcon } from "@/components/icons";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { register, login } from "@/services/authService";
 import { Loader2, Sparkles } from "lucide-react";
+import { PageContainer } from "@/components/layout/page-container";
 
 export default function AuthenticationPage() {
   const router = useRouter();
@@ -21,23 +22,6 @@ export default function AuthenticationPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-
-  const handleAuthError = (error: any) => {
-    let title = "Ошибка аутентификации";
-    let description = "Произошла неизвестная ошибка.";
-
-    console.error("Auth Error:", error);
-
-    if (error.message) {
-      description = error.message;
-    }
-    
-    toast({
-      variant: "destructive",
-      title: title,
-      description: description,
-    });
-  }
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -108,7 +92,7 @@ export default function AuthenticationPage() {
   };
 
   return (
-    <div className="w-full h-screen lg:grid lg:grid-cols-2">
+    <div className="w-full h-screen lg:grid lg:grid-cols-2 font-body">
       <div className="hidden bg-background lg:block relative">
         <Image
           src="/images/login/login-bg2.jpg"
@@ -137,10 +121,10 @@ export default function AuthenticationPage() {
           </blockquote>
         </div>
       </div>
-      <div className="flex items-center justify-center py-12 px-4 h-full">
-        <div className="mx-auto grid w-[350px] gap-6">
+      <PageContainer className="flex items-center justify-center h-full">
+        <div className="mx-auto grid w-full max-w-[400px] gap-6 md:gap-8">
           <div className="grid gap-2 text-center">
-            <h1 className="text-3xl font-bold font-headline">Добро пожаловать, странник</h1>
+            <h1 className="text-3xl md:text-4xl font-headline">Добро пожаловать, странник</h1>
             <p className="text-balance text-muted-foreground font-body">
               Ваша эпическая история начинается здесь. Войдите или создайте своего героя.
             </p>
@@ -153,93 +137,102 @@ export default function AuthenticationPage() {
               </Link>
             </div>
           </div>
-          <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">Вход</TabsTrigger>
-              <TabsTrigger value="register">Регистрация</TabsTrigger>
-            </TabsList>
-            <TabsContent value="login">
-              <form onSubmit={handleLogin}>
-                <div className="grid gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="email">Электронная почта</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="miraak@solstheim.com"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      disabled={isLoading}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <div className="flex items-center">
-                      <Label htmlFor="password">Пароль</Label>
+          <Card className="border-border/40 bg-card/60 backdrop-blur-sm">
+            <CardContent className="pt-6">
+              <Tabs defaultValue="login" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 mb-6">
+                  <TabsTrigger value="login">Вход</TabsTrigger>
+                  <TabsTrigger value="register">Регистрация</TabsTrigger>
+                </TabsList>
+                <TabsContent value="login" className="font-body">
+                  <form onSubmit={handleLogin}>
+                    <div className="grid gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="email" className="font-body">Электронная почта</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          placeholder="miraak@solstheim.com"
+                          required
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          disabled={isLoading}
+                          className="font-body"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <div className="flex items-center">
+                          <Label htmlFor="password" className="font-body">Пароль</Label>
+                        </div>
+                        <Input
+                          id="password"
+                          type="password"
+                          required
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          disabled={isLoading}
+                          className="font-body"
+                        />
+                      </div>
+                      <Button type="submit" className="w-full font-bold font-headline mt-2" disabled={isLoading}>
+                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Войти
+                      </Button>
                     </div>
-                    <Input 
-                      id="password" 
-                      type="password" 
-                      required 
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      disabled={isLoading}
-                    />
-                  </div>
-                  <Button type="submit" className="w-full font-bold" disabled={isLoading}>
-                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Войти
-                  </Button>
-                </div>
-              </form>
-            </TabsContent>
-            <TabsContent value="register">
-              <form onSubmit={handleRegister}>
-                <div className="grid gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="reg-email">Электронная почта</Label>
-                    <Input
-                      id="reg-email"
-                      type="email"
-                      placeholder="nerevar@morrowind.net"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      disabled={isLoading}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="reg-password">Пароль</Label>
-                    <Input 
-                      id="reg-password" 
-                      type="password" 
-                      required 
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      disabled={isLoading}
-                    />
-                  </div>
-                   <div className="grid gap-2">
-                    <Label htmlFor="confirm-password">Подтвердите пароль</Label>
-                    <Input 
-                      id="confirm-password" 
-                      type="password" 
-                      required 
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      disabled={isLoading}
-                    />
-                  </div>
-                  <Button type="submit" className="w-full font-bold" disabled={isLoading}>
-                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Создать аккаунт и героя
-                  </Button>
-                </div>
-              </form>
-            </TabsContent>
-          </Tabs>
+                  </form>
+                </TabsContent>
+                <TabsContent value="register" className="font-body">
+                  <form onSubmit={handleRegister}>
+                    <div className="grid gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="reg-email" className="font-body">Электронная почта</Label>
+                        <Input
+                          id="reg-email"
+                          type="email"
+                          placeholder="nerevar@morrowind.net"
+                          required
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          disabled={isLoading}
+                          className="font-body"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="reg-password" className="font-body">Пароль</Label>
+                        <Input
+                          id="reg-password"
+                          type="password"
+                          required
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          disabled={isLoading}
+                          className="font-body"
+                        />
+                      </div>
+                       <div className="grid gap-2">
+                        <Label htmlFor="confirm-password" className="font-body">Подтвердите пароль</Label>
+                        <Input
+                          id="confirm-password"
+                          type="password"
+                          required
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          disabled={isLoading}
+                          className="font-body"
+                        />
+                      </div>
+                      <Button type="submit" className="w-full font-bold font-headline mt-2" disabled={isLoading}>
+                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Создать аккаунт и героя
+                      </Button>
+                    </div>
+                  </form>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
         </div>
-      </div>
+      </PageContainer>
     </div>
   );
 }

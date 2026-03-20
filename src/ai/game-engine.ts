@@ -81,14 +81,14 @@ import { getGlobalGameDate } from '@/lib/gameTime';
  * A utility function to add an item to the character's inventory, handling stacking.
  */
 function addItemToInventory(character: Character, itemToAdd: Omit<Character['inventory'][0], 'quantity'>, quantity: number): { updatedCharacter: Character; logMessage: string } {
-    let updatedChar = structuredClone(character);
+    const updatedChar = structuredClone(character);
     
     // Apply Zenithar's grace
     if (itemToAdd.id === 'gold' && character.effects.some(e => e.id === 'grace_zenithar')) {
         quantity = Math.floor(quantity * 1.20);
     }
     
-    let itemLog = `Получен предмет: ${itemToAdd.name}${quantity > 1 ? ` (x${quantity})` : ''}.`;
+    const itemLog = `Получен предмет: ${itemToAdd.name}${quantity > 1 ? ` (x${quantity})` : ''}.`;
     
     const existingItem = updatedChar.inventory.find(i => i.id === itemToAdd.id);
     if (existingItem) {
@@ -106,7 +106,7 @@ function addItemToInventory(character: Character, itemToAdd: Omit<Character['inv
  */
 function processRespawn(character: Character): {char: Character, log: string | null} {
     if (character.status === 'dead' && character.respawnAt && Date.now() > character.respawnAt) {
-        let updatedChar = structuredClone(character);
+        const updatedChar = structuredClone(character);
         updatedChar.status = 'idle';
         updatedChar.deaths += 1;
         updatedChar.stats.health.current = updatedChar.stats.health.max / 2;
@@ -129,7 +129,7 @@ function processRespawn(character: Character): {char: Character, log: string | n
  */
 function processEffects(character: Character): {char: Character, logs: string[]} {
     const logs: string[] = [];
-    let updatedChar = structuredClone(character);
+    const updatedChar = structuredClone(character);
     const activeEffects: ActiveEffect[] = [];
 
     if (updatedChar.effects && updatedChar.effects.length > 0) {
@@ -201,7 +201,7 @@ function processEffects(character: Character): {char: Character, logs: string[]}
  */
 async function processDeath(character: Character, userId: string): Promise<{char: Character, log: string | null, didDie: boolean, chronicle?: OutboxChronicle | null}> {
     if (character.stats.health.current <= 0 && character.status !== 'dead') {
-        let updatedChar = structuredClone(character);
+        const updatedChar = structuredClone(character);
         let logMessages = "";
 
         updatedChar.status = 'dead';
@@ -238,7 +238,7 @@ async function processLevelUp(character: Character): Promise<{ char: Character, 
         return { char: character, log: null };
     }
 
-    let updatedChar = structuredClone(character);
+    const updatedChar = structuredClone(character);
     let logMessages = "";
 
     while (updatedChar.xp.current >= updatedChar.xp.required) {
@@ -727,7 +727,7 @@ async function processActionCompletion(character: Character, gameData: GameData,
 function processPassiveRegen(character: Character): {char: Character, log: string | null} {
     if (character.status !== 'idle') return { char: character, log: null };
     
-    let updatedChar = structuredClone(character);
+    const updatedChar = structuredClone(character);
     let logMessage = null;
 
     const hasShameDebuff = updatedChar.effects.some(e => e.id === 'public_shame');
@@ -953,7 +953,7 @@ function processTravelEvents(character: Character, gameData: GameData): { char: 
 // Location-bound events (idle or during dungeon exploration)
 function processLocationEvents(character: Character, gameData: GameData): { char: Character, logs: string[] } {
     const logs: string[] = [];
-    let updatedChar = structuredClone(character);
+    const updatedChar = structuredClone(character);
 
     if (updatedChar.status !== 'idle' && !(updatedChar.currentAction?.type === 'explore')) {
         return { char: character, logs };
@@ -987,7 +987,7 @@ function processLocationEvents(character: Character, gameData: GameData): { char
  * Processes stamina consumption during travel and forces a rest if needed.
  */
 function processTravelFatigue(character: Character): { char: Character } {
-    let updatedChar = structuredClone(character);
+    const updatedChar = structuredClone(character);
 
     if (updatedChar.currentAction?.type !== 'travel') {
         return { char: character };
@@ -1134,7 +1134,7 @@ function getTimeOfDayModifiers(timeOfDay: TimeOfDay): TimeOfDayEffect {
  * Processes weather changes.
  */
 function processWeather(character: Character): { char: Character, log: string | null } {
-    let updatedChar = structuredClone(character);
+    const updatedChar = structuredClone(character);
     let logMessage = null;
 
     // Small chance to change weather each tick
@@ -1179,7 +1179,7 @@ function processWeather(character: Character): { char: Character, log: string | 
  * Advances the in-game calendar and handles season changes.
  */
 function processTimeAndSeasons(character: Character): { char: Character, log: string | null } {
-    let updatedChar = structuredClone(character);
+    const updatedChar = structuredClone(character);
     let logMessage = null;
 
     // Synchronized global game time for everyone (1 day in 2 real hours)
@@ -1216,7 +1216,7 @@ function processTimeAndSeasons(character: Character): { char: Character, log: st
  * Processes character's mood. It drifts towards neutral and is affected by stats.
  */
 function processMood(character: Character): {char: Character, logs: string[]} {
-    let updatedChar = structuredClone(character);
+    const updatedChar = structuredClone(character);
     const logs: string[] = [];
     let moodChanged = false;
 
@@ -1446,7 +1446,7 @@ async function processEpicPhraseGeneration(character: Character, thoughts: Array
 
         const phrase = (chosen && chosen.text) || getFallbackThought(character);
         if (phrase) {
-            let updatedChar = structuredClone(character);
+            const updatedChar = structuredClone(character);
             if (!updatedChar.analytics.epicPhrases) {
                 updatedChar.analytics.epicPhrases = [];
             }
@@ -1468,7 +1468,7 @@ async function processEpicPhraseGeneration(character: Character, thoughts: Array
 
     const phrase = getFallbackThought(character);
     if (phrase) {
-        let updatedChar = structuredClone(character);
+        const updatedChar = structuredClone(character);
         if (!updatedChar.analytics.epicPhrases) {
             updatedChar.analytics.epicPhrases = [];
         }

@@ -30,23 +30,23 @@ export function RecipeCard(props: { recipe: any; onCraft?: () => void; disabled?
     }
   }
   return (
-    <Card className="p-4 flex flex-col gap-2">
+    <Card className="p-4 flex flex-col gap-2 font-body">
       <div className="flex items-center justify-between">
-        <div className="font-medium">{r.name}</div>
+        <div className="font-medium font-headline">{r.name}</div>
         {r.locked ? (
           <Button size="sm" variant="secondary" onClick={unlock} disabled={busy || !props.characterId}>Открыть (1 очко)</Button>
         ) : (
           <Button size="sm" onClick={props.onCraft} disabled={props.disabled}>Скрафтить</Button>
         )}
       </div>
-      <div className="text-xs text-muted-foreground">Требуется навык: {r.skillReq ?? 0}</div>
+      <div className="text-xs text-muted-foreground font-body">Требуется навык: {r.skillReq ?? 0}</div>
       <div className="flex flex-wrap gap-2 items-center">
         <span className="text-xs">Вход:</span>
         {(r.inputs || []).map((i: any) => {
           const have = inv[i.id]?.quantity || 0;
           const ok = have >= (i.quantity || 0);
           return (
-            <Badge key={i.id} variant={ok ? 'secondary' : 'destructive'} className={`text-[10px] ${ok ? 'bg-emerald-600 text-white hover:bg-emerald-600' : ''}`}>{i.name || i.id} ×{i.quantity}</Badge>
+            <Badge key={i.id} variant={ok ? 'secondary' : 'destructive'} className={`text-[10px] ${ok ? 'bg-green-600 text-white hover:bg-green-600' : ''}`}>{i.name || i.id} ×{i.quantity}</Badge>
           );
         })}
       </div>

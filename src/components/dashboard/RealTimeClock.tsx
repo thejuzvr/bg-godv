@@ -18,11 +18,11 @@ export const RealTimeClock = () => {
     const formattedDate = format(date, 'EEEE, d MMMM yyyy г.', { locale: ru });
 
     return (
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between font-body">
             <div className="flex items-center gap-3">
                 <Calendar className="h-5 w-5 text-muted-foreground" />
                 <div>
-                    <p className="text-sm font-medium capitalize">{formattedDate}</p>
+                    <p className="text-sm font-medium capitalize font-body">{formattedDate}</p>
                 </div>
             </div>
             <div className="flex items-center gap-3">

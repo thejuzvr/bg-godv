@@ -102,16 +102,16 @@ export function ShopManagement({ character, gameData, onUpdated }: { character: 
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 font-body">
       {/* Статистика лавки */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950/20 dark:to-amber-900/20 border-amber-200 dark:border-amber-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Товаров выставлено</CardTitle>
+            <CardTitle className="text-sm font-medium font-headline">Товаров выставлено</CardTitle>
             <Package className="h-4 w-4 text-amber-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-amber-700 dark:text-amber-400">{shopInventory.length}</div>
+            <div className="text-3xl font-headline text-amber-700 dark:text-amber-400">{shopInventory.length}</div>
             <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
               Активные позиции
             </p>
@@ -120,11 +120,11 @@ export function ShopManagement({ character, gameData, onUpdated }: { character: 
         
         <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950/20 dark:to-green-900/20 border-green-200 dark:border-green-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Общая стоимость</CardTitle>
+            <CardTitle className="text-sm font-medium font-headline">Общая стоимость</CardTitle>
             <Coins className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-green-700 dark:text-green-400 flex items-center gap-2">
+            <div className="text-3xl font-headline text-green-700 dark:text-green-400 flex items-center gap-2">
               {totalListedValue.toLocaleString()}
               <Coins className="h-5 w-5" />
             </div>
@@ -136,11 +136,11 @@ export function ShopManagement({ character, gameData, onUpdated }: { character: 
         
         <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/20 dark:to-blue-900/20 border-blue-200 dark:border-blue-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Средняя цена</CardTitle>
+            <CardTitle className="text-sm font-medium font-headline">Средняя цена</CardTitle>
             <TrendingUp className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-blue-700 dark:text-blue-400 flex items-center gap-2">
+            <div className="text-3xl font-headline text-blue-700 dark:text-blue-400 flex items-center gap-2">
               {shopInventory.length > 0 ? Math.floor(totalListedValue / shopInventory.length) : 0}
               <Coins className="h-5 w-5" />
             </div>
@@ -154,17 +154,17 @@ export function ShopManagement({ character, gameData, onUpdated }: { character: 
       {/* Выставить предмет */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Выставить предмет</CardTitle>
+          <CardTitle className="text-lg font-headline">Выставить предмет</CardTitle>
           <CardDescription>
             Выберите предмет из инвентаря и установите цену
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 md:space-y-6">
           {selected && (
-            <div className="p-4 bg-gradient-to-br from-secondary/50 to-secondary/30 rounded-lg border-2 border-primary/20 space-y-3">
+            <div className="p-4 md:p-6 bg-gradient-to-br from-secondary/50 to-secondary/30 rounded-lg border-2 border-primary/20 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <p className="font-medium text-lg">{selected.name}</p>
+                  <p className="font-headline text-lg">{selected.name}</p>
                   <div className="flex items-center gap-2 mt-1">
                     <Badge variant="outline" className="text-xs">
                       {selected.type}
@@ -254,7 +254,7 @@ export function ShopManagement({ character, gameData, onUpdated }: { character: 
                 <div className="p-3 bg-primary/10 rounded-lg">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">Общая стоимость:</span>
-                    <span className="text-lg font-bold text-amber-600 flex items-center gap-1">
+                    <span className="text-lg font-headline text-amber-600 flex items-center gap-1">
                       <Coins className="h-4 w-4" />
                       {(price * quantity).toLocaleString()}
                     </span>
@@ -293,7 +293,7 @@ export function ShopManagement({ character, gameData, onUpdated }: { character: 
       {/* Выставленные товары */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
+          <CardTitle className="text-lg font-headline flex items-center gap-2">
             <Store className="h-5 w-5" />
             Выставленные товары
           </CardTitle>
@@ -319,12 +319,12 @@ export function ShopManagement({ character, gameData, onUpdated }: { character: 
                 return (
                   <div 
                     key={idx} 
-                    className="group relative p-4 rounded-lg bg-gradient-to-br from-secondary/40 to-secondary/20 border-2 border-secondary hover:border-primary/50 transition-all duration-300 hover:shadow-md"
+                    className="group relative p-4 md:p-6 rounded-lg bg-gradient-to-br from-secondary/40 to-secondary/20 border-2 border-secondary hover:border-primary/50 transition-all duration-300 hover:shadow-md"
                   >
                     <div className="space-y-2">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <p className="font-semibold text-lg">{item?.name || e.itemId}</p>
+                          <p className="font-headline text-lg">{item?.name || e.itemId}</p>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <Badge variant="outline" className="text-xs">
                               Кол-во: {e.quantity}
@@ -336,7 +336,7 @@ export function ShopManagement({ character, gameData, onUpdated }: { character: 
                               <Badge 
                                 variant="default" 
                                 className={`text-xs ${
-                                  item.rarity === 'legendary' ? 'bg-amber-600' :
+                                  item.rarity === 'legendary' ? 'bg-orange-600' :
                                   item.rarity === 'rare' ? 'bg-purple-600' :
                                   item.rarity === 'uncommon' ? 'bg-blue-600' : ''
                                 }`}

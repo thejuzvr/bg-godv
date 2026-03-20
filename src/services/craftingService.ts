@@ -34,7 +34,7 @@ function addItem(updated: any, id: string, delta: number) {
 export async function performCraft(character: any, recipeId: string): Promise<{ character: any; log: string } | { error: string }> {
   const [recipe] = await db.select().from(schema.craftingRecipes).where(eq(schema.craftingRecipes.id, recipeId)).limit(1);
   if (!recipe) return { error: 'Recipe not found' };
-  let updated = structuredClone(character);
+  const updated = structuredClone(character);
   // Check unlock if gating enabled
   const unlocked: string[] | undefined = (updated as any).unlockedRecipes || (updated as any).unlocked_recipes;
   if (Array.isArray(unlocked) && unlocked.length > 0) {
@@ -70,7 +70,7 @@ export async function performCraft(character: any, recipeId: string): Promise<{ 
       const nextXp = prevXp + gain;
       updated.craftingXp = nextXp;
       // Simple: level up each 100 XP, award 1 point on each level up
-      let levelsGained = Math.floor(nextXp / 100) - Math.floor(prevXp / 100);
+      const levelsGained = Math.floor(nextXp / 100) - Math.floor(prevXp / 100);
       if (levelsGained > 0) {
         updated.craftingLevel = prevLvl + levelsGained;
         updated.craftingPoints = Number(updated.craftingPoints || 0) + levelsGained;

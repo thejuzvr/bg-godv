@@ -8,7 +8,7 @@ import { useGameLoop } from '@/hooks/use-game-loop';
 import { useRealtimeState } from '@/hooks/use-realtime-state';
 import { useAuth } from "@/hooks/use-auth";
 
-import type { Character, Weather } from "@/types/character";
+import type { Character } from "@/types/character";
 import { fetchCharacter } from "@/app/dashboard/shared-actions";
 import { fetchGameData, type GameData } from "@/services/gameDataService";
 
@@ -19,7 +19,7 @@ import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Button } from '@/components/ui/button';
-import { MapPin, Coins, Skull, Zap, Sparkles, CloudRain, Loader2, BookOpen, Smile, Meh, Frown, Star, Gem, HandHelping, BrainCircuit, Cloud } from "lucide-react";
+import { MapPin, Zap, Sparkles, CloudRain, Loader2, BookOpen, Smile, Meh, Frown, Star, HandHelping, BrainCircuit, Cloud } from "lucide-react";
 import type { LucideProps } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 
@@ -42,14 +42,14 @@ import { WeatherPanel } from '@/components/dashboard/weather-panel';
 import { GameTimeClock } from '@/components/dashboard/GameTimeClock';
 import { allDivinities } from '@/data/divinities';
 import { QuestProgressPanel } from '@/components/dashboard/quest-progress-panel';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ActiveCompanionPanel } from '@/components/dashboard/active-companion-panel';
 import { getActiveCompanionAction } from '@/actions/companion-actions';
 import type { CharacterCompanionDB } from '@/../shared/schema';
+import { PageContainer } from '@/components/layout/page-container';
 
-const Icon = ({ name, ...props }: { name: string } & LucideIcons.LucideProps) => {
-  const LucideIcon = (LucideIcons as any)[name];
+const Icon = ({ name, ...props }: { name: keyof typeof LucideIcons } & LucideIcons.LucideProps) => {
+  const LucideIcon = LucideIcons[name] as React.FC<LucideIcons.LucideProps>;
   if (!LucideIcon) {
     return <Star {...props} />; // Fallback icon
   }
@@ -73,20 +73,20 @@ const TempleProgressPanel = ({ character }: { character: Character }) => {
     const progress = (character.templeProgress / TEMPLE_GOAL) * 100;
 
     return (
-        <div>
+        <div className="font-body">
             <Separator />
             <div className="pt-4">
-                <Label className="text-base font-semibold flex items-center gap-2">
+                <Label className="text-base font-semibold font-headline flex items-center gap-2">
                     <Icon name={deity.icon} className="h-5 w-5 text-primary" />
                     Храм Покровителя
                 </Label>
                 <div className="mt-2">
                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-sm">Прогресс</span>
+                        <span className="text-sm font-body">Прогресс</span>
                         <span className="text-sm font-mono text-muted-foreground">{progress.toFixed(4)}%</span>
                     </div>
                     <Progress value={progress} className="h-3" />
-                    <p className="text-xs text-muted-foreground text-center mt-2">{character.templeProgress.toLocaleString()} / {TEMPLE_GOAL.toLocaleString()} золота</p>
+                    <p className="text-xs text-muted-foreground text-center mt-2 font-body">{character.templeProgress.toLocaleString()} / {TEMPLE_GOAL.toLocaleString()} золота</p>
                 </div>
             </div>
         </div>
@@ -100,17 +100,17 @@ const DivineFavorPanel = ({ character }: { character: Character }) => {
     const progress = character.divineFavor || 0;
 
     return (
-        <div>
+        <div className="font-body">
             <Separator />
             <div className="pt-4">
-                 <Label className="text-base font-semibold flex items-center gap-2">
+                 <Label className="text-base font-semibold font-headline flex items-center gap-2">
                     <HandHelping className="h-5 w-5 text-primary" />
                     Божественное Благоволение
                 </Label>
-                <p className="text-xs text-muted-foreground mt-1">Накопите 100 очков, чтобы получить благословение.</p>
+                <p className="text-xs text-muted-foreground mt-1 font-body">Накопите 100 очков, чтобы получить благословение.</p>
                 <div className="mt-2">
                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-sm">Прогресс</span>
+                        <span className="text-sm font-body">Прогресс</span>
                         <span className="text-sm font-mono text-muted-foreground">{progress} / 100</span>
                     </div>
                     <Progress value={progress} className="h-3" />
@@ -134,7 +134,14 @@ export default function DashboardPage() {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [msgCooldownUntil, setMsgCooldownUntil] = useState<number>(0);
   const [logLimit, setLogLimit] = useState<number>(10);
-  const [activeQuest, setActiveQuest] = useState<any | null>(null);
+  const [activeQuest, setActiveQuest] = useState<{
+    id: string;
+    title: string;
+    progress: number;
+    priority: number;
+    type: string;
+    tasks: string[];
+  } | null>(null);
   const [activeCompanion, setActiveCompanion] = useState<CharacterCompanionDB | null>(null);
 
   // Load saved log limit from localStorage on mount
@@ -181,14 +188,14 @@ export default function DashboardPage() {
   const processedAdventureLog = useMemo(() => {
     if (!adventureLog) return [];
     // Sort strictly by timestamp desc and dedupe by id
-    const sorted = [...adventureLog].sort((a: any, b: any) => b.timestamp - a.timestamp);
+    const sorted = [...adventureLog].sort((a, b) => (b.timestamp as number) - (a.timestamp as number));
     const seen = new Set<string>();
-    const deduped = [] as any[];
+    const deduped = [] as Record<string, string | number>[];
     for (const item of sorted) {
-      const key = (item as any).id ?? `${(item as any).timestamp}-${(item as any).message}`;
+      const key = (item.id as string) ?? `${item.timestamp}-${item.message}`;
       if (!seen.has(key)) {
         seen.add(key);
-        deduped.push(item);
+        deduped.push(item as Record<string, string | number>);
       }
     }
     return deduped.slice(0, logLimit);
@@ -359,12 +366,13 @@ export default function DashboardPage() {
       const data = await resp.json();
       if (!data.ok) throw new Error(data.error || 'Не удалось отправить сообщение');
       // Optimistic local spend of power
-      setCharacter({ ...character, interventionPower: { ...character.interventionPower, current: Math.max(0, character.interventionPower.current - cost) } } as any);
+      setCharacter({ ...character, interventionPower: { ...character.interventionPower, current: Math.max(0, character.interventionPower.current - cost) } } as Character);
       setMsgCooldownUntil(Date.now() + 5 * 60 * 1000);
       setDivineMessage('');
       toast({ title: 'Сообщение отправлено', description: 'Герой скоро услышит шёпот свыше.' });
-    } catch (e: any) {
-      toast({ title: 'Ошибка', description: e?.message || 'Не удалось отправить сообщение' });
+    } catch (e: unknown) {
+      const error = e as { message?: string };
+      toast({ title: 'Ошибка', description: error?.message || 'Не удалось отправить сообщение' });
     } finally {
       setSendingMessage(false);
     }
@@ -374,13 +382,12 @@ export default function DashboardPage() {
     return <div className="flex items-center justify-center min-h-screen font-headline text-xl">Загрузка данных о герое и мире...</div>;
   }
     
-  const raceName = {
+  const raceName = ({
     'nord': 'Норд', 'dunmer': 'Данмер', 'altmer': 'Альтмер',
     'bosmer': 'Босмер', 'khajiit': 'Каджит', 'argonian': 'Аргонианин'
-  }[character.race] || character.race;
+  } as Record<string, string>)[character.race] || character.race;
   const locationName = gameData.locations.find(l => l.id === character.location)?.name || character.location;
-  const goldAmount = character.inventory.find(i => i.id === 'gold')?.quantity || 0;
-  const isEffectivelyDead = character.status === 'dead' || (character.respawnAt && character.respawnAt > Date.now());
+  const isEffectivelyDead = character.status === 'dead' || (character.respawnAt && (character.respawnAt as number) > Date.now());
   const moodDetails = getMoodDetails(character.mood);
 
 
@@ -405,13 +412,13 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="w-full grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-8 p-4 md:p-8">
+    <PageContainer className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-8 font-body">
         {/* Real-time Connection Indicator */}
         <div className="lg:col-span-4 -mb-4">
-          <div className="flex items-center justify-end gap-2 text-xs">
+          <div className="flex items-center justify-end gap-2 text-xs font-body">
             {isConnected ? (
-              <span className="flex items-center gap-1 text-green-500">
-                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
+              <span className="flex items-center gap-1 text-emerald-500">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
                 Real-time подключён
               </span>
             ) : (
@@ -431,23 +438,23 @@ export default function DashboardPage() {
                          <AvatarImage src="https://placehold.co/100x100.png" data-ai-hint="viking warrior" />
                          <AvatarFallback>{character.name.substring(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
-                    <div>
+                    <div className="font-body">
                          <CardTitle className="font-headline text-2xl">{character.name}</CardTitle>
-                         <CardDescription>Уровень {character.level} {raceName}</CardDescription>
-                         <div className="text-sm text-muted-foreground mt-2 flex items-center gap-2">
+                         <CardDescription className="font-body">Уровень {character.level} {raceName}</CardDescription>
+                         <div className="text-sm text-muted-foreground mt-2 flex items-center gap-2 font-body">
                             <MapPin className="h-4 w-4"/>
                             <span>{locationName}</span>
                          </div>
-                         <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
+                         <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2 font-body">
                             <moodDetails.icon className={`h-4 w-4 ${moodDetails.color}`}/>
                             <span className={moodDetails.color}>{moodDetails.description}</span>
                          </div>
                     </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                     <p className="text-sm text-center bg-secondary/50 p-2 rounded-md">
-                        <span className="font-bold text-primary">{characterStatus}</span>
-                        {character.currentAction && ` (${character.currentAction.name})`}
+                <CardContent className="space-y-4 font-body">
+                     <p className="text-sm text-center bg-secondary/50 p-2 rounded-md font-body">
+                        <span className="font-bold text-primary font-body">{characterStatus}</span>
+                        {character.currentAction && <span className="font-body">{` (${character.currentAction.name})`}</span>}
                      </p>
                     <EquipmentPanel character={character} />
                     <EffectsPanel effects={character.effects} />
@@ -480,20 +487,20 @@ export default function DashboardPage() {
               <QuestProgressPanel quest={activeQuest} />
             ) : null}
 
-            <Card className="flex-1 flex flex-col">
+            <Card className="flex-1 flex flex-col font-body">
                 <CardHeader>
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                         <div className="flex items-center gap-2">
                             <BookOpen className="h-6 w-6 text-primary" />
                             <CardTitle className="font-headline">Журнал приключений</CardTitle>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <Label htmlFor="log-limit" className="text-xs text-muted-foreground whitespace-nowrap">Показывать:</Label>
+                        <div className="flex items-center gap-2 font-body">
+                            <Label htmlFor="log-limit" className="text-xs text-muted-foreground whitespace-nowrap font-body">Показывать:</Label>
                             <Select value={String(logLimit)} onValueChange={handleLogLimitChange}>
-                                <SelectTrigger id="log-limit" className="h-8 w-[70px]">
+                                <SelectTrigger id="log-limit" className="h-8 w-[70px] font-body">
                                     <SelectValue placeholder="Limit" />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="font-body">
                                     <SelectItem value="5">5</SelectItem>
                                     <SelectItem value="10">10</SelectItem>
                                     <SelectItem value="40">40</SelectItem>
@@ -501,16 +508,16 @@ export default function DashboardPage() {
                             </Select>
                         </div>
                     </div>
-                    <CardDescription>
+                    <CardDescription className="font-body">
                     Хроника путешествий, мыслей и деяний вашего героя.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="flex-1 flex flex-col">
                     <ScrollArea className="h-72 w-full flex-1" ref={adventureLogRef}>
                       <div className="space-y-4 pr-4">
-                        {processedAdventureLog.map((log: any, index) => {
+                        {processedAdventureLog.map((log, index) => {
                           const msg: string = String(log.message || "");
-                          const time = new Date(log.timestamp).toLocaleTimeString();
+                          const time = new Date(log.timestamp as number).toLocaleTimeString();
                           let text = msg;
                           let icon: React.ReactNode | null = null;
                           // Divine messages (божественный шёпот)
@@ -537,7 +544,7 @@ export default function DashboardPage() {
                                 {icon ? (
                                   <div className="mt-0.5 text-primary">{icon}</div>
                                 ) : null}
-                                <p className="text-sm text-foreground/90 flex-1">{text}</p>
+                                <p className="text-sm text-foreground/90 flex-1 font-body">{text}</p>
                               </div>
                               { index < processedAdventureLog.length - 1 && <Separator /> }
                             </div>
@@ -550,20 +557,20 @@ export default function DashboardPage() {
         </div>
 
         {/* Right Column */}
-        <div className="lg:col-span-1 flex flex-col gap-4 md:gap-8">
+        <div className="lg:col-span-1 flex flex-col gap-4 md:gap-8 font-body">
             <Card>
                 <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-semibold">Игровое время</CardTitle>
+                    <CardTitle className="text-sm font-semibold font-headline">Игровое время</CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="font-body">
                     <GameTimeClock gameDate={character.gameDate} />
                 </CardContent>
             </Card>
              <Card>
                 <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-semibold">Реальное время</CardTitle>
+                    <CardTitle className="text-sm font-semibold font-headline">Реальное время</CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="font-body">
                      <RealTimeClock />
                 </CardContent>
             </Card>
@@ -573,50 +580,51 @@ export default function DashboardPage() {
                 <WeatherPanel character={character} />
              )}
              <DiseaseStatusPanel character={character} />
-             <Card>
+             <Card className="font-body">
                 <CardHeader>
                     <CardTitle className="font-headline text-lg flex items-center gap-2">
                         <Zap className="h-5 w-5 text-primary" />
                         Пульт Вмешательства
                     </CardTitle>
-                    <CardDescription>
+                    <CardDescription className="font-body">
                         Направляйте своего героя или просто наблюдайте. Каждое действие тратит 50 ед. силы.
                     </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 font-body">
                     <div>
                          <div className="flex justify-between items-center mb-1">
-                            <Label className="font-semibold">Сила Вмешательства</Label>
+                            <Label className="font-semibold font-body">Сила Вмешательства</Label>
                             <span className="text-sm font-mono text-muted-foreground">{character.interventionPower.current} / {character.interventionPower.max}</span>
                         </div>
                         <Progress value={(character.interventionPower.current / character.interventionPower.max) * 100} className="h-3" />
-                        <p className="text-xs text-muted-foreground mt-1">Восстановление: ~2 ед./мин реального времени</p>
+                        <p className="text-xs text-muted-foreground mt-1 font-body">Восстановление: ~2 ед./мин реального времени</p>
                     </div>
-                    <div className="space-y-2">
-                        <Label className="font-semibold">Божественный шёпот</Label>
+                    <div className="space-y-2 font-body">
+                        <Label className="font-semibold font-body">Божественный шёпот</Label>
                         <Textarea
                           value={divineMessage}
                           onChange={(e) => setDivineMessage(e.target.value)}
                           placeholder="Сообщение герою (до 200 символов)"
                           maxLength={200}
+                          className="font-body"
                         />
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <div className="flex items-center justify-between text-xs text-muted-foreground font-body">
                           <span>{divineMessage.length}/200</span>
                           {msgCooldownUntil > Date.now() && (
-                            <span>Кулдаун: {Math.ceil((msgCooldownUntil - Date.now()) / 60000)} мин</span>
+                            <span className="font-body">Кулдаун: {Math.ceil((msgCooldownUntil - Date.now()) / 60000)} мин</span>
                           )}
                         </div>
-                        <Button onClick={handleSendDivineMessage} disabled={sendingMessage || divineMessage.trim().length === 0}>
+                        <Button onClick={handleSendDivineMessage} disabled={sendingMessage || divineMessage.trim().length === 0} className="font-body">
                           {sendingMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                           Отправить сообщение (10 силы)
                         </Button>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <Button onClick={() => handleIntervention('bless')} disabled={isIntervening || character.interventionPower.current < 50}>
+                    <div className="grid grid-cols-2 gap-4 font-body">
+                        <Button onClick={() => handleIntervention('bless')} disabled={isIntervening || character.interventionPower.current < 50} className="font-body">
                             {isIntervening ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4"/>}
                             Благословить
                         </Button>
-                        <Button variant="destructive" onClick={() => handleIntervention('punish')} disabled={isIntervening || character.interventionPower.current < 50}>
+                        <Button variant="destructive" onClick={() => handleIntervention('punish')} disabled={isIntervening || character.interventionPower.current < 50} className="font-body">
                             {isIntervening ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CloudRain className="mr-2 h-4 w-4"/>}
                             Покарать
                         </Button>
@@ -624,6 +632,6 @@ export default function DashboardPage() {
                 </CardContent>
             </Card>
         </div>
-    </div>
+    </PageContainer>
   );
 }

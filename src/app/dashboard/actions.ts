@@ -57,7 +57,7 @@ async function performInterventionLegacy(
       throw new Error("Герой не найден в анналах истории.");
     }
 
-    let character: Character = charData as any;
+    const character: Character = charData as any;
     let actionDescription = '';
 
     if (character.interventionPower.current < INTERVENTION_COST) {

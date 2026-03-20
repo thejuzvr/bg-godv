@@ -230,24 +230,24 @@ export function AiGraphEditor({ characterId }: { characterId: string }) {
 
   const localizedNodes: Node[] = useMemo(() => nodes.map(n => ({ ...n, data: { label: LABELS_RU[(graph?.nodes.find(x => x.id === n.id)?.type) || ''] || (n.data as any)?.label || '' } })), [nodes, graph]);
 
-  const renderEdges: Edge[] = useMemo(() => showFlow ? edges.map(e => ({ ...e, animated: true, style: { ...(e.style || {}), stroke: '#16a34a' } })) : edges, [edges, showFlow]);
+  const renderEdges: Edge[] = useMemo(() => showFlow ? edges.map(e => ({ ...e, animated: true, style: { ...(e.style || {}), stroke: 'hsl(var(--primary))' } })) : edges, [edges, showFlow]);
 
-  if (loading) return <div className="p-4">Загрузка редактора...</div>;
+  if (loading) return <div className="p-4 md:p-8 font-body">Загрузка редактора...</div>;
 
   return (
-    <div className="w-full h-[85vh] border rounded-md grid grid-cols-[1fr_360px]">
+    <div className="w-full h-[85vh] border rounded-md grid grid-cols-[1fr_360px] font-body">
       <div className="relative" ref={wrapperRef} onContextMenu={onPaneContextMenu} onClick={hideCtx}>
         <div className="flex flex-wrap items-center gap-2 p-2 border-b bg-card">
-          <button className="px-3 py-1 border rounded" onClick={addSelectNode}>Добавить выбор по имени</button>
+          <button className="px-3 py-1 border rounded font-body text-sm hover:bg-accent transition-colors" onClick={addSelectNode}>Добавить выбор по имени</button>
           <div className="flex items-center gap-2">
-            <select className="border rounded px-2 py-1 bg-background" value={newType} onChange={(e) => setNewType(e.target.value)}>
+            <select className="border rounded px-2 py-1 bg-background font-body text-sm" value={newType} onChange={(e) => setNewType(e.target.value)}>
               {NODE_TYPES.map(t => (<option key={t} value={t}>{LABELS_RU[t] || t}</option>))}
             </select>
-            <button className="px-3 py-1 border rounded" onClick={addNodeOfType}>Добавить узел</button>
+            <button className="px-3 py-1 border rounded font-body text-sm hover:bg-accent transition-colors" onClick={addNodeOfType}>Добавить узел</button>
           </div>
-          <button className="px-3 py-1 border rounded" onClick={() => setShowFlow(s => !s)}>{showFlow ? 'Спрятать поток' : 'Показать поток'}</button>
-          <a className="px-3 py-1 border rounded" href="/docs/ai-graph" target="_blank" rel="noreferrer">Документация</a>
-          <button className="px-3 py-1 border rounded ml-auto" onClick={handleSave}>Сохранить</button>
+          <button className="px-3 py-1 border rounded font-body text-sm hover:bg-accent transition-colors" onClick={() => setShowFlow(s => !s)}>{showFlow ? 'Спрятать поток' : 'Показать поток'}</button>
+          <a className="px-3 py-1 border rounded font-body text-sm hover:bg-accent transition-colors" href="/docs/ai-graph" target="_blank" rel="noreferrer">Документация</a>
+          <button className="px-3 py-1 border rounded font-body text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors ml-auto" onClick={handleSave}>Сохранить</button>
         </div>
         <ReactFlowProvider>
           <ReactFlow nodes={localizedNodes} edges={renderEdges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect} onSelectionChange={onSelectionChange} onNodeContextMenu={onNodeContextMenu} onInit={(inst) => { rfRef.current = inst; }} fitView>
@@ -257,42 +257,42 @@ export function AiGraphEditor({ characterId }: { characterId: string }) {
           </ReactFlow>
         </ReactFlowProvider>
         {ctx?.visible && (
-          <div className="absolute z-50 bg-popover text-popover-foreground border rounded shadow" style={{ left: ctx.x, top: ctx.y }} onClick={(e) => e.stopPropagation()}>
+          <div className="absolute z-50 bg-popover text-popover-foreground border rounded shadow font-body" style={{ left: ctx.x, top: ctx.y }} onClick={(e) => e.stopPropagation()}>
             {ctx.target === 'pane' && (
               <div className="p-2 space-y-2">
-                <div className="text-xs text-muted-foreground">Добавить узел здесь</div>
-                <select className="border rounded px-2 py-1 w-56 bg-background" value={newType} onChange={(e) => setNewType(e.target.value)}>
+                <div className="text-xs text-muted-foreground font-body">Добавить узел здесь</div>
+                <select className="border rounded px-2 py-1 w-56 bg-background font-body text-sm" value={newType} onChange={(e) => setNewType(e.target.value)}>
                   {NODE_TYPES.map(t => (<option key={t} value={t}>{LABELS_RU[t] || t}</option>))}
                 </select>
-                <button className="w-full px-3 py-1 border rounded" onClick={() => { if (ctx.flowPos) addNodeAt(newType, ctx.flowPos); hideCtx(); }}>Добавить</button>
+                <button className="w-full px-3 py-1 border rounded font-body text-sm hover:bg-accent transition-colors" onClick={() => { if (ctx.flowPos) addNodeAt(newType, ctx.flowPos); hideCtx(); }}>Добавить</button>
               </div>
             )}
             {ctx.target === 'node' && (
-              <div className="p-2 space-y-2">
-                <button className="w-full px-3 py-1 border rounded" onClick={() => { if (ctx.nodeId) { disconnectNode(ctx.nodeId); hideCtx(); } }}>Отключить связи</button>
-                <button className="w-full px-3 py-1 border rounded text-destructive" onClick={() => { if (ctx.nodeId) { deleteNode(ctx.nodeId); hideCtx(); } }}>Удалить узел</button>
+              <div className="p-2 space-y-2 font-body">
+                <button className="w-full px-3 py-1 border rounded font-body text-sm hover:bg-accent transition-colors" onClick={() => { if (ctx.nodeId) { disconnectNode(ctx.nodeId); hideCtx(); } }}>Отключить связи</button>
+                <button className="w-full px-3 py-1 border rounded font-body text-sm text-destructive hover:bg-destructive/10 transition-colors" onClick={() => { if (ctx.nodeId) { deleteNode(ctx.nodeId); hideCtx(); } }}>Удалить узел</button>
               </div>
             )}
           </div>
         )}
       </div>
-      <div className="border-l p-3 text-sm bg-card/40 overflow-auto">
-        <h3 className="font-semibold mb-2">Справка</h3>
-        <ol className="list-decimal ml-4 mb-3 space-y-1">
+      <div className="border-l p-3 text-sm bg-card/40 overflow-auto font-body">
+        <h3 className="font-headline font-semibold text-lg mb-2">Справка</h3>
+        <ol className="list-decimal ml-4 mb-3 space-y-1 font-body text-muted-foreground">
           <li>Добавьте узлы (сенсоры/оценки/действия).</li>
           <li>Соедините их линиями от источника к приёмнику.</li>
           <li>Узел действия должен выводить имя выбранного действия.</li>
           <li>Нажмите «Сохранить» — новая логика применится со следующего тика.</li>
         </ol>
         {selectedNode && (
-          <div className="space-y-2">
-            <div className="text-xs text-muted-foreground">Выбран узел: <span className="font-mono">{(selectedNode.data as any)?.label}</span></div>
+          <div className="space-y-2 border-t pt-3">
+            <div className="text-xs text-muted-foreground font-body">Выбран узел: <span className="font-mono text-primary">{(selectedNode.data as any)?.label}</span></div>
             {((graph?.nodes.find(n => n.id === selectedNode.id)?.type) === 'Act.SelectByName') && (
-              <div className="space-y-2">
-                <label className="block text-xs">Действие по имени</label>
-                <input className="w-full border rounded px-2 py-1 bg-background" value={String((graph?.nodes.find(n => n.id === selectedNode.id)?.config as any)?.actionName || '')} onChange={(e) => updateSelectActionName(e.target.value)} placeholder="Например: Отдохнуть в таверне" />
-                <label className="block text-xs">Или выбрать из каталога</label>
-                <select className="w-full border rounded px-2 py-1 bg-background" onChange={(e) => updateSelectActionName(e.target.value)} value={String((graph?.nodes.find(n => n.id === selectedNode.id)?.config as any)?.actionName || '')}>
+              <div className="space-y-2 font-body">
+                <label className="block text-xs font-medium">Действие по имени</label>
+                <input className="w-full border rounded px-2 py-1 bg-background font-body text-sm focus:ring-1 focus:ring-primary outline-none" value={String((graph?.nodes.find(n => n.id === selectedNode.id)?.config as any)?.actionName || '')} onChange={(e) => updateSelectActionName(e.target.value)} placeholder="Например: Отдохнуть в таверне" />
+                <label className="block text-xs font-medium">Или выбрать из каталога</label>
+                <select className="w-full border rounded px-2 py-1 bg-background font-body text-sm focus:ring-1 focus:ring-primary outline-none" onChange={(e) => updateSelectActionName(e.target.value)} value={String((graph?.nodes.find(n => n.id === selectedNode.id)?.config as any)?.actionName || '')}>
                   <option value="">— выберите —</option>
                   {actions.map(a => (
                     <option key={a.id} value={a.name}>{a.name}</option>
@@ -300,7 +300,7 @@ export function AiGraphEditor({ characterId }: { characterId: string }) {
                 </select>
               </div>
             )}
-            {!selectedNode && <div className="text-xs text-muted-foreground">Выберите узел, чтобы настроить его.</div>}
+            {!selectedNode && <div className="text-xs text-muted-foreground font-body">Выберите узел, чтобы настроить его.</div>}
           </div>
         )}
       </div>

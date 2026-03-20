@@ -17,7 +17,7 @@ import {
   Moon,
 } from "lucide-react";
 import { DragonIcon } from "@/components/icons";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
@@ -26,6 +26,8 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { PageContainer } from "@/components/layout/page-container";
+import { SectionContainer } from "@/components/layout/section-container";
 
 export default function ThemePreviewPage() {
   const [isDarkTheme, setIsDarkTheme] = useState(true);
@@ -104,7 +106,7 @@ export default function ThemePreviewPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link href="/" className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" className={themeStyles.buttonSecondary}>
+                <Button variant="ghost" size="sm" className={themeStyles.buttonSecondary + " font-body"}>
                   <ArrowLeft className="h-4 w-4 mr-2" />
                   Назад
                 </Button>
@@ -118,12 +120,12 @@ export default function ThemePreviewPage() {
             </div>
             
             <div className="flex items-center gap-4">
-              <Badge variant="outline" className={themeStyles.badge}>
+              <Badge variant="outline" className={themeStyles.badge + " font-body"}>
                 {themeStyles.themeName}
               </Badge>
               <Button
                 onClick={() => setIsDarkTheme(!isDarkTheme)}
-                className={themeStyles.button}
+                className={themeStyles.button + " font-body"}
               >
                 {isDarkTheme ? (
                   <>
@@ -142,14 +144,14 @@ export default function ThemePreviewPage() {
         </div>
       </header>
 
-      <div className="container mx-auto p-4 md:p-8">
+      <PageContainer maxWidth="container">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-8">
           {/* Left Column - Character Info */}
           <div className="lg:col-span-1 flex flex-col gap-4">
             <Card className={themeStyles.card}>
               <CardHeader className={`flex flex-row items-center gap-4 ${themeStyles.cardHeader}`}>
                 <Avatar className={`h-16 w-16 ${themeStyles.avatar}`}>
-                  <AvatarFallback className={themeStyles.badge}>
+                  <AvatarFallback className={themeStyles.badge + " font-headline"}>
                     {mockCharacter.name.substring(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
@@ -157,29 +159,29 @@ export default function ThemePreviewPage() {
                   <CardTitle className={`font-headline text-2xl ${themeStyles.text}`}>
                     {mockCharacter.name}
                   </CardTitle>
-                  <CardDescription className={themeStyles.textMuted}>
+                  <CardDescription className={themeStyles.textMuted + " font-body"}>
                     Уровень {mockCharacter.level} {mockCharacter.race}
                   </CardDescription>
-                  <div className={`text-sm ${themeStyles.textMuted} mt-2 flex items-center gap-2`}>
+                  <div className={`text-sm ${themeStyles.textMuted} mt-2 flex items-center gap-2 font-body`}>
                     <MapPin className="h-4 w-4"/>
                     <span>{mockCharacter.location}</span>
                   </div>
-                  <div className={`text-sm ${themeStyles.textAccent} mt-1 flex items-center gap-2`}>
+                  <div className={`text-sm ${themeStyles.textAccent} mt-1 flex items-center gap-2 font-body`}>
                     <Smile className="h-4 w-4"/>
                     <span>В хорошем настроении</span>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4 pt-4">
-                <p className={`text-sm text-center p-2 rounded-md ${themeStyles.badge}`}>
-                  <span className="font-bold">{mockCharacter.status}</span>
+                <p className={`text-sm text-center p-2 rounded-md ${themeStyles.badge} font-body font-bold`}>
+                  <span>{mockCharacter.status}</span>
                 </p>
 
                 {/* Stats */}
                 <div className="space-y-3">
                   <div>
                     <div className="flex justify-between items-center mb-1">
-                      <Label className={`text-sm ${themeStyles.text}`}>Здоровье</Label>
+                      <Label className={`text-sm ${themeStyles.text} font-body`}>Здоровье</Label>
                       <span className={`text-xs font-mono ${themeStyles.textMuted}`}>
                         {mockCharacter.stats.health.current} / {mockCharacter.stats.health.max}
                       </span>
@@ -194,7 +196,7 @@ export default function ThemePreviewPage() {
 
                   <div>
                     <div className="flex justify-between items-center mb-1">
-                      <Label className={`text-sm ${themeStyles.text}`}>Магия</Label>
+                      <Label className={`text-sm ${themeStyles.text} font-body`}>Магия</Label>
                       <span className={`text-xs font-mono ${themeStyles.textMuted}`}>
                         {mockCharacter.stats.magicka.current} / {mockCharacter.stats.magicka.max}
                       </span>
@@ -209,7 +211,7 @@ export default function ThemePreviewPage() {
 
                   <div>
                     <div className="flex justify-between items-center mb-1">
-                      <Label className={`text-sm ${themeStyles.text}`}>Выносливость</Label>
+                      <Label className={`text-sm ${themeStyles.text} font-body`}>Выносливость</Label>
                       <span className={`text-xs font-mono ${themeStyles.textMuted}`}>
                         {mockCharacter.stats.stamina.current} / {mockCharacter.stats.stamina.max}
                       </span>
@@ -227,13 +229,13 @@ export default function ThemePreviewPage() {
 
                 {/* Temple Progress */}
                 <div className="pt-4">
-                  <Label className={`text-base font-semibold flex items-center gap-2 ${themeStyles.text}`}>
+                  <Label className={`text-base font-semibold flex items-center gap-2 ${themeStyles.text} font-headline`}>
                     <Sparkles className={`h-5 w-5 ${themeStyles.icon}`} />
                     Храм Покровителя
                   </Label>
                   <div className="mt-2">
                     <div className="flex justify-between items-center mb-1">
-                      <span className={`text-sm ${themeStyles.text}`}>Прогресс</span>
+                      <span className={`text-sm ${themeStyles.text} font-body`}>Прогресс</span>
                       <span className={`text-sm font-mono ${themeStyles.textMuted}`}>22.5%</span>
                     </div>
                     <div className={`h-3 rounded-full overflow-hidden ${themeStyles.progress}`}>
@@ -242,7 +244,7 @@ export default function ThemePreviewPage() {
                         style={{ width: '22.5%' }}
                       />
                     </div>
-                    <p className={`text-xs ${themeStyles.textMuted} text-center mt-2`}>
+                    <p className={`text-xs ${themeStyles.textMuted} text-center mt-2 font-body`}>
                       450,000 / 2,000,000 золота
                     </p>
                   </div>
@@ -252,16 +254,16 @@ export default function ThemePreviewPage() {
 
                 {/* Divine Favor */}
                 <div className="pt-4">
-                  <Label className={`text-base font-semibold flex items-center gap-2 ${themeStyles.text}`}>
+                  <Label className={`text-base font-semibold flex items-center gap-2 ${themeStyles.text} font-headline`}>
                     <HandHelping className={`h-5 w-5 ${themeStyles.icon}`} />
                     Божественное Благоволение
                   </Label>
-                  <p className={`text-xs ${themeStyles.textMuted} mt-1`}>
+                  <p className={`text-xs ${themeStyles.textMuted} mt-1 font-body`}>
                     Накопите 100 очков, чтобы получить благословение.
                   </p>
                   <div className="mt-2">
                     <div className="flex justify-between items-center mb-1">
-                      <span className={`text-sm ${themeStyles.text}`}>Прогресс</span>
+                      <span className={`text-sm ${themeStyles.text} font-body`}>Прогресс</span>
                       <span className={`text-sm font-mono ${themeStyles.textMuted}`}>45 / 100</span>
                     </div>
                     <div className={`h-3 rounded-full overflow-hidden ${themeStyles.progress}`}>
@@ -286,7 +288,7 @@ export default function ThemePreviewPage() {
                     Журнал приключений
                   </CardTitle>
                 </div>
-                <CardDescription className={themeStyles.textMuted}>
+                <CardDescription className={themeStyles.textMuted + " font-body"}>
                   Хроника путешествий, мыслей и деяний вашего героя в новом стиле.
                 </CardDescription>
               </CardHeader>
@@ -302,7 +304,7 @@ export default function ThemePreviewPage() {
                           {log.icon && (
                             <div className={`mt-0.5 ${themeStyles.icon}`}>{log.icon}</div>
                           )}
-                          <p className={`text-sm ${themeStyles.text} flex-1`}>{log.text}</p>
+                          <p className={`text-sm ${themeStyles.text} flex-1 font-body`}>{log.text}</p>
                         </div>
                         {index < mockAdventureLog.length - 1 && (
                           <Separator className={themeStyles.separator} />
@@ -322,12 +324,12 @@ export default function ThemePreviewPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-4">
-                <div className="space-y-4">
+                <SectionContainer>
                   <div>
-                    <h3 className={`font-semibold mb-2 ${themeStyles.text}`}>
+                    <h3 className={`font-bold mb-2 ${themeStyles.text} font-headline text-lg`}>
                       {isDarkTheme ? "🌙 Темная Магия" : "☀️ Нордическое Золото"}
                     </h3>
-                    <p className={`text-sm ${themeStyles.textMuted}`}>
+                    <p className={`text-sm ${themeStyles.textMuted} font-body`}>
                       {isDarkTheme 
                         ? "Мистическая тёмная тема с фиолетовыми и синими оттенками. Идеально для магов и любителей ночных приключений."
                         : "Классическая светлая тема с золотыми акцентами. Вдохновлена нордической культурой Скайрима."
@@ -336,8 +338,8 @@ export default function ThemePreviewPage() {
                   </div>
                   
                   <div>
-                    <h4 className={`text-sm font-semibold mb-2 ${themeStyles.text}`}>Особенности:</h4>
-                    <ul className={`text-sm ${themeStyles.textMuted} space-y-1 list-disc list-inside`}>
+                    <h4 className={`text-sm font-bold mb-2 ${themeStyles.text} font-headline`}>Особенности:</h4>
+                    <ul className={`text-sm ${themeStyles.textMuted} space-y-1 list-disc list-inside font-body`}>
                       {isDarkTheme ? (
                         <>
                           <li>Градиентный фон slate-900 → purple-900</li>
@@ -355,7 +357,7 @@ export default function ThemePreviewPage() {
                       )}
                     </ul>
                   </div>
-                </div>
+                </SectionContainer>
               </CardContent>
             </Card>
           </div>
@@ -368,14 +370,14 @@ export default function ThemePreviewPage() {
                   <Zap className={`h-5 w-5 ${themeStyles.icon}`} />
                   Пульт Вмешательства
                 </CardTitle>
-                <CardDescription className={themeStyles.textMuted}>
+                <CardDescription className={themeStyles.textMuted + " font-body"}>
                   Направляйте своего героя или просто наблюдайте.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 pt-4">
                 <div>
                   <div className="flex justify-between items-center mb-1">
-                    <Label className={`font-semibold ${themeStyles.text}`}>Сила Вмешательства</Label>
+                    <Label className={`font-bold ${themeStyles.text} font-headline`}>Сила Вмешательства</Label>
                     <span className={`text-sm font-mono ${themeStyles.textMuted}`}>
                       {mockCharacter.interventionPower.current} / {mockCharacter.interventionPower.max}
                     </span>
@@ -386,30 +388,30 @@ export default function ThemePreviewPage() {
                       style={{ width: '80%' }}
                     />
                   </div>
-                  <p className={`text-xs ${themeStyles.textMuted} mt-1`}>
+                  <p className={`text-xs ${themeStyles.textMuted} mt-1 font-body`}>
                     Восстановление: ~2 ед./мин
                   </p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label className={`font-semibold ${themeStyles.text}`}>Божественный шёпот</Label>
+                  <Label className={`font-bold ${themeStyles.text} font-headline`}>Божественный шёпот</Label>
                   <Textarea
                     placeholder="Сообщение герою (до 200 символов)"
                     maxLength={200}
-                    className={`${isDarkTheme ? 'bg-slate-700 border-purple-500/30 text-slate-100' : ''}`}
+                    className={`${isDarkTheme ? 'bg-slate-700 border-purple-500/30 text-slate-100' : ''} font-body`}
                   />
-                  <Button className={`w-full ${themeStyles.button}`}>
+                  <Button className={`w-full ${themeStyles.button} font-body font-bold`}>
                     <Sparkles className="mr-2 h-4 w-4" />
                     Отправить сообщение (10 силы)
                   </Button>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <Button className={themeStyles.button}>
+                  <Button className={themeStyles.button + " font-body font-bold"}>
                     <Sparkles className="mr-2 h-4 w-4"/>
                     Благословить
                   </Button>
-                  <Button className={`${isDarkTheme ? 'bg-red-600 hover:bg-red-700' : 'bg-red-500 hover:bg-red-600'} text-white`}>
+                  <Button className={`${isDarkTheme ? 'bg-red-600 hover:bg-red-700' : 'bg-red-500 hover:bg-red-600'} text-white font-body font-bold`}>
                     <CloudRain className="mr-2 h-4 w-4"/>
                     Покарать
                   </Button>
@@ -420,17 +422,17 @@ export default function ThemePreviewPage() {
             {/* Comparison Info */}
             <Card className={themeStyles.card}>
               <CardHeader className={themeStyles.cardHeader}>
-                <CardTitle className={`text-sm font-semibold ${themeStyles.text}`}>
+                <CardTitle className={`text-sm font-bold ${themeStyles.text} font-headline uppercase tracking-wider`}>
                   Сравнение тем
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-4">
                 <div className="space-y-3">
                   <div>
-                    <h4 className={`text-xs font-semibold ${themeStyles.textAccent} mb-1`}>
+                    <h4 className={`text-xs font-bold ${themeStyles.textAccent} mb-1 font-body uppercase`}>
                       Текущая тема:
                     </h4>
-                    <p className={`text-xs ${themeStyles.textMuted}`}>
+                    <p className={`text-xs ${themeStyles.textMuted} font-body`}>
                       {themeStyles.themeName}
                     </p>
                   </div>
@@ -438,8 +440,8 @@ export default function ThemePreviewPage() {
                   <Separator className={themeStyles.separator} />
                   
                   <div>
-                    <h4 className={`text-xs font-semibold ${themeStyles.text} mb-2`}>Переключите тему:</h4>
-                    <p className={`text-xs ${themeStyles.textMuted}`}>
+                    <h4 className={`text-xs font-bold ${themeStyles.text} mb-2 font-headline uppercase`}>Переключите тему:</h4>
+                    <p className={`text-xs ${themeStyles.textMuted} font-body`}>
                       Используйте кнопку в шапке для сравнения светлой и тёмной версий интерфейса.
                     </p>
                   </div>
@@ -453,22 +455,22 @@ export default function ThemePreviewPage() {
         <div className="mt-8">
           <Card className={themeStyles.card}>
             <CardContent className="pt-6">
-              <div className="text-center space-y-2">
-                <h2 className={`text-2xl font-bold font-headline ${themeStyles.text}`}>
+              <div className="text-center space-y-4">
+                <h2 className={`text-3xl font-bold font-headline ${themeStyles.text}`}>
                   Это демонстрационная страница
                 </h2>
-                <p className={themeStyles.textMuted}>
+                <p className={themeStyles.textMuted + " font-body max-w-2xl mx-auto"}>
                   Здесь вы можете сравнить две темы интерфейса и выбрать ту, которая вам больше нравится.
                   Используйте переключатель в шапке для смены между светлой и тёмной темой.
                 </p>
-                <div className="flex justify-center gap-4 mt-4">
+                <div className="flex justify-center gap-4 mt-6">
                   <Link href="/">
-                    <Button className={themeStyles.buttonSecondary}>
+                    <Button className={themeStyles.buttonSecondary + " font-body font-bold"}>
                       Вернуться к логину
                     </Button>
                   </Link>
                   <Link href="/dashboard">
-                    <Button className={themeStyles.button}>
+                    <Button className={themeStyles.button + " font-body font-bold"}>
                       Перейти к игре
                     </Button>
                   </Link>
@@ -477,8 +479,7 @@ export default function ThemePreviewPage() {
             </CardContent>
           </Card>
         </div>
-      </div>
+      </PageContainer>
     </div>
   );
 }
-

@@ -48,22 +48,22 @@ const getClassLabel = (companionClass: string) => {
 const getRarityColor = (rarity: string) => {
   switch (rarity) {
     case 'legendary':
-      return 'bg-amber-500';
+      return 'bg-orange-600';
     case 'rare':
-      return 'bg-purple-500';
+      return 'bg-purple-600';
     case 'uncommon':
-      return 'bg-blue-500';
+      return 'bg-blue-600';
     default:
-      return 'bg-gray-500';
+      return 'bg-muted-foreground';
   }
 };
 
 export function ActiveCompanionPanel({ companion }: ActiveCompanionPanelProps) {
   if (!companion) {
     return (
-      <Card>
+      <Card className="font-body">
         <CardHeader>
-          <CardTitle className="text-base font-semibold flex items-center gap-2">
+          <CardTitle className="text-base font-semibold flex items-center gap-2 font-headline">
             <Users className="h-5 w-5 text-muted-foreground" />
             Активный Компаньон
           </CardTitle>
@@ -75,7 +75,7 @@ export function ActiveCompanionPanel({ companion }: ActiveCompanionPanelProps) {
               Нет активного компаньона
             </p>
             <p className="text-xs text-muted-foreground text-center mt-1">
-              Нанимайте спутников в разделе "Социальная Жизнь"
+              Нанимайте спутников в разделе &quot;Социальная Жизнь&quot;
             </p>
           </div>
         </CardContent>
@@ -90,11 +90,11 @@ export function ActiveCompanionPanel({ companion }: ActiveCompanionPanelProps) {
   const healthPercent = (stats.health.current / stats.health.max) * 100;
 
   return (
-    <Card>
+    <Card className="font-body">
       <CardHeader>
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <CardTitle className="text-base font-semibold flex items-center gap-2 font-headline">
               <CompanionIcon className="h-5 w-5 text-primary" />
               {companion.name}
             </CardTitle>

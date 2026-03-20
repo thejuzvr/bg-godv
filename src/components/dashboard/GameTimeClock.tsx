@@ -33,12 +33,12 @@ export const GameTimeClock = ({ gameDate }: { gameDate: number }) => {
     const TimeIcon = timeInfo.icon;
 
     return (
-        <div className="space-y-3">
+        <div className="space-y-3 font-body">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <Calendar className="h-5 w-5 text-muted-foreground" />
                     <div>
-                        <p className="text-sm font-medium capitalize">{dateText}</p>
+                        <p className="text-sm font-medium capitalize font-headline">{dateText}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">

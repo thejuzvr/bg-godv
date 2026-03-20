@@ -11,7 +11,7 @@ import type { GameData } from '@/services/gameDataService';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { LineChart, Skull, Dices, Users, Rabbit, Swords, ThumbsUp, ThumbsDown, Bot, BrainCircuit } from 'lucide-react';
+import { LineChart, Skull, Dices, Users, Rabbit, Swords, ThumbsUp, ThumbsDown, BrainCircuit } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -23,19 +23,19 @@ export default function AnalyticsPage() {
     const [character, setCharacter] = useState<Character | null>(null);
     const [gameData, setGameData] = useState<GameData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [combatSummary, setCombatSummary] = useState<any | null>(null);
-    const [recentBattles, setRecentBattles] = useState<any[]>([]);
+    const [combatSummary, setCombatSummary] = useState<Record<string, string | number> | null>(null);
+    const [recentBattles, setRecentBattles] = useState<Record<string, string | number | string[]>[]>([]);
     const [openLogIndex, setOpenLogIndex] = useState<number | null>(null);
     const [period, setPeriod] = useState<'all' | '24h' | '7d' | '30d'>('all');
     const [resultFilter, setResultFilter] = useState<'all' | 'victory' | 'defeat' | 'fled'>('all');
-    const [perEnemy, setPerEnemy] = useState<any[]>([]);
+    const [perEnemy, setPerEnemy] = useState<Record<string, string | number>[]>([]);
 
     useEffect(() => {
         if (!user) return;
 
         const loadData = async () => {
             try {
-                const [char, gData] = await Promise.all([fetchCharacter(user.userId), fetchGameData()]);
+                const [char, gData] = await Promise.all<[Character | null, GameData]>([fetchCharacter(user.userId), fetchGameData()]);
                 if (char) {
                     setCharacter(char);
                     setGameData(gData);
@@ -52,7 +52,7 @@ export default function AnalyticsPage() {
                 } else {
                     router.push('/create-character');
                 }
-            } catch (error) {
+            } catch {
                 toast({ title: "Ошибка", description: "Не удалось загрузить данные для аналитики.", variant: "destructive" });
             } finally {
                 setIsLoading(false);
@@ -80,14 +80,14 @@ export default function AnalyticsPage() {
     }, [user, period, resultFilter]);
 
     if (authLoading || isLoading) {
-        return <div className="flex items-center justify-center min-h-screen font-headline text-xl">Загрузка аналитики...</div>;
+        return <div className="flex items-center justify-center min-h-screen font-headline text-xl font-body">Загрузка аналитики...</div>;
     }
 
     if (!character || !gameData) {
-        return <div className="flex items-center justify-center min-h-screen font-headline text-xl">Данные не найдены.</div>;
+        return <div className="flex items-center justify-center min-h-screen font-headline text-xl font-body">Данные не найдены.</div>;
     }
 
-    const analytics = character.analytics!;
+    const analytics = character.analytics;
     const totalKills = Object.values(analytics.killedEnemies).reduce((a, b) => a + b, 0);
     const totalRolls = analytics.diceRolls.d20.slice(1).reduce((a, b) => a + b, 0);
     const criticalSuccesses = analytics.diceRolls.d20[20];
@@ -113,96 +113,96 @@ export default function AnalyticsPage() {
 
     return (
         <div className="w-full font-body p-4 md:p-8 space-y-8">
-            <header>
-                <h1 className="text-3xl font-headline text-primary flex items-center gap-3"><LineChart /> Аналитика</h1>
-                <p className="text-muted-foreground">Статистика и отчеты о приключениях вашего героя.</p>
+            <header className="font-body">
+                <h1 className="text-3xl font-headline text-primary flex items-center gap-3 font-body"><LineChart /> Аналитика</h1>
+                <p className="text-muted-foreground font-body">Статистика и отчеты о приключениях вашего героя.</p>
             </header>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Всего убито врагов</CardTitle>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 font-body">
+                <Card className="font-body">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 font-body">
+                        <CardTitle className="text-sm font-medium font-body">Всего убито врагов</CardTitle>
                         <Skull className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{totalKills}</div>
-                        <p className="text-xs text-muted-foreground">поверженных противников</p>
+                    <CardContent className="font-body">
+                        <div className="text-2xl font-bold font-body">{totalKills}</div>
+                        <p className="text-xs text-muted-foreground font-body">поверженных противников</p>
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Мысли (последние 20)</CardTitle>
+                <Card className="font-body">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 font-body">
+                        <CardTitle className="text-sm font-medium font-body">Мысли (последние 20)</CardTitle>
                         <BrainCircuit className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{analytics.epicPhrases?.length || 0}</div>
-                        <p className="text-xs text-muted-foreground">ограничены квотой и кулдауном</p>
+                    <CardContent className="font-body">
+                        <div className="text-2xl font-bold font-body">{analytics.epicPhrases?.length || 0}</div>
+                        <p className="text-xs text-muted-foreground font-body">ограничены квотой и кулдауном</p>
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Сделано бросков D20</CardTitle>
+                <Card className="font-body">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 font-body">
+                        <CardTitle className="text-sm font-medium font-body">Сделано бросков D20</CardTitle>
                         <Dices className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{totalRolls}</div>
-                         <p className="text-xs text-muted-foreground">в пылу сражений</p>
+                    <CardContent className="font-body">
+                        <div className="text-2xl font-bold font-body">{totalRolls}</div>
+                         <p className="text-xs text-muted-foreground font-body">в пылу сражений</p>
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Встречено врагов</CardTitle>
+                <Card className="font-body">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 font-body">
+                        <CardTitle className="text-sm font-medium font-body">Встречено врагов</CardTitle>
                         <Users className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{analytics.encounteredEnemies.length}</div>
-                         <p className="text-xs text-muted-foreground">уникальных типов</p>
+                    <CardContent className="font-body">
+                        <div className="text-2xl font-bold font-body">{analytics.encounteredEnemies.length}</div>
+                         <p className="text-xs text-muted-foreground font-body">уникальных типов</p>
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Крит. успехов (20)</CardTitle>
+                <Card className="font-body">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 font-body">
+                        <CardTitle className="text-sm font-medium font-body">Крит. успехов (20)</CardTitle>
                         <ThumbsUp className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{criticalSuccesses}</div>
-                        <p className="text-xs text-muted-foreground">блестящих попаданий</p>
+                    <CardContent className="font-body">
+                        <div className="text-2xl font-bold font-body">{criticalSuccesses}</div>
+                        <p className="text-xs text-muted-foreground font-body">блестящих попаданий</p>
                     </CardContent>
                 </Card>
-                 <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Крит. неудач (1)</CardTitle>
+                 <Card className="font-body">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 font-body">
+                        <CardTitle className="text-sm font-medium font-body">Крит. неудач (1)</CardTitle>
                         <ThumbsDown className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{criticalFails}</div>
-                        <p className="text-xs text-muted-foreground">неловких моментов</p>
+                    <CardContent className="font-body">
+                        <div className="text-2xl font-bold font-body">{criticalFails}</div>
+                        <p className="text-xs text-muted-foreground font-body">неловких моментов</p>
                     </CardContent>
                 </Card>
-                 <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Любимая цель</CardTitle>
+                 <Card className="font-body">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 font-body">
+                        <CardTitle className="text-sm font-medium font-body">Любимая цель</CardTitle>
                         <Rabbit className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold truncate">{bestiaryData[0]?.name || 'Никто'}</div>
-                        <p className="text-xs text-muted-foreground">Убито: {bestiaryData[0]?.killed || 0} раз</p>
+                    <CardContent className="font-body">
+                        <div className="text-2xl font-bold truncate font-body">{bestiaryData[0]?.name || 'Никто'}</div>
+                        <p className="text-xs text-muted-foreground font-body">Убито: {bestiaryData[0]?.killed || 0} раз</p>
                     </CardContent>
                 </Card>
             </div>
 
-            <div className="grid lg:grid-cols-2 gap-8">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Аналитика бросков D20</CardTitle>
-                        <CardDescription>Как часто выпадают те или иные числа.</CardDescription>
+            <div className="grid lg:grid-cols-2 gap-8 font-body">
+                <Card className="font-body">
+                    <CardHeader className="font-body">
+                        <CardTitle className="font-headline">Аналитика бросков D20</CardTitle>
+                        <CardDescription className="font-body">Как часто выпадают те или иные числа.</CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="font-body">
                         <ResponsiveContainer width="100%" height={300}>
                             <BarChart data={diceChartData}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                                <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
+                                <XAxis dataKey="name" stroke="currentColor" className="text-muted-foreground" fontSize={12} tickLine={false} axisLine={false} />
+                                <YAxis stroke="currentColor" className="text-muted-foreground" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
                                 <Tooltip
                                     contentStyle={{
                                         backgroundColor: "hsl(var(--card))",
@@ -214,12 +214,12 @@ export default function AnalyticsPage() {
                         </ResponsiveContainer>
                     </CardContent>
                 </Card>
-                 <Card>
-                    <CardHeader>
-                        <CardTitle>Бестиарий</CardTitle>
-                        <CardDescription>Все враги, которых встретил ваш герой.</CardDescription>
+                 <Card className="font-body">
+                    <CardHeader className="font-body">
+                        <CardTitle className="font-headline">Бестиарий</CardTitle>
+                        <CardDescription className="font-body">Все враги, которых встретил ваш герой.</CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="font-body">
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -248,17 +248,17 @@ export default function AnalyticsPage() {
             </div>
             
             {/* Боевые отчеты */}
-            <section className="space-y-4">
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                    <h2 className="text-2xl font-headline flex items-center gap-2"><Swords /> Боевые отчеты</h2>
-                    <div className="flex items-center gap-2">
-                        <select className="border rounded px-2 py-1 bg-background text-foreground" value={period} onChange={(e) => setPeriod(e.target.value as any)}>
+            <section className="space-y-4 font-body">
+                <div className="flex items-center justify-between gap-4 flex-wrap font-body">
+                    <h2 className="text-2xl font-headline flex items-center gap-2 font-body"><Swords /> Боевые отчеты</h2>
+                    <div className="flex items-center gap-2 font-body">
+                        <select className="border rounded px-2 py-1 bg-background text-foreground font-body" value={period} onChange={(e) => setPeriod(e.target.value as "all" | "24h" | "7d" | "30d")}>
                             <option value="all">За всё время</option>
                             <option value="24h">24 часа</option>
                             <option value="7d">7 дней</option>
                             <option value="30d">30 дней</option>
                         </select>
-                        <select className="border rounded px-2 py-1 bg-background text-foreground" value={resultFilter} onChange={(e) => setResultFilter(e.target.value as any)}>
+                        <select className="border rounded px-2 py-1 bg-background text-foreground font-body" value={resultFilter} onChange={(e) => setResultFilter(e.target.value as "all" | "victory" | "defeat" | "fled")}>
                             <option value="all">Все результаты</option>
                             <option value="victory">Победы</option>
                             <option value="defeat">Поражения</option>
@@ -268,52 +268,52 @@ export default function AnalyticsPage() {
                 </div>
 
                 {/* KPI cards */}
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-                    <Card>
-                        <CardHeader className="pb-2"><CardTitle className="text-sm">Всего боёв</CardTitle></CardHeader>
-                        <CardContent><div className="text-2xl font-bold">{combatSummary?.totalBattles ?? 0}</div></CardContent>
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 font-body">
+                    <Card className="font-body">
+                        <CardHeader className="pb-2 font-body"><CardTitle className="text-sm font-body">Всего боёв</CardTitle></CardHeader>
+                        <CardContent className="font-body"><div className="text-2xl font-bold font-body">{combatSummary?.totalBattles ?? 0}</div></CardContent>
                     </Card>
-                    <Card>
-                        <CardHeader className="pb-2"><CardTitle className="text-sm">Победы</CardTitle></CardHeader>
-                        <CardContent><div className="text-2xl font-bold">{combatSummary?.victories ?? 0}</div></CardContent>
+                    <Card className="font-body">
+                        <CardHeader className="pb-2 font-body"><CardTitle className="text-sm font-body">Победы</CardTitle></CardHeader>
+                        <CardContent className="font-body"><div className="text-2xl font-bold font-body">{combatSummary?.victories ?? 0}</div></CardContent>
                     </Card>
-                    <Card>
-                        <CardHeader className="pb-2"><CardTitle className="text-sm">Поражения</CardTitle></CardHeader>
-                        <CardContent><div className="text-2xl font-bold">{combatSummary?.defeats ?? 0}</div></CardContent>
+                    <Card className="font-body">
+                        <CardHeader className="pb-2 font-body"><CardTitle className="text-sm font-body">Поражения</CardTitle></CardHeader>
+                        <CardContent className="font-body"><div className="text-2xl font-bold font-body">{combatSummary?.defeats ?? 0}</div></CardContent>
                     </Card>
-                    <Card>
-                        <CardHeader className="pb-2"><CardTitle className="text-sm">Побеги</CardTitle></CardHeader>
-                        <CardContent><div className="text-2xl font-bold">{combatSummary?.flees ?? 0}</div></CardContent>
+                    <Card className="font-body">
+                        <CardHeader className="pb-2 font-body"><CardTitle className="text-sm font-body">Побеги</CardTitle></CardHeader>
+                        <CardContent className="font-body"><div className="text-2xl font-bold font-body">{combatSummary?.flees ?? 0}</div></CardContent>
                     </Card>
-                    <Card>
-                        <CardHeader className="pb-2"><CardTitle className="text-sm">Win rate</CardTitle></CardHeader>
-                        <CardContent><div className="text-2xl font-bold">{combatSummary ? `${combatSummary.winRate}%` : '0%'}</div></CardContent>
+                    <Card className="font-body">
+                        <CardHeader className="pb-2 font-body"><CardTitle className="text-sm font-body">Win rate</CardTitle></CardHeader>
+                        <CardContent className="font-body"><div className="text-2xl font-bold font-body">{combatSummary ? `${combatSummary.winRate}%` : '0%'}</div></CardContent>
                     </Card>
-                    <Card>
-                        <CardHeader className="pb-2"><CardTitle className="text-sm">Всего XP</CardTitle></CardHeader>
-                        <CardContent><div className="text-2xl font-bold">{combatSummary?.totalXpGained ?? 0}</div></CardContent>
+                    <Card className="font-body">
+                        <CardHeader className="pb-2 font-body"><CardTitle className="text-sm font-body">Всего XP</CardTitle></CardHeader>
+                        <CardContent className="font-body"><div className="text-2xl font-bold font-body">{combatSummary?.totalXpGained ?? 0}</div></CardContent>
                     </Card>
-                    <Card>
-                        <CardHeader className="pb-2"><CardTitle className="text-sm">Средн. нанесённый</CardTitle></CardHeader>
-                        <CardContent><div className="text-2xl font-bold">{combatSummary?.avgDamageDealt ?? 0}</div></CardContent>
+                    <Card className="font-body">
+                        <CardHeader className="pb-2 font-body"><CardTitle className="text-sm font-body">Средн. нанесённый</CardTitle></CardHeader>
+                        <CardContent className="font-body"><div className="text-2xl font-bold font-body">{combatSummary?.avgDamageDealt ?? 0}</div></CardContent>
                     </Card>
-                    <Card>
-                        <CardHeader className="pb-2"><CardTitle className="text-sm">Средн. полученный</CardTitle></CardHeader>
-                        <CardContent><div className="text-2xl font-bold">{combatSummary?.avgDamageTaken ?? 0}</div></CardContent>
+                    <Card className="font-body">
+                        <CardHeader className="pb-2 font-body"><CardTitle className="text-sm font-body">Средн. полученный</CardTitle></CardHeader>
+                        <CardContent className="font-body"><div className="text-2xl font-bold font-body">{combatSummary?.avgDamageTaken ?? 0}</div></CardContent>
                     </Card>
-                    <Card>
-                        <CardHeader className="pb-2"><CardTitle className="text-sm">Средн. раундов</CardTitle></CardHeader>
-                        <CardContent><div className="text-2xl font-bold">{combatSummary?.avgRoundsPerBattle ?? 0}</div></CardContent>
+                    <Card className="font-body">
+                        <CardHeader className="pb-2 font-body"><CardTitle className="text-sm font-body">Средн. раундов</CardTitle></CardHeader>
+                        <CardContent className="font-body"><div className="text-2xl font-bold font-body">{combatSummary?.avgRoundsPerBattle ?? 0}</div></CardContent>
                     </Card>
                 </div>
 
                 {/* Recent battles table */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Недавние бои</CardTitle>
-                        <CardDescription>Последние 10 сражений героя.</CardDescription>
+                <Card className="font-body">
+                    <CardHeader className="font-body">
+                        <CardTitle className="font-headline">Недавние бои</CardTitle>
+                        <CardDescription className="font-body">Последние 10 сражений героя.</CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="font-body">
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -329,19 +329,19 @@ export default function AnalyticsPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {recentBattles.map((b, idx) => {
+                                {recentBattles.map((b, idx: number) => {
                                     const result = b.fled ? 'Побег' : (b.victory ? 'Победа' : 'Поражение');
-                                    const date = new Date(b.timestamp).toLocaleString();
+                                    const date = new Date(b.timestamp as string).toLocaleString();
                                     return (
                                         <TableRow key={b.id ?? idx}>
                                             <TableCell className="whitespace-nowrap">{date}</TableCell>
-                                            <TableCell className="font-medium">{b.enemyName}</TableCell>
-                                            <TableCell>{b.enemyLevel}</TableCell>
+                                            <TableCell className="font-medium">{b.enemyName as string}</TableCell>
+                                            <TableCell>{b.enemyLevel as number}</TableCell>
                                             <TableCell>{result}</TableCell>
-                                            <TableCell className="text-right">{b.roundsCount}</TableCell>
-                                            <TableCell className="text-right">{b.damageDealt}</TableCell>
-                                            <TableCell className="text-right">{b.damageTaken}</TableCell>
-                                            <TableCell className="text-right">{b.xpGained}</TableCell>
+                                            <TableCell className="text-right">{b.roundsCount as number}</TableCell>
+                                            <TableCell className="text-right">{b.damageDealt as number}</TableCell>
+                                            <TableCell className="text-right">{b.damageTaken as number}</TableCell>
+                                            <TableCell className="text-right">{b.xpGained as number}</TableCell>
                                             <TableCell className="text-right">
                                                 <Dialog open={openLogIndex === idx} onOpenChange={(open) => setOpenLogIndex(open ? idx : null)}>
                                                     <DialogTrigger asChild>
@@ -349,7 +349,7 @@ export default function AnalyticsPage() {
                                                     </DialogTrigger>
                                                     <DialogContent className="max-w-2xl">
                                                         <DialogHeader>
-                                                            <DialogTitle>Лог боя — {b.enemyName}</DialogTitle>
+                                                            <DialogTitle>Лог боя — {b.enemyName as string}</DialogTitle>
                                                         </DialogHeader>
                                                         <pre className="whitespace-pre-wrap text-sm max-h-[60vh] overflow-auto">{(b.combatLog || []).join('\n')}</pre>
                                                     </DialogContent>
@@ -369,18 +369,18 @@ export default function AnalyticsPage() {
                 </Card>
 
                 {/* Charts */}
-                <div className="grid lg:grid-cols-2 gap-8">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Нанесено vs Получено</CardTitle>
-                            <CardDescription>Последние бои: сравнение урона.</CardDescription>
+                <div className="grid lg:grid-cols-2 gap-8 font-body">
+                    <Card className="font-body">
+                        <CardHeader className="font-body">
+                            <CardTitle className="font-headline">Нанесено vs Получено</CardTitle>
+                            <CardDescription className="font-body">Последние бои: сравнение урона.</CardDescription>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="font-body">
                             <ResponsiveContainer width="100%" height={300}>
                                 <BarChart data={recentBattles.map((b, i) => ({ name: `${i + 1}`, Dealt: b.damageDealt, Taken: b.damageTaken }))}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                    <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                                    <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
+                                <XAxis dataKey="name" stroke="currentColor" className="text-muted-foreground" fontSize={12} tickLine={false} axisLine={false} />
+                                <YAxis stroke="currentColor" className="text-muted-foreground" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
                                     <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))" }} />
                                     <Legend />
                                     <Bar dataKey="Dealt" fill="hsl(var(--primary))" radius={[4,4,0,0]} />
@@ -389,17 +389,17 @@ export default function AnalyticsPage() {
                             </ResponsiveContainer>
                         </CardContent>
                     </Card>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Раунды в бою</CardTitle>
-                            <CardDescription>Длительность последних боёв.</CardDescription>
+                    <Card className="font-body">
+                        <CardHeader className="font-body">
+                            <CardTitle className="font-headline">Раунды в бою</CardTitle>
+                            <CardDescription className="font-body">Длительность последних боёв.</CardDescription>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="font-body">
                             <ResponsiveContainer width="100%" height={300}>
                                 <BarChart data={recentBattles.map((b, i) => ({ name: `${i + 1}`, Rounds: b.roundsCount }))}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                    <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                                    <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
+                                <XAxis dataKey="name" stroke="currentColor" className="text-muted-foreground" fontSize={12} tickLine={false} axisLine={false} />
+                                <YAxis stroke="currentColor" className="text-muted-foreground" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
                                     <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))" }} />
                                     <Bar dataKey="Rounds" fill="hsl(var(--primary))" radius={[4,4,0,0]} />
                                 </BarChart>
@@ -409,12 +409,12 @@ export default function AnalyticsPage() {
                 </div>
 
                 {/* Per-enemy aggregation */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Сводка по врагам</CardTitle>
-                        <CardDescription>Винрейт и средние показатели по каждому врагу.</CardDescription>
+                <Card className="font-body">
+                    <CardHeader className="font-body">
+                        <CardTitle className="font-headline">Сводка по врагам</CardTitle>
+                        <CardDescription className="font-body">Винрейт и средние показатели по каждому врагу.</CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="font-body">
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -454,22 +454,22 @@ export default function AnalyticsPage() {
                 </Card>
             </section>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+            <Card className="font-body">
+                <CardHeader className="font-body">
+                    <CardTitle className="flex items-center gap-2 font-headline">
                         <BrainCircuit />
                         Мысли героя
                     </CardTitle>
-                    <CardDescription>
-                        Здесь хранятся уникальные мысли и цели, которые герой "придумал" во время своих приключений.
+                    <CardDescription className="font-body">
+                        Здесь хранятся уникальные мысли и цели, которые герой &quot;придумал&quot; во время своих приключений.
                     </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="font-body">
                     {analytics.epicPhrases && analytics.epicPhrases.length > 0 ? (
                         <div className="space-y-3">
                             {analytics.epicPhrases.slice().reverse().map((phrase, index) => (
                                 <blockquote key={index} className="p-3 border-l-4 border-primary bg-primary/10">
-                                    <p className="italic text-foreground">"{phrase}"</p>
+                                    <p className="italic text-foreground">&quot;{phrase}&quot;</p>
                                 </blockquote>
                             ))}
                         </div>

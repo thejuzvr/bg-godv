@@ -37,7 +37,7 @@ export const SovngardeStatusPanel = ({ character, gameData }: { character: Chara
     const progressValue = totalDuration > 0 ? ((totalDuration - remainingDuration) / totalDuration) * 100 : 0;
     
     return (
-        <Card className="border-primary ring-2 ring-primary/50">
+        <Card className="border-primary ring-2 ring-primary/50 font-body">
             <CardHeader className="text-center">
                  <CardTitle className="font-headline text-primary">Совнгард</CardTitle>
                  <CardDescription>Душа героя отдыхает в Залах доблести, ожидая искупления.</CardDescription>
@@ -46,7 +46,7 @@ export const SovngardeStatusPanel = ({ character, gameData }: { character: Chara
                  <Image src="https://placehold.co/400x200.png" data-ai-hint="heavenly hall" alt="Sovngarde" width={400} height={200} className="rounded-lg object-cover mx-auto" />
                  
                  <div className="space-y-2 text-left">
-                    <p className="font-semibold text-center">Возрождение через: {timeLeft}</p>
+                    <p className="font-semibold text-center font-headline">Возрождение через: {timeLeft}</p>
                     <Progress value={progressValue} className="w-full" />
                  </div>
                  
@@ -88,7 +88,7 @@ export const SleepingStatusPanel = ({ character }: { character: Character }) => 
 
 
     return (
-        <Card className="border-secondary ring-2 ring-secondary/50">
+        <Card className="border-secondary ring-2 ring-secondary/50 font-body">
             <CardHeader>
                 <div className="flex items-center gap-2">
                     <Bed className="h-6 w-6 text-secondary-foreground" />
@@ -97,8 +97,8 @@ export const SleepingStatusPanel = ({ character }: { character: Character }) => 
                 <CardDescription>{character.name} крепко спит в таверне, восстанавливая силы.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-                 <p className="text-muted-foreground text-center">"Тсс... не будите спящего драконорожденного."</p>
-                 <p className="font-semibold text-center">Проснется через: {timeLeft}</p>
+                 <p className="text-muted-foreground text-center italic">&quot;Тсс... не будите спящего драконорожденного.&quot;</p>
+                 <p className="font-semibold text-center font-headline">Проснется через: {timeLeft}</p>
                  <Progress value={progressValue} className="w-full mt-4" />
             </CardContent>
         </Card>
@@ -108,7 +108,7 @@ export const SleepingStatusPanel = ({ character }: { character: Character }) => 
 
 export const SovngardeConditionsPanel = () => {
     return (
-        <Card>
+        <Card className="font-body">
             <CardHeader>
                 <CardTitle className="font-headline text-lg flex items-center gap-2">
                     <Sparkles className="h-5 w-5 text-primary" />
@@ -121,17 +121,17 @@ export const SovngardeConditionsPanel = () => {
                         <Sparkles className="h-5 w-5 text-muted-foreground" />
                         <p className="text-sm font-medium">Состояние</p>
                     </div>
-                    <p className="text-sm font-semibold">Легендарное</p>
+                    <p className="text-sm font-semibold font-headline">Легендарное</p>
                 </div>
                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                          <Infinity className="h-5 w-5 text-muted-foreground" />
                         <p className="text-sm font-medium">Время</p>
                     </div>
-                    <p className="text-sm font-semibold">Вечность</p>
+                    <p className="text-sm font-semibold font-headline">Вечность</p>
                 </div>
                 <Separator />
-                <p className="text-xs text-muted-foreground text-center">Воздух пропитан историями о доблести и чести.</p>
+                <p className="text-xs text-muted-foreground text-center italic">Воздух пропитан историями о доблести и чести.</p>
             </CardContent>
         </Card>
     );
@@ -146,7 +146,7 @@ export const DiseaseStatusPanel = ({ character }: { character: Character }) => {
     const status = isVampire ? (isDay ? 'Дневная слабость' : 'Ночная терпимость') : (character.timeOfDay === 'night' ? 'Ночная сила' : 'Дневное спокойствие');
     const hungerText = ['Сыт', 'Лёгкий голод', 'Голод', 'Сильный голод'][Math.min(3, hunger)];
     return (
-        <Card className="border-destructive/50 ring-2 ring-destructive/30">
+        <Card className="border-destructive/50 ring-2 ring-destructive/30 font-body">
             <CardHeader>
                 <CardTitle className="font-headline text-lg">
                     {isVampire ? 'Вампиризм' : 'Ликантропия'}
@@ -155,7 +155,7 @@ export const DiseaseStatusPanel = ({ character }: { character: Character }) => {
             </CardHeader>
             <CardContent className="space-y-3">
                 <div className="text-sm">
-                    <div className="flex justify-between"><span>Сытость:</span><span className="font-mono">{hungerText}</span></div>
+                    <div className="flex justify-between"><span>Сытость:</span><span className="font-mono font-headline">{hungerText}</span></div>
                 </div>
                 {character.currentAction?.name && (character.currentAction.name === 'Лечение болезни' || character.currentAction.name === 'Охота за кровью' || character.currentAction.name === 'Охота на зверя') && (
                     <div>

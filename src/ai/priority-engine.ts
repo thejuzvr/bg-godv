@@ -41,7 +41,7 @@ function inferTags(entry: CatalogEntry): string[] {
 }
 
 const SCORE_CACHE_TTL_MS = 1000;
-let scoreCache: Map<string, { at: number; data: ScoredAction[] }> = new Map();
+const scoreCache: Map<string, { at: number; data: ScoredAction[] }> = new Map();
 
 export async function computeActionScores(params: {
   character: Character;

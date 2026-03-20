@@ -11,6 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Pickaxe, MapPin, Zap, Package, Loader2, TrendingUp, Clock } from "lucide-react";
+import { PageContainer } from "@/components/layout/page-container";
 
 // Типы ресурсов которые можно добыть
 const resourceTypes = [
@@ -79,8 +80,9 @@ export default function GatheringPage() {
       if (!data.success) throw new Error(data.error || 'Не удалось добыть ресурс');
       setCharacter(data.character);
       toast({ title: 'Добыча завершена', description: data.log });
-    } catch (e: any) {
-      toast({ title: 'Ошибка добычи', description: e?.message || 'Попробуйте позже', variant: 'destructive' });
+    } catch (e: unknown) {
+      const error = e as { message?: string };
+      toast({ title: 'Ошибка добычи', description: error?.message || 'Попробуйте позже', variant: 'destructive' });
     } finally {
       setBusy(false);
     }
@@ -128,7 +130,7 @@ export default function GatheringPage() {
   const canAffordGathering = character.stats.stamina.current >= 10;
 
   return (
-    <div className="w-full font-body p-4 md:p-8 space-y-6">
+    <PageContainer className="space-y-6 font-body">
       {/* Заголовок */}
       <div className="flex items-center justify-between">
         <div>
@@ -136,41 +138,41 @@ export default function GatheringPage() {
             <Pickaxe className="h-8 w-8 text-primary" />
             Добыча Ресурсов
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-muted-foreground mt-1 font-body">
             Добывайте руду и материалы на окраинах городов
           </p>
         </div>
-        <Badge variant="outline" className="text-sm">
+        <Badge variant="outline" className="text-sm font-body">
           <MapPin className="mr-1 h-3 w-3" />
           {character.location}
         </Badge>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6">
+      <div className="grid md:grid-cols-2 gap-6 font-body">
         {/* Основная карточка добычи */}
-        <Card className={canGatherHere ? "border-primary/50" : "border-dashed"}>
+        <Card className={cn("font-body", canGatherHere ? "border-primary/50" : "border-dashed")}>
           <CardHeader>
             <CardTitle className="font-headline flex items-center gap-2">
               <Pickaxe className="h-5 w-5" />
               Добыча Руды
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="font-body">
               {canGatherHere 
                 ? "Окраины города — идеальное место для добычи руды"
                 : "Добыча доступна только на окраинах городов (локации *_outskirts)"}
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 font-body">
             {/* Выносливость */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-medium">Выносливость</span>
-                <span className="text-sm text-muted-foreground">
+            <div className="font-body">
+              <div className="flex justify-between items-center mb-2 font-body">
+                <span className="text-sm font-medium font-body">Выносливость</span>
+                <span className="text-sm text-muted-foreground font-body">
                   {character.stats.stamina.current} / {character.stats.stamina.max}
                 </span>
               </div>
               <Progress value={staminaRatio} className="h-2" />
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-muted-foreground mt-1 font-body">
                 Каждая добыча требует 10 выносливости
               </p>
             </div>
@@ -178,11 +180,11 @@ export default function GatheringPage() {
             <Separator />
 
             {/* Кнопки действий */}
-            <div className="space-y-2">
+            <div className="space-y-2 font-body">
               <Button 
                 onClick={gather} 
                 disabled={!canGatherHere || busy || !canAffordGathering || character.status === 'in-combat'}
-                className="w-full"
+                className="w-full font-body"
                 size="lg"
               >
                 {busy ? (
@@ -202,7 +204,7 @@ export default function GatheringPage() {
                 variant="secondary" 
                 onClick={() => prioritizeGathering()} 
                 disabled={!canGatherHere || priorityActive || character.status === 'in-combat'}
-                className="w-full"
+                className="w-full font-body"
               >
                 {priorityActive ? (
                   <>
@@ -219,8 +221,8 @@ export default function GatheringPage() {
             </div>
 
             {!canAffordGathering && canGatherHere && (
-              <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                <p className="text-sm text-yellow-600 dark:text-yellow-400">
+              <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg font-body">
+                <p className="text-sm text-yellow-600 dark:text-yellow-400 font-body">
                   ⚠️ Недостаточно выносливости для добычи
                 </p>
               </div>
@@ -229,17 +231,17 @@ export default function GatheringPage() {
         </Card>
 
         {/* Статистика добычи */}
-        <Card>
+        <Card className="font-body">
           <CardHeader>
             <CardTitle className="font-headline flex items-center gap-2">
               <Package className="h-5 w-5" />
               Добытые Ресурсы
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="font-body">
               Всего добыто: {gatheringStats.total} ед.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 font-body">
             {/* Group resources by category */}
             {['Руды', 'Алхимия', 'Грибы', 'Материалы', 'Особое'].map(category => {
               const categoryResources = resourceTypes.filter(r => r.category === category);
@@ -248,9 +250,9 @@ export default function GatheringPage() {
               if (categoryTotal === 0 && gatheringStats.total > 0) return null; // Hide empty categories if player has some resources
               
               return (
-                <div key={category}>
-                  <h4 className="text-sm font-semibold text-muted-foreground mb-2">{category}</h4>
-                  <div className="space-y-2">
+                <div key={category} className="font-body">
+                  <h4 className="text-sm font-semibold text-muted-foreground mb-2 font-headline">{category}</h4>
+                  <div className="space-y-2 font-body">
                     {categoryResources.slice(0, 5).map(resource => {
                       const count = gatheringStats.byType[resource.id] || 0;
                       const hasResource = count > 0;
@@ -260,16 +262,16 @@ export default function GatheringPage() {
                       return (
                         <div 
                           key={resource.id} 
-                          className={`p-2 rounded-lg border ${hasResource ? 'bg-primary/5 border-primary/20' : 'bg-muted/50 border-dashed'}`}
+                          className={cn("p-2 rounded-lg border font-body", hasResource ? 'bg-primary/5 border-primary/20' : 'bg-muted/50 border-dashed')}
                         >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
+                          <div className="flex items-center justify-between font-body">
+                            <div className="flex items-center gap-2 font-body">
                               <span className="text-xl">{resource.icon}</span>
-                              <div>
-                                <p className="text-sm font-medium">{resource.name}</p>
+                              <div className="font-body">
+                                <p className="text-sm font-medium font-body">{resource.name}</p>
                               </div>
                             </div>
-                            <Badge variant={hasResource ? "default" : "outline"} className="text-xs">
+                            <Badge variant={hasResource ? "default" : "outline"} className="text-xs font-body">
                               {count}
                             </Badge>
                           </div>
@@ -282,9 +284,9 @@ export default function GatheringPage() {
             })}
 
             {gatheringStats.total === 0 && (
-              <div className="text-center py-8">
+              <div className="text-center py-8 font-body">
                 <TrendingUp className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground font-body">
                   Начните добывать ресурсы для крафта!
                 </p>
               </div>
@@ -294,33 +296,31 @@ export default function GatheringPage() {
       </div>
 
       {/* Информационная карточка */}
-      <Card className="bg-gradient-to-r from-primary/5 to-secondary/5 border-primary/20">
-        <CardContent className="p-6">
-          <h3 className="font-semibold mb-3 flex items-center gap-2">
+      <Card className="bg-gradient-to-r from-primary/5 to-secondary/5 border-primary/20 font-body">
+        <CardContent className="p-6 font-body">
+          <h3 className="font-semibold mb-3 flex items-center gap-2 font-headline">
             💡 Советы по добыче
           </h3>
-          <ul className="space-y-2 text-sm text-muted-foreground">
-            <li className="flex items-start gap-2">
+          <ul className="space-y-2 text-sm text-muted-foreground font-body">
+            <li className="flex items-start gap-2 font-body">
               <span className="text-primary mt-0.5">•</span>
-              <span>Окраины городов (*_outskirts) — лучшее место для добычи руды</span>
+              <span className="font-body">Окраины городов (*_outskirts) — лучшее место для добычи руды</span>
             </li>
-            <li className="flex items-start gap-2">
+            <li className="flex items-start gap-2 font-body">
               <span className="text-primary mt-0.5">•</span>
-              <span>Используйте "Автоматическую добычу" чтобы герой добывал ресурсы самостоятельно</span>
+              <span className="font-body">Используйте &quot;Автоматическую добычу&quot; чтобы герой добывал ресурсы самостоятельно</span>
             </li>
-            <li className="flex items-start gap-2">
+            <li className="flex items-start gap-2 font-body">
               <span className="text-primary mt-0.5">•</span>
-              <span>Добытые материалы можно использовать для крафта на странице "Крафт"</span>
+              <span className="font-body">Добытые материалы можно использовать для крафта на странице &quot;Крафт&quot;</span>
             </li>
-            <li className="flex items-start gap-2">
+            <li className="flex items-start gap-2 font-body">
               <span className="text-primary mt-0.5">•</span>
-              <span>Следите за выносливостью — без нее добыча невозможна</span>
+              <span className="font-body">Следите за выносливостью — без нее добыча невозможна</span>
             </li>
           </ul>
         </CardContent>
       </Card>
-    </div>
+    </PageContainer>
   );
 }
-
-

@@ -46,8 +46,8 @@ export const EffectsPanel = ({ effects }: { effects: ActiveEffect[] }) => {
     return (
         <div>
             <Separator />
-            <div className="pt-4">
-                <Label className="text-base font-semibold">Активные эффекты</Label>
+            <div className="pt-4 font-body">
+                <Label className="text-base font-semibold font-headline">Активные эффекты</Label>
                 <div className="flex flex-wrap gap-2 pt-2">
                     {effects.map((effect) => {
                         const remaining = effect.expiresAt - time;
@@ -63,16 +63,16 @@ export const EffectsPanel = ({ effects }: { effects: ActiveEffect[] }) => {
                                         <Icon name={effect.icon} className="w-6 h-6" />
                                     </button>
                                 </DialogTrigger>
-                                <DialogContent className="max-w-md sm:max-w-lg">
+                                <DialogContent className="max-w-md sm:max-w-lg font-body">
                                     <DialogHeader>
-                                        <DialogTitle>{effect.name}</DialogTitle>
+                                        <DialogTitle className="font-headline">{effect.name}</DialogTitle>
                                         <DialogDescription>
-                                            <span className="text-sm text-muted-foreground">{effect.type === 'buff' ? 'Положительный эффект' : 'Отрицательный эффект'}</span>
+                                            <span className="text-sm text-muted-foreground font-body">{effect.type === 'buff' ? 'Положительный эффект' : 'Отрицательный эффект'}</span>
                                         </DialogDescription>
                                     </DialogHeader>
                                     <div className="space-y-2">
-                                        <p className="text-sm whitespace-pre-wrap break-words">{effect.description}</p>
-                                        <p className="text-xs text-muted-foreground">Осталось: {formatDuration(remaining)}</p>
+                                        <p className="text-sm whitespace-pre-wrap break-words font-body">{effect.description}</p>
+                                        <p className="text-xs text-muted-foreground font-body">Осталось: {formatDuration(remaining)}</p>
                                     </div>
                                 </DialogContent>
                             </Dialog>

@@ -127,19 +127,19 @@ export default function DataManagerPage() {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen font-headline text-xl">Загрузка...</div>;
+    return <div className="flex items-center justify-center min-h-screen font-headline text-xl font-body">Загрузка...</div>;
   }
 
   if (!user || !user.isAdmin) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Доступ запрещён</CardTitle>
-            <CardDescription>У вас нет прав для доступа к этой странице.</CardDescription>
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 font-body">
+        <Card className="w-full max-w-md font-body">
+          <CardHeader className="font-body">
+            <CardTitle className="font-headline text-2xl">Доступ запрещён</CardTitle>
+            <CardDescription className="font-body">У вас нет прав для доступа к этой странице.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <Button asChild className="w-full">
+          <CardContent className="font-body">
+            <Button asChild className="w-full font-body">
               <Link href="/dashboard">Вернуться на дашборд</Link>
             </Button>
           </CardContent>
@@ -158,13 +158,13 @@ export default function DataManagerPage() {
 
   return (
     <div className="w-full font-body p-4 md:p-8 space-y-8">
-      <header>
+      <header className="font-body">
         <h1 className="text-4xl font-headline text-primary">Data Manager</h1>
-        <p className="text-lg text-muted-foreground mt-2">Управление пользователями и героями</p>
+        <p className="text-lg text-muted-foreground mt-2 font-body">Управление пользователями и героями</p>
       </header>
 
-      <Tabs defaultValue="users" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+      <Tabs defaultValue="users" className="w-full font-body">
+        <TabsList className="grid w-full grid-cols-2 font-body">
           <TabsTrigger value="users" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             Пользователи
@@ -176,13 +176,13 @@ export default function DataManagerPage() {
         </TabsList>
 
         {/* Users Tab */}
-        <TabsContent value="users" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Пользователи ({filteredUsers.length})</CardTitle>
-                  <CardDescription>Все зарегистрированные пользователи</CardDescription>
+        <TabsContent value="users" className="space-y-4 font-body">
+          <Card className="font-body">
+            <CardHeader className="font-body">
+              <div className="flex items-center justify-between font-body">
+                <div className="font-body">
+                  <CardTitle className="font-headline">Пользователи ({filteredUsers.length})</CardTitle>
+                  <CardDescription className="font-body">Все зарегистрированные пользователи</CardDescription>
                 </div>
                 <Button
                   variant="outline"
@@ -274,13 +274,13 @@ export default function DataManagerPage() {
         </TabsContent>
 
         {/* Characters Tab */}
-        <TabsContent value="characters" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Герои ({filteredCharacters.length})</CardTitle>
-                  <CardDescription>Все созданные персонажи</CardDescription>
+        <TabsContent value="characters" className="space-y-4 font-body">
+          <Card className="font-body">
+            <CardHeader className="font-body">
+              <div className="flex items-center justify-between font-body">
+                <div className="font-body">
+                  <CardTitle className="font-headline">Герои ({filteredCharacters.length})</CardTitle>
+                  <CardDescription className="font-body">Все созданные персонажи</CardDescription>
                 </div>
                 <Button
                   variant="outline"

@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Coins, 
   TrendingUp, 
@@ -35,7 +35,7 @@ import { cn } from '@/lib/utils';
 type Row = { itemId: string; price: number; supply: number; demand: number };
 
 // Item categories mapping
-const itemCategories: Record<string, { name: string; icon: any; color: string }> = {
+const itemCategories: Record<string, { name: string; icon: keyof typeof LucideIcons; color: string }> = {
   ore: { name: 'Руды', icon: Gem, color: 'text-amber-600' },
   potion: { name: 'Зелья', icon: Sparkles, color: 'text-purple-600' },
   weapon: { name: 'Оружие', icon: Sword, color: 'text-red-600' },
@@ -117,7 +117,7 @@ export default function MarketPage() {
       const d2 = await r2.json();
       setMarket(d2.market || []);
       setQuantity(1);
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({ 
         title: 'Ошибка', 
         description: e?.message || 'Попробуйте позже',
@@ -215,70 +215,71 @@ export default function MarketPage() {
           </CardContent>
         </Card>
         
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Общий объем</CardTitle>
+        <Card className="font-body">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 font-body">
+            <CardTitle className="text-sm font-medium font-body">Общий объем</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
+          <CardContent className="font-body">
+            <div className="text-2xl font-bold font-body">
               {market.reduce((sum, row) => sum + row.supply + row.demand, 0).toLocaleString()}
             </div>
-            <p className="text-xs text-muted-foreground">Предложение + Спрос</p>
+            <p className="text-xs text-muted-foreground font-body">Предложение + Спрос</p>
           </CardContent>
         </Card>
         
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ваш инвентарь</CardTitle>
+        <Card className="font-body">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 font-body">
+            <CardTitle className="text-sm font-medium font-body">Ваш инвентарь</CardTitle>
             <ShoppingCart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
+          <CardContent className="font-body">
+            <div className="text-2xl font-bold font-body">
               {character?.inventory.filter(i => i.id !== 'gold').length || 0}
             </div>
-            <p className="text-xs text-muted-foreground">Уникальных предметов</p>
+            <p className="text-xs text-muted-foreground font-body">Уникальных предметов</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Search and Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Фильтры и поиск</CardTitle>
+      <Card className="font-body">
+        <CardHeader className="font-body">
+          <CardTitle className="text-lg font-headline">Фильтры и поиск</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex gap-4 flex-wrap">
-            <div className="flex-1 min-w-[200px]">
-              <div className="relative">
+        <CardContent className="space-y-4 font-body">
+          <div className="flex gap-4 flex-wrap font-body">
+            <div className="flex-1 min-w-[200px] font-body">
+              <div className="relative font-body">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Поиск товаров..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 font-body"
                 />
               </div>
             </div>
             
-            <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="w-full">
-              <TabsList className="grid grid-cols-7 w-full">
-                <TabsTrigger value="all">Все</TabsTrigger>
+            <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="w-full font-body">
+              <TabsList className="grid grid-cols-7 w-full font-body">
+                <TabsTrigger value="all" className="font-body">Все</TabsTrigger>
                 {Object.entries(itemCategories).map(([key, { name, icon: Icon }]) => (
-                  <TabsTrigger key={key} value={key} className="flex items-center gap-1">
+                  <TabsTrigger key={key} value={key} className="flex items-center gap-1 font-body">
                     <Icon className="h-3 w-3" />
-                    <span className="hidden sm:inline">{name}</span>
+                    <span className="hidden sm:inline font-body">{name}</span>
                   </TabsTrigger>
                 ))}
               </TabsList>
             </Tabs>
           </div>
           
-          <div className="flex gap-2 items-center">
-            <span className="text-sm text-muted-foreground">Сортировка:</span>
+          <div className="flex gap-2 items-center font-body">
+            <span className="text-sm text-muted-foreground font-body">Сортировка:</span>
             <Button
               variant={sortBy === 'name' ? 'default' : 'outline'}
               size="sm"
+              className="font-body"
               onClick={() => {
                 if (sortBy === 'name') {
                   setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -293,6 +294,7 @@ export default function MarketPage() {
             <Button
               variant={sortBy === 'price' ? 'default' : 'outline'}
               size="sm"
+              className="font-body"
               onClick={() => {
                 if (sortBy === 'price') {
                   setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -307,6 +309,7 @@ export default function MarketPage() {
             <Button
               variant={sortBy === 'demand' ? 'default' : 'outline'}
               size="sm"
+              className="font-body"
               onClick={() => {
                 if (sortBy === 'demand') {
                   setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -323,7 +326,7 @@ export default function MarketPage() {
       </Card>
 
       {/* Market Items Grid */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 font-body">
         {filteredAndSortedMarket.length === 0 ? (
           <Card className="col-span-full">
             <CardContent className="flex flex-col items-center justify-center py-12">

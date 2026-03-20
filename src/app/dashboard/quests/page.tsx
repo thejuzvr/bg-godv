@@ -8,7 +8,7 @@ import { fetchCharacter } from '@/app/dashboard/shared-actions';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { BookOpen, Target, Star, Clock, Award, ChevronRight } from 'lucide-react';
+import { BookOpen, Target, Clock, Award, ChevronRight, Star } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -21,6 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { PageContainer } from '@/components/layout/page-container';
 
 type QuestDB = {
   id: string;
@@ -81,7 +82,7 @@ export default function QuestsPage() {
                 }
                 setCharacter(char);
                 await loadQuests(char.id);
-            } catch (error) {
+            } catch {
                 toast({ title: "Ошибка", description: "Не удалось загрузить данные.", variant: "destructive" });
             } finally {
                 setIsLoading(false);
@@ -142,7 +143,7 @@ export default function QuestsPage() {
             } else {
                 toast({ title: "Ошибка", description: data.error, variant: "destructive" });
             }
-        } catch (error) {
+        } catch {
             toast({ title: "Ошибка", description: "Не удалось установить активное задание.", variant: "destructive" });
         } finally {
             setActionLoading(false);
@@ -165,7 +166,7 @@ export default function QuestsPage() {
     };
     
     if (authLoading || isLoading) {
-        return <div className="flex items-center justify-center min-h-screen font-headline text-xl">Загрузка журнала заданий...</div>;
+        return <div className="flex items-center justify-center min-h-screen font-headline text-xl font-body">Загрузка журнала заданий...</div>;
     }
 
     if (!character) {
@@ -173,15 +174,15 @@ export default function QuestsPage() {
     }
 
     return (
-        <div className="w-full font-body p-4 md:p-8">
-            <header className="flex items-center justify-between mb-8">
+        <PageContainer className="font-body">
+            <header className="flex items-center justify-between mb-8 font-body">
                 <h1 className="text-3xl font-headline text-primary flex items-center gap-3">
                     <BookOpen /> Журнал Заданий
                 </h1>
             </header>
 
-            <Tabs defaultValue="active" className="w-full">
-                <TabsList className="grid w-full grid-cols-4 mb-6">
+            <Tabs defaultValue="active" className="w-full font-body">
+                <TabsList className="grid w-full grid-cols-4 mb-6 font-body">
                     <TabsTrigger value="active" className="flex items-center gap-2">
                         <Target className="h-4 w-4" /> Активное {activeQuest && '(1)'}
                     </TabsTrigger>
@@ -197,43 +198,43 @@ export default function QuestsPage() {
                 </TabsList>
 
                 {/* Active Quest Tab */}
-                <TabsContent value="active" className="space-y-4">
+                <TabsContent value="active" className="space-y-4 font-body">
                     {activeQuest ? (
-                        <Card className="border-2 border-amber-500/50">
-                            <CardHeader>
-                                <div className="flex items-start justify-between">
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-2">
+                        <Card className="border-2 border-amber-500/50 font-body">
+                            <CardHeader className="font-body">
+                                <div className="flex items-start justify-between font-body">
+                                    <div className="font-body">
+                                        <div className="flex items-center gap-2 mb-2 font-body">
                                             <Target className="h-5 w-5 text-amber-500" />
-                                            <Badge variant="default" className="bg-amber-500">Активное</Badge>
-                                            <Badge variant="outline">{getQuestTypeLabel(activeQuest.type)}</Badge>
+                                            <Badge variant="default" className="bg-amber-500 font-body">Активное</Badge>
+                                            <Badge variant="outline" className="font-body">{getQuestTypeLabel(activeQuest.type)}</Badge>
                                         </div>
-                                        <CardTitle className="text-2xl">{activeQuest.title}</CardTitle>
+                                        <CardTitle className="text-2xl font-headline">{activeQuest.title}</CardTitle>
                                     </div>
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex items-center gap-1 font-body">
                                         {getPriorityStars(activeQuest.priority)}
                                     </div>
                                 </div>
-                                <CardDescription className="text-base mt-2">{activeQuest.description}</CardDescription>
+                                <CardDescription className="text-base mt-2 font-body">{activeQuest.description}</CardDescription>
                             </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div>
-                                    <div className="flex justify-between text-sm mb-2">
-                                        <span className="font-medium">Общий прогресс</span>
+                            <CardContent className="space-y-4 font-body">
+                                <div className="font-body">
+                                    <div className="flex justify-between text-sm mb-2 font-body">
+                                        <span className="font-medium font-body">Общий прогресс</span>
                                         <span className="font-mono">{activeQuest.progress}%</span>
                                     </div>
                                     <Progress value={activeQuest.progress} className="h-3" />
                                 </div>
 
                                 {activeTasks.length > 0 && (
-                                    <div className="space-y-3 mt-4">
-                                        <h3 className="font-semibold text-sm text-muted-foreground">Подзадачи:</h3>
+                                    <div className="space-y-3 mt-4 font-body">
+                                        <h3 className="font-semibold text-sm text-muted-foreground font-headline">Подзадачи:</h3>
                                         {activeTasks.map((task, idx) => (
-                                            <div key={task.id} className="flex items-start gap-3 pl-4 border-l-2">
-                                                <span className="text-muted-foreground">{idx + 1}.</span>
-                                                <div className="flex-1 space-y-1">
-                                                    <div className="flex justify-between">
-                                                        <span className={task.status === 'completed' ? 'line-through text-muted-foreground' : ''}>
+                                            <div key={task.id} className="flex items-start gap-3 pl-4 border-l-2 font-body">
+                                                <span className="text-muted-foreground font-body">{idx + 1}.</span>
+                                                <div className="flex-1 space-y-1 font-body">
+                                                    <div className="flex justify-between font-body">
+                                                        <span className={cn("font-body", task.status === 'completed' ? 'line-through text-muted-foreground' : '')}>
                                                             {task.title}
                                                         </span>
                                                         <span>{getTaskStatusIcon(task.status)}</span>
@@ -247,23 +248,23 @@ export default function QuestsPage() {
                                     </div>
                                 )}
 
-                                <div className="pt-4 border-t">
-                                    <p className="text-sm font-semibold mb-2">💰 Награды:</p>
-                                    <div className="flex flex-wrap gap-2">
-                                        {activeQuest.rewards.gold && <Badge variant="outline">{activeQuest.rewards.gold} золота</Badge>}
-                                        {activeQuest.rewards.xp && <Badge variant="outline">{activeQuest.rewards.xp} XP</Badge>}
+                                <div className="pt-4 border-t font-body">
+                                    <p className="text-sm font-semibold mb-2 font-headline">💰 Награды:</p>
+                                    <div className="flex flex-wrap gap-2 font-body">
+                                        {activeQuest.rewards.gold && <Badge variant="outline" className="font-body">{activeQuest.rewards.gold} золота</Badge>}
+                                        {activeQuest.rewards.xp && <Badge variant="outline" className="font-body">{activeQuest.rewards.xp} XP</Badge>}
                                         {activeQuest.rewards.items && activeQuest.rewards.items.map((item, idx) => (
-                                            <Badge key={idx} variant="outline">{item.id} x{item.quantity}</Badge>
+                                            <Badge key={idx} variant="outline" className="font-body">{item.id} x{item.quantity}</Badge>
                                         ))}
                                         {activeQuest.rewards.randomItemRewards && activeQuest.rewards.randomItemRewards.map((reward, idx) => (
-                                            <Badge key={idx} variant="outline">{reward.rarity} {reward.type} x{reward.quantity}</Badge>
+                                            <Badge key={idx} variant="outline" className="font-body">{reward.rarity} {reward.type} x{reward.quantity}</Badge>
                                         ))}
                                     </div>
                                 </div>
 
                                 <Button
                                     variant="outline"
-                                    className="w-full"
+                                    className="w-full font-body"
                                     onClick={() => openQuestDialog(activeQuest)}
                                 >
                                     Подробнее <ChevronRight className="ml-2 h-4 w-4" />
@@ -271,12 +272,12 @@ export default function QuestsPage() {
                             </CardContent>
                         </Card>
                     ) : (
-                        <Card>
-                            <CardContent className="py-12 text-center">
+                        <Card className="font-body">
+                            <CardContent className="py-12 text-center font-body">
                                 <Target className="h-16 w-16 text-muted-foreground mx-auto mb-4 opacity-50" />
-                                <p className="text-lg text-muted-foreground">Нет активного задания</p>
-                                <p className="text-sm text-muted-foreground mt-2">
-                                    Выберите задание из вкладки "В процессе" или "Доступные"
+                                <p className="text-lg text-muted-foreground font-body">Нет активного задания</p>
+                                <p className="text-sm text-muted-foreground mt-2 font-body">
+                                    Выберите задание из вкладки &quot;В процессе&quot; или &quot;Доступные&quot;
                                 </p>
                             </CardContent>
                         </Card>
@@ -359,35 +360,35 @@ export default function QuestsPage() {
 
             {/* Quest Details Dialog */}
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto font-body">
                     {selectedQuest && (
                         <>
-                            <DialogHeader>
-                                <div className="flex items-center justify-between">
-                                    <DialogTitle className="text-2xl">{selectedQuest.title}</DialogTitle>
-                                    <div className="flex items-center gap-1">
+                            <DialogHeader className="font-body">
+                                <div className="flex items-center justify-between font-body">
+                                    <DialogTitle className="text-2xl font-headline">{selectedQuest.title}</DialogTitle>
+                                    <div className="flex items-center gap-1 font-body">
                                         {getPriorityStars(selectedQuest.priority)}
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2 mt-2">
-                                    <Badge>{getQuestTypeLabel(selectedQuest.type)}</Badge>
-                                    <Badge variant="outline">{selectedQuest.location}</Badge>
-                                    <Badge variant="secondary">Приоритет: {selectedQuest.priority}/100</Badge>
+                                <div className="flex items-center gap-2 mt-2 font-body">
+                                    <Badge className="font-body">{getQuestTypeLabel(selectedQuest.type)}</Badge>
+                                    <Badge variant="outline" className="font-body">{selectedQuest.location}</Badge>
+                                    <Badge variant="secondary" className="font-body">Приоритет: {selectedQuest.priority}/100</Badge>
                                 </div>
-                                <DialogDescription className="text-base mt-4">
+                                <DialogDescription className="text-base mt-4 font-body">
                                     {selectedQuest.description}
                                 </DialogDescription>
                             </DialogHeader>
 
                             {selectedTasks.length > 0 && (
-                                <div className="space-y-3 my-4">
-                                    <h3 className="font-semibold">Подзадачи:</h3>
+                                <div className="space-y-3 my-4 font-body">
+                                    <h3 className="font-semibold font-headline">Подзадачи:</h3>
                                     {selectedTasks.map((task, idx) => (
-                                        <div key={task.id} className="flex items-start gap-3 p-3 bg-secondary/30 rounded">
-                                            <span className="text-muted-foreground">{idx + 1}.</span>
-                                            <div className="flex-1">
-                                                <div className="flex justify-between mb-1">
-                                                    <span>{task.title}</span>
+                                        <div key={task.id} className="flex items-start gap-3 p-3 bg-secondary/30 rounded font-body">
+                                            <span className="text-muted-foreground font-body">{idx + 1}.</span>
+                                            <div className="flex-1 font-body">
+                                                <div className="flex justify-between mb-1 font-body">
+                                                    <span className="font-body">{task.title}</span>
                                                     <span>{getTaskStatusIcon(task.status)}</span>
                                                 </div>
                                                 <Progress value={task.progress} className="h-1.5" />
@@ -397,20 +398,20 @@ export default function QuestsPage() {
                                 </div>
                             )}
 
-                            <div className="space-y-2 my-4">
-                                <h3 className="font-semibold">Награды:</h3>
-                                <div className="flex flex-wrap gap-2">
-                                    {selectedQuest.rewards.gold && <Badge variant="outline">{selectedQuest.rewards.gold} золота</Badge>}
-                                    {selectedQuest.rewards.xp && <Badge variant="outline">{selectedQuest.rewards.xp} XP</Badge>}
+                            <div className="space-y-2 my-4 font-body">
+                                <h3 className="font-semibold font-headline">Награды:</h3>
+                                <div className="flex flex-wrap gap-2 font-body">
+                                    {selectedQuest.rewards.gold && <Badge variant="outline" className="font-body">{selectedQuest.rewards.gold} золота</Badge>}
+                                    {selectedQuest.rewards.xp && <Badge variant="outline" className="font-body">{selectedQuest.rewards.xp} XP</Badge>}
                                 </div>
                             </div>
 
-                            <DialogFooter>
+                            <DialogFooter className="font-body">
                                 {selectedQuest.status === 'in-progress' && !selectedQuest.isActive && (
                                     <Button
                                         onClick={() => handleSetActive(selectedQuest.id)}
                                         disabled={actionLoading}
-                                        className="w-full"
+                                        className="w-full font-body"
                                     >
                                         ⭐ Сделать активным
                                     </Button>
@@ -420,7 +421,7 @@ export default function QuestsPage() {
                     )}
                 </DialogContent>
             </Dialog>
-        </div>
+        </PageContainer>
     );
 }
 
@@ -441,47 +442,47 @@ function QuestCard({
     actionLoading?: boolean;
 }) {
     return (
-        <Card className={isCompleted ? 'opacity-70' : ''}>
-            <CardHeader>
-                <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                            <Badge variant="outline">{getQuestTypeLabel(quest.type)}</Badge>
-                            <span className="text-xs text-muted-foreground">{quest.location}</span>
+        <Card className={cn("font-body", isCompleted ? 'opacity-70' : '')}>
+            <CardHeader className="font-body">
+                <div className="flex items-start justify-between font-body">
+                    <div className="flex-1 font-body">
+                        <div className="flex items-center gap-2 mb-2 font-body">
+                            <Badge variant="outline" className="font-body">{getQuestTypeLabel(quest.type)}</Badge>
+                            <span className="text-xs text-muted-foreground font-body">{quest.location}</span>
                         </div>
-                        <CardTitle className={isCompleted ? 'line-through text-muted-foreground' : ''}>
+                        <CardTitle className={cn("font-headline", isCompleted ? 'line-through text-muted-foreground' : '')}>
                             {quest.title}
                         </CardTitle>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 font-body">
                         {getPriorityStars(quest.priority)}
                     </div>
                 </div>
             </CardHeader>
-            <CardContent>
-                <p className="text-sm text-muted-foreground mb-4">{quest.description}</p>
+            <CardContent className="font-body">
+                <p className="text-sm text-muted-foreground mb-4 font-body">{quest.description}</p>
                 
                 {!isCompleted && !isAvailable && (
-                    <div className="mb-4">
-                        <div className="flex justify-between text-sm mb-1">
-                            <span>Прогресс</span>
+                    <div className="mb-4 font-body">
+                        <div className="flex justify-between text-sm mb-1 font-body">
+                            <span className="font-body">Прогресс</span>
                             <span className="font-mono">{quest.progress}%</span>
                         </div>
                         <Progress value={quest.progress} className="h-2" />
                     </div>
                 )}
 
-                <div className="flex flex-wrap gap-2 mb-4">
-                    {quest.rewards.gold && <Badge variant="secondary">{quest.rewards.gold} золота</Badge>}
-                    {quest.rewards.xp && <Badge variant="secondary">{quest.rewards.xp} XP</Badge>}
+                <div className="flex flex-wrap gap-2 mb-4 font-body">
+                    {quest.rewards.gold && <Badge variant="secondary" className="font-body">{quest.rewards.gold} золота</Badge>}
+                    {quest.rewards.xp && <Badge variant="secondary" className="font-body">{quest.rewards.xp} XP</Badge>}
                 </div>
 
-                <div className="flex gap-2">
-                    <Button variant="outline" onClick={onDetails} className="flex-1">
+                <div className="flex gap-2 font-body">
+                    <Button variant="outline" onClick={onDetails} className="flex-1 font-body">
                         Подробнее
                     </Button>
                     {onSetActive && !isCompleted && !isAvailable && (
-                        <Button onClick={onSetActive} disabled={actionLoading} className="flex-1">
+                        <Button onClick={onSetActive} disabled={actionLoading} className="flex-1 font-body">
                             ⭐ Активировать
                         </Button>
                     )}

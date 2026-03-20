@@ -50,24 +50,24 @@ export const EquipmentPanel = ({ character }: { character: Character }) => {
     const totalAttack = equippedWeapon?.damage || 1; // Base unarmed damage
 
     return (
-      <>
+      <div className="font-body space-y-4">
         <div>
             <div className="flex justify-between items-center mb-1">
-                <Label className="flex items-center gap-2 font-semibold"><Heart className="text-destructive"/>Здоровье</Label>
+                <Label className="flex items-center gap-2 font-semibold font-headline"><Heart className="text-destructive"/>Здоровье</Label>
                 <span className="text-sm font-mono text-muted-foreground">{character.stats.health.current} / {character.stats.health.max}</span>
             </div>
             <Progress value={(character.stats.health.current / character.stats.health.max) * 100} className="h-3 [&>div]:bg-destructive" />
         </div>
         <div>
             <div className="flex justify-between items-center mb-1">
-                <Label className="flex items-center gap-2 font-semibold"><Wand className="text-primary"/>Магия</Label>
+                <Label className="flex items-center gap-2 font-semibold font-headline"><Wand className="text-primary"/>Магия</Label>
                 <span className="text-sm font-mono text-muted-foreground">{character.stats.magicka.current} / {character.stats.magicka.max}</span>
             </div>
             <Progress value={(character.stats.magicka.current / character.stats.magicka.max) * 100} className="h-3" />
         </div>
         <div>
             <div className="flex justify-between items-center mb-1">
-                <Label className="flex items-center gap-2 font-semibold"><Zap className="text-secondary-foreground/80"/>Запас сил</Label>
+                <Label className="flex items-center gap-2 font-semibold font-headline"><Zap className="text-secondary-foreground/80"/>Запас сил</Label>
                 <span className="text-sm font-mono text-muted-foreground">{character.stats.stamina.current} / {character.stats.stamina.max}</span>
             </div>
             <Progress value={(character.stats.stamina.current / character.stats.stamina.max) * 100} className="h-3 [&>div]:bg-secondary-foreground/80" />
@@ -76,16 +76,16 @@ export const EquipmentPanel = ({ character }: { character: Character }) => {
         <div className="space-y-2 text-sm">
             <div className="flex justify-between">
                 <span className="text-muted-foreground flex items-center gap-2"><Coins/>Золото</span>
-                <span className="font-semibold">{character.inventory.find(i => i.id === 'gold')?.quantity || 0}</span>
+                <span className="font-semibold font-headline">{character.inventory.find(i => i.id === 'gold')?.quantity || 0}</span>
             </div>
                 <div className="flex justify-between">
                 <span className="text-muted-foreground flex items-center gap-2"><Skull/>Смертей</span>
-                <span className="font-semibold">{character.deaths}</span>
+                <span className="font-semibold font-headline">{character.deaths}</span>
             </div>
         </div>
         <Separator />
         <div className="pt-4">
-            <Label className="text-base font-semibold flex items-center gap-2 mb-2"><ShieldCheck className="w-5 h-5 text-primary"/> Снаряжение</Label>
+            <Label className="text-base font-semibold flex items-center gap-2 mb-2 font-headline"><ShieldCheck className="w-5 h-5 text-primary"/> Снаряжение</Label>
              <div className="flex items-center justify-between text-sm mb-4">
                  <TooltipProvider>
                     <Tooltip>
@@ -133,7 +133,7 @@ export const EquipmentPanel = ({ character }: { character: Character }) => {
                         <div key={slot} className="flex items-center gap-3">
                              <Icon className="w-5 h-5 text-primary-foreground/70"/>
                             <div>
-                                <p className="font-semibold">{slotNames[slot]}</p>
+                                <p className="font-semibold font-headline">{slotNames[slot]}</p>
                                 <p className="text-xs text-muted-foreground">{details}</p>
                             </div>
                         </div>
@@ -141,6 +141,6 @@ export const EquipmentPanel = ({ character }: { character: Character }) => {
                 })}
             </div>
         </div>
-      </>
+      </div>
     );
 }
