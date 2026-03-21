@@ -16,28 +16,23 @@ import { fetchNPCs, fetchLocations, fetchItems } from "@/actions/game-data-actio
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Progress } from "@/components/ui/progress";
+import { PageContainer } from "@/components/layout/page-container";
 
 import * as LucideIcons from "lucide-react";
 import { 
   Users, 
   Store, 
-  Heart, 
   MapPin, 
   MessageSquare, 
   ShoppingCart, 
   Gift, 
   Coins,
   Loader2,
-  Search,
-  Globe,
   Info,
   UserPlus,
   Sword,
@@ -45,7 +40,6 @@ import {
 } from "lucide-react";
 import { ShopManagement } from "@/components/dashboard/shop-management";
 import { companionTemplates } from "@/data/companions";
-import type { CompanionTemplate } from "@/types/companion";
 import type { CharacterCompanionDB } from "@/../shared/schema";
 import { 
     hireCompanionAction, 
@@ -57,7 +51,7 @@ import {
 } from "@/actions/companion-actions";
 
 const Icon = ({ name, ...props }: { name: keyof typeof LucideIcons } & LucideIcons.LucideProps) => {
-    const LucideIcon = LucideIcons[name] as React.ElementType;
+    const LucideIcon = LucideIcons[name] as React.FC<LucideIcons.LucideProps>;
     if (!LucideIcon) return <LucideIcons.HelpCircle {...props} />;
     return <LucideIcon {...props} />;
 };
@@ -84,17 +78,14 @@ export default function SocialPage() {
     const { user, loading: authLoading } = useAuth(true);
     
     const [character, setCharacter] = useState<Character | null>(null);
-    const [gameData, setGameData] = useState<any | null>(null);
+    const [gameData, setGameData] = useState<Record<string, Record<string, string | number>[]> | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [selectedNPC, setSelectedNPC] = useState<NPC | null>(null);
     
     const [npcs, setNpcs] = useState<NPC[]>([]);
     const [locations, setLocations] = useState<Location[]>([]);
     const [items, setItems] = useState<CharacterInventoryItem[]>([]);
     
-    const [searchQuery, setSearchQuery] = useState("");
-    const [locationFilter, setLocationFilter] = useState<string>("all");
-    const [typeFilter, setTypeFilter] = useState<string>("all");
-    const [selectedNPC, setSelectedNPC] = useState<NPC | null>(null);
     const [isInteracting, setIsInteracting] = useState(false);
     
     // Companion state
@@ -108,7 +99,7 @@ export default function SocialPage() {
 
         const loadData = async () => {
             try {
-                const [char, npcsData, locationsData, itemsData, gData] = await Promise.all([
+                const [char, npcsData, locationsData, itemsData, gData] = await Promise.all<[Character | null, NPC[], Location[], CharacterInventoryItem[], Record<string, any>]>([
                     fetchCharacter(user.userId),
                     fetchNPCs(),
                     fetchLocations(),
@@ -180,26 +171,6 @@ export default function SocialPage() {
         return '👤 Житель';
     };
 
-    const filteredNPCs = useMemo(() => {
-        let result = [...npcs];
-
-        if (searchQuery) {
-            result = result.filter(npc => 
-                npc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                npc.description.toLowerCase().includes(searchQuery.toLowerCase())
-            );
-        }
-
-        if (locationFilter !== "all") {
-            result = result.filter(npc => npc.location === locationFilter || npc.location === 'on_road');
-        }
-
-        if (typeFilter !== "all") {
-            result = result.filter(npc => getNPCRole(npc) === typeFilter);
-        }
-
-        return result;
-    }, [npcs, searchQuery, locationFilter, typeFilter]);
 
     const currentLocationNPCs = useMemo(() => {
         if (!character) return [];
@@ -233,11 +204,11 @@ export default function SocialPage() {
             } else {
                 toast({
                     title: "Ошибка",
-                    description: result.error,
+                    description: result.error || "Произошла ошибка",
                     variant: "destructive",
                 });
             }
-        } catch (error) {
+        } catch {
             toast({
                 title: "Ошибка",
                 description: "Не удалось взаимодействовать с NPC",
@@ -265,11 +236,11 @@ export default function SocialPage() {
             } else {
                 toast({
                     title: "Ошибка",
-                    description: result.error,
+                    description: result.error || "Произошла ошибка",
                     variant: "destructive",
                 });
             }
-        } catch (error) {
+        } catch {
             toast({
                 title: "Ошибка",
                 description: "Не удалось совершить торговлю",
@@ -297,11 +268,11 @@ export default function SocialPage() {
             } else {
                 toast({
                     title: "Ошибка",
-                    description: result.error,
+                    description: result.error || "Произошла ошибка",
                     variant: "destructive",
                 });
             }
-        } catch (error) {
+        } catch {
             toast({
                 title: "Ошибка",
                 description: "Не удалось вручить подарок",
@@ -335,11 +306,11 @@ export default function SocialPage() {
             } else {
                 toast({
                     title: "Ошибка",
-                    description: result.error,
+                    description: result.error || "Произошла ошибка",
                     variant: "destructive",
                 });
             }
-        } catch (error) {
+        } catch {
             toast({
                 title: "Ошибка",
                 description: "Не удалось нанять компаньона",
@@ -368,11 +339,11 @@ export default function SocialPage() {
             } else {
                 toast({
                     title: "Ошибка",
-                    description: result.error,
+                    description: result.error || "Произошла ошибка",
                     variant: "destructive",
                 });
             }
-        } catch (error) {
+        } catch {
             toast({
                 title: "Ошибка",
                 description: "Не удалось активировать компаньона",
@@ -396,11 +367,11 @@ export default function SocialPage() {
             } else {
                 toast({
                     title: "Ошибка",
-                    description: result.error,
+                    description: result.error || "Произошла ошибка",
                     variant: "destructive",
                 });
             }
-        } catch (error) {
+        } catch {
             toast({
                 title: "Ошибка",
                 description: "Не удалось деактивировать компаньона",
@@ -437,11 +408,11 @@ export default function SocialPage() {
             } else {
                 toast({
                     title: "Ошибка",
-                    description: result.error,
+                    description: result.error || "Произошла ошибка",
                     variant: "destructive",
                 });
             }
-        } catch (error) {
+        } catch {
             toast({
                 title: "Ошибка",
                 description: "Не удалось уволить компаньона",
@@ -452,7 +423,7 @@ export default function SocialPage() {
 
     if (authLoading || isLoading) {
         return (
-            <div className="flex items-center justify-center h-full p-8">
+            <div className="flex items-center justify-center h-full p-8 font-body">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
         );
@@ -467,28 +438,28 @@ export default function SocialPage() {
     const playerGold = character.inventory.find(i => i.id === 'gold')?.quantity || 0;
 
     return (
-        <div className="space-y-6 p-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight font-headline">Социальная Жизнь</h1>
-                    <p className="text-muted-foreground">
+        <PageContainer className="space-y-6 font-body">
+            <div className="flex items-center justify-between font-body">
+                <div className="font-body">
+                    <h1 className="text-3xl font-headline text-primary">Социальная Жизнь</h1>
+                    <p className="text-muted-foreground font-body">
                         Торговля, общение и взаимодействия с жителями Скайрима
                     </p>
                 </div>
-                <div className="flex flex-col items-end gap-2">
-                    <Badge variant="outline" className="text-sm">
+                <div className="flex flex-col items-end gap-2 font-body">
+                    <Badge variant="outline" className="text-sm font-body">
                         <MapPin className="mr-1 h-3 w-3" />
                         {currentLocation?.name || character.location}
                     </Badge>
-                    <Badge variant="secondary" className="text-sm">
+                    <Badge variant="secondary" className="text-sm font-body">
                         <Coins className="mr-1 h-3 w-3" />
                         {playerGold} золота
                     </Badge>
                 </div>
             </div>
 
-            <Tabs defaultValue="npcs" className="w-full">
-                <TabsList className="grid w-full grid-cols-4">
+            <Tabs defaultValue="npcs" className="w-full font-body">
+                <TabsList className="grid w-full grid-cols-4 font-body">
                     <TabsTrigger value="npcs">
                         <Users className="mr-2 h-4 w-4" />
                         NPC ({currentLocationNPCs.length})
@@ -508,50 +479,50 @@ export default function SocialPage() {
                 </TabsList>
 
                 {/* NPC Tab */}
-                <TabsContent value="npcs" className="space-y-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Жители локации</CardTitle>
-                            <CardDescription>
+                <TabsContent value="npcs" className="space-y-4 font-body">
+                    <Card className="font-body">
+                        <CardHeader className="font-body">
+                            <CardTitle className="font-headline">Жители локации</CardTitle>
+                            <CardDescription className="font-body">
                                 Взаимодействуйте с местными жителями, чтобы улучшить отношения и получить информацию
                             </CardDescription>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="font-body">
                             {currentLocationNPCs.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-12">
+                                <div className="flex flex-col items-center justify-center py-12 font-body">
                                     <Users className="h-12 w-12 text-muted-foreground mb-4" />
-                                    <p className="text-muted-foreground">В этой локации нет NPC</p>
+                                    <p className="text-muted-foreground font-body">В этой локации нет NPC</p>
                                 </div>
                             ) : (
-                                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 font-body">
                                     {currentLocationNPCs.map(npc => {
                                         const relLevel = getRelationshipLevel(npc.id);
                                         const relName = relationshipLevelNames[relLevel];
                                         const relColor = relationshipColors[relLevel];
 
                                         return (
-                                            <Card key={npc.id} className="overflow-hidden">
-                                                <CardHeader className="pb-3">
-                                                    <div className="flex items-start justify-between">
-                                                        <div className="flex-1">
-                                                            <CardTitle className="text-lg">{npc.name}</CardTitle>
-                                                            <CardDescription className="text-sm mt-1">
+                                            <Card key={npc.id} className="overflow-hidden font-body">
+                                                <CardHeader className="pb-3 font-body">
+                                                    <div className="flex items-start justify-between font-body">
+                                                        <div className="flex-1 font-body">
+                                                            <CardTitle className="text-lg font-headline">{npc.name}</CardTitle>
+                                                            <CardDescription className="text-sm mt-1 font-body">
                                                                 {getNPCRoleLabel(npc)}
                                                             </CardDescription>
                                                         </div>
-                                                        <Badge className={`${relColor} text-white ml-2`}>
+                                                        <Badge className={`${relColor} text-white ml-2 font-body`}>
                                                             {relName}
                                                         </Badge>
                                                     </div>
                                                 </CardHeader>
-                                                <CardContent className="space-y-3">
-                                                    <p className="text-sm text-muted-foreground line-clamp-2">
+                                                <CardContent className="space-y-3 font-body">
+                                                    <p className="text-sm text-muted-foreground line-clamp-2 font-body">
                                                         {npc.description}
                                                     </p>
                                                     <Dialog>
                                                         <DialogTrigger asChild>
                                                             <Button 
-                                                                className="w-full" 
+                                                                className="w-full font-body"
                                                                 variant="outline"
                                                                 onClick={() => setSelectedNPC(npc)}
                                                             >
@@ -559,14 +530,14 @@ export default function SocialPage() {
                                                                 Взаимодействовать
                                                             </Button>
                                                         </DialogTrigger>
-                                                        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                                                            <DialogHeader>
-                                                                <DialogTitle>{npc.name}</DialogTitle>
-                                                                <DialogDescription>{npc.description}</DialogDescription>
+                                                        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto font-body">
+                                                            <DialogHeader className="font-body">
+                                                                <DialogTitle className="font-headline">{selectedNPC?.name || npc.name}</DialogTitle>
+                                                                <DialogDescription className="font-body">{selectedNPC?.description || npc.description}</DialogDescription>
                                                             </DialogHeader>
                                                             <NPCDialogContent 
-                                                                npc={npc} 
-                                                                character={character}
+                                                                npc={selectedNPC || npc}
+                                                                character={character as Character}
                                                                 relationshipLevel={relLevel}
                                                                 onInteract={handleInteract}
                                                                 onTrade={handleTrade}
@@ -588,37 +559,37 @@ export default function SocialPage() {
                 </TabsContent>
 
                 {/* Merchants Tab */}
-                <TabsContent value="merchants" className="space-y-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Торговцы</CardTitle>
-                            <CardDescription>
+                <TabsContent value="merchants" className="space-y-4 font-body">
+                    <Card className="font-body">
+                        <CardHeader className="font-body">
+                            <CardTitle className="font-headline">Торговцы</CardTitle>
+                            <CardDescription className="font-body">
                                 Покупайте и продавайте предметы у местных торговцев
                             </CardDescription>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="font-body">
                             {merchantNPCs.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-12">
+                                <div className="flex flex-col items-center justify-center py-12 font-body">
                                     <Store className="h-12 w-12 text-muted-foreground mb-4" />
-                                    <p className="text-muted-foreground">В этой локации нет торговцев</p>
+                                    <p className="text-muted-foreground font-body">В этой локации нет торговцев</p>
                                 </div>
                             ) : (
-                                <div className="grid gap-4 md:grid-cols-2">
+                                <div className="grid gap-4 md:grid-cols-2 font-body">
                                     {merchantNPCs.map((npc) => (
-                                        <Card key={npc.id}>
-                                            <CardHeader>
-                                                <CardTitle className="text-base">{npc.name}</CardTitle>
-                                                <CardDescription>{npc.description}</CardDescription>
+                                        <Card key={npc.id} className="font-body">
+                                            <CardHeader className="font-body">
+                                                <CardTitle className="text-base font-headline">{npc.name}</CardTitle>
+                                                <CardDescription className="font-body">{npc.description}</CardDescription>
                                             </CardHeader>
-                                            <CardContent className="space-y-2">
-                                                <div className="space-y-2">
-                                                    {(npc.inventory || []).slice(0, 5).map((row, idx) => {
-                                                        const base = gameData.items.find((i: any) => i.id === row.itemId);
+                                            <CardContent className="space-y-2 font-body">
+                                                <div className="space-y-2 font-body">
+                                                    {(npc.inventory || []).slice(0, 5).map((row: { itemId: string; stock: number; priceModifier: number }, idx: number) => {
+                                                        const base = gameData?.items.find((i: { id: string; name: string; baseValue: number }) => i.id === row.itemId);
                                                         const name = base?.name || row.itemId;
-                                                        const price = Math.floor((base?.baseValue || 10) * (row.priceModifier || 1));
+                                                        const price = Math.floor((Number(base?.baseValue) || 10) * (row.priceModifier || 1));
                                                         return (
-                                                            <div key={idx} className="flex items-center justify-between text-sm p-2 rounded bg-muted/50">
-                                                                <span>{name}</span>
+                                                            <div key={idx} className="flex items-center justify-between text-sm p-2 rounded bg-muted/50 font-body">
+                                                                <span className="font-body">{name}</span>
                                                                 <span className="text-muted-foreground font-mono">{price}g</span>
                                                             </div>
                                                         );
@@ -627,20 +598,20 @@ export default function SocialPage() {
                                                 <Separator />
                                                 <Dialog>
                                                     <DialogTrigger asChild>
-                                                        <Button className="w-full" variant="default" onClick={() => setSelectedNPC(npc)}>
+                                                        <Button className="w-full font-body" variant="default" onClick={() => setSelectedNPC(npc)}>
                                                             <ShoppingCart className="mr-2 h-4 w-4" />
                                                             Торговать
                                                         </Button>
                                                     </DialogTrigger>
-                                                    <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                                                        <DialogHeader>
-                                                            <DialogTitle>{npc.name}</DialogTitle>
-                                                            <DialogDescription>{npc.description}</DialogDescription>
+                                                    <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto font-body">
+                                                        <DialogHeader className="font-body">
+                                                            <DialogTitle className="font-headline">{selectedNPC?.name || npc.name}</DialogTitle>
+                                                            <DialogDescription className="font-body">{selectedNPC?.description || npc.description}</DialogDescription>
                                                         </DialogHeader>
                                                         <NPCDialogContent 
-                                                            npc={npc} 
-                                                            character={character}
-                                                            relationshipLevel={getRelationshipLevel(npc.id)}
+                                                            npc={selectedNPC || npc}
+                                                            character={character as Character}
+                                                            relationshipLevel={getRelationshipLevel(selectedNPC?.id || npc.id)}
                                                             onInteract={handleInteract}
                                                             onTrade={handleTrade}
                                                             onGift={handleGift}
@@ -660,29 +631,29 @@ export default function SocialPage() {
                 </TabsContent>
 
                 {/* Companions Tab */}
-                <TabsContent value="companions" className="space-y-4">
+                <TabsContent value="companions" className="space-y-4 font-body">
                     {/* Нанятые компаньоны */}
                     {hiredCompanions.length > 0 && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Ваш отряд</CardTitle>
-                                <CardDescription>
+                        <Card className="font-body">
+                            <CardHeader className="font-body">
+                                <CardTitle className="font-headline">Ваш отряд</CardTitle>
+                                <CardDescription className="font-body">
                                     Нанятые компаньоны. Активируйте одного для участия в приключениях.
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent>
-                                <div className="grid gap-4 md:grid-cols-2">
+                            <CardContent className="font-body">
+                                <div className="grid gap-4 md:grid-cols-2 font-body">
                                     {hiredCompanions.map((companion) => {
-                                        const stats = companion.stats as any;
-                                        const skills = companion.skills as any;
+                                        const stats = companion.stats as Record<string, string | number | Record<string, number>>;
+                                        const skills = companion.skills as Record<string, string | number | Record<string, number>>;
                                         const isActive = companion.id === activeCompanion?.id;
                                         
                                         return (
-                                            <Card key={companion.id} className={`${isActive ? 'border-2 border-primary shadow-lg' : ''}`}>
-                                                <CardHeader>
-                                                    <div className="flex items-start justify-between">
-                                                        <div>
-                                                            <CardTitle className="flex items-center gap-2 text-lg">
+                                            <Card key={companion.id} className={cn("font-body", isActive ? 'border-2 border-primary shadow-lg' : '')}>
+                                                <CardHeader className="font-body">
+                                                    <div className="flex items-start justify-between font-body">
+                                                        <div className="font-body">
+                                                            <CardTitle className="flex items-center gap-2 text-lg font-headline">
                                                                 {companion.class === 'warrior' && <Icon name="Swords" className="h-5 w-5" />}
                                                                 {companion.class === 'mage' && <Icon name="Sparkles" className="h-5 w-5" />}
                                                                 {companion.class === 'rogue' && <Icon name="Eye" className="h-5 w-5" />}
@@ -690,7 +661,7 @@ export default function SocialPage() {
                                                                 {companion.class === 'ranger' && <Icon name="Crosshair" className="h-5 w-5" />}
                                                                 {companion.name}
                                                             </CardTitle>
-                                                            <CardDescription>
+                                                            <CardDescription className="font-body">
                                                                 Уровень {companion.level} • {
                                                                     companion.class === 'warrior' ? 'Воин' :
                                                                     companion.class === 'mage' ? 'Маг' :
@@ -700,29 +671,29 @@ export default function SocialPage() {
                                                             </CardDescription>
                                                         </div>
                                                         {isActive && (
-                                                            <Badge variant="default" className="bg-green-600">
+                                                            <Badge variant="default" className="bg-green-600 font-body">
                                                                 Активен
                                                             </Badge>
                                                         )}
                                                     </div>
                                                 </CardHeader>
-                                                <CardContent className="space-y-3">
-                                                    <div className="grid grid-cols-2 gap-2 text-sm">
-                                                        <div>
-                                                            <span className="text-muted-foreground">❤️ HP:</span>
-                                                            <span className="ml-1 font-medium">{stats.health.current}/{stats.health.max}</span>
+                                                <CardContent className="space-y-3 font-body">
+                                                    <div className="grid grid-cols-2 gap-2 text-sm font-body">
+                                                        <div className="font-body">
+                                                            <span className="text-muted-foreground font-body">❤️ HP:</span>
+                                                            <span className="ml-1 font-medium font-body">{stats.health.current}/{stats.health.max}</span>
                                                         </div>
-                                                        <div>
-                                                            <span className="text-muted-foreground">⚔️ Урон:</span>
-                                                            <span className="ml-1 font-medium">{stats.damage}</span>
+                                                        <div className="font-body">
+                                                            <span className="text-muted-foreground font-body">⚔️ Урон:</span>
+                                                            <span className="ml-1 font-medium font-body">{stats.damage}</span>
                                                         </div>
-                                                        <div>
-                                                            <span className="text-muted-foreground">🛡️ Броня:</span>
-                                                            <span className="ml-1 font-medium">{stats.armor}</span>
+                                                        <div className="font-body">
+                                                            <span className="text-muted-foreground font-body">🛡️ Броня:</span>
+                                                            <span className="ml-1 font-medium font-body">{stats.armor}</span>
                                                         </div>
-                                                        <div>
-                                                            <span className="text-muted-foreground">💪 Бой:</span>
-                                                            <span className="ml-1 font-medium">{skills.combat}</span>
+                                                        <div className="font-body">
+                                                            <span className="text-muted-foreground font-body">💪 Бой:</span>
+                                                            <span className="ml-1 font-medium font-body">{skills.combat}</span>
                                                         </div>
                                                     </div>
                                                     
@@ -765,16 +736,16 @@ export default function SocialPage() {
                     )}
                     
                     {/* Доступные для найма */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Доступные для найма</CardTitle>
-                            <CardDescription>
+                    <Card className="font-body">
+                        <CardHeader className="font-body">
+                            <CardTitle className="font-headline">Доступные для найма</CardTitle>
+                            <CardDescription className="font-body">
                                 Нанимайте спутников для помощи в приключениях. Они помогают в бою, путешествиях и социальных взаимодействиях.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="font-body">
                             {companionsLoading ? (
-                                <div className="flex items-center justify-center py-12">
+                                <div className="flex items-center justify-center py-12 font-body">
                                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                                 </div>
                             ) : (() => {
@@ -785,10 +756,10 @@ export default function SocialPage() {
                                 
                                 if (availableCompanions.length === 0) {
                                     return (
-                                        <div className="flex flex-col items-center justify-center py-12">
+                                        <div className="flex flex-col items-center justify-center py-12 font-body">
                                             <Sword className="h-12 w-12 text-muted-foreground mb-4" />
-                                            <p className="text-muted-foreground">Нет доступных компаньонов</p>
-                                            <p className="text-sm text-muted-foreground mt-2">
+                                            <p className="text-muted-foreground font-body">Нет доступных компаньонов</p>
+                                            <p className="text-sm text-muted-foreground mt-2 font-body">
                                                 {hiredCompanions.length > 0 
                                                     ? 'Вы уже наняли всех доступных компаньонов в этой локации.'
                                                     : 'В этой локации нет компаньонов для найма. Попробуйте другие города.'}
@@ -798,13 +769,13 @@ export default function SocialPage() {
                                 }
                                 
                                 return (
-                                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 font-body">
                                         {availableCompanions.map((template) => (
-                                            <Card key={template.id} className="hover:shadow-lg transition-shadow">
-                                                <CardHeader>
-                                                    <div className="flex items-start justify-between">
-                                                        <div>
-                                                            <CardTitle className="flex items-center gap-2 text-lg">
+                                            <Card key={template.id} className="hover:shadow-lg transition-shadow font-body">
+                                                <CardHeader className="font-body">
+                                                    <div className="flex items-start justify-between font-body">
+                                                        <div className="font-body">
+                                                            <CardTitle className="flex items-center gap-2 text-lg font-headline">
                                                                 {template.class === 'warrior' && <Icon name="Swords" className="h-5 w-5" />}
                                                                 {template.class === 'mage' && <Icon name="Sparkles" className="h-5 w-5" />}
                                                                 {template.class === 'rogue' && <Icon name="Eye" className="h-5 w-5" />}
@@ -812,7 +783,7 @@ export default function SocialPage() {
                                                                 {template.class === 'ranger' && <Icon name="Crosshair" className="h-5 w-5" />}
                                                                 {template.namePool[0]}
                                                             </CardTitle>
-                                                            <CardDescription className="capitalize mt-1">
+                                                            <CardDescription className="capitalize mt-1 font-body">
                                                                 {template.class === 'warrior' && 'Воин'}
                                                                 {template.class === 'mage' && 'Маг'}
                                                                 {template.class === 'rogue' && 'Разбойник'}
@@ -824,7 +795,7 @@ export default function SocialPage() {
                                                             template.rarity === 'legendary' ? 'default' :
                                                             template.rarity === 'rare' ? 'destructive' :
                                                             template.rarity === 'uncommon' ? 'secondary' : 'outline'
-                                                        }>
+                                                        } className="font-body">
                                                             {template.rarity === 'common' && 'Обычный'}
                                                             {template.rarity === 'uncommon' && 'Необычный'}
                                                             {template.rarity === 'rare' && 'Редкий'}
@@ -832,21 +803,21 @@ export default function SocialPage() {
                                                         </Badge>
                                                     </div>
                                                 </CardHeader>
-                                                <CardContent className="space-y-3">
-                                                    <p className="text-sm text-muted-foreground">{template.bio}</p>
+                                                <CardContent className="space-y-3 font-body">
+                                                    <p className="text-sm text-muted-foreground font-body">{template.bio}</p>
                                                     
-                                                    <div className="space-y-2">
-                                                        <div className="flex justify-between text-sm">
-                                                            <span className="text-muted-foreground">Здоровье:</span>
-                                                            <span className="font-medium">{template.baseStats.health.max}</span>
+                                                    <div className="space-y-2 font-body">
+                                                        <div className="flex justify-between text-sm font-body">
+                                                            <span className="text-muted-foreground font-body">Здоровье:</span>
+                                                            <span className="font-medium font-body">{template.baseStats.health.max}</span>
                                                         </div>
-                                                        <div className="flex justify-between text-sm">
-                                                            <span className="text-muted-foreground">Урон:</span>
-                                                            <span className="font-medium">{template.baseStats.damage}</span>
+                                                        <div className="flex justify-between text-sm font-body">
+                                                            <span className="text-muted-foreground font-body">Урон:</span>
+                                                            <span className="font-medium font-body">{template.baseStats.damage}</span>
                                                         </div>
-                                                        <div className="flex justify-between text-sm">
-                                                            <span className="text-muted-foreground">Защита:</span>
-                                                            <span className="font-medium">{template.baseStats.defense}</span>
+                                                        <div className="flex justify-between text-sm font-body">
+                                                            <span className="text-muted-foreground font-body">Защита:</span>
+                                                            <span className="font-medium font-body">{template.baseStats.defense}</span>
                                                         </div>
                                                     </div>
                                                     
@@ -914,25 +885,26 @@ export default function SocialPage() {
                 </TabsContent>
 
                 {/* Player Shop Tab */}
-                <TabsContent value="shop" className="space-y-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Моя Торговая Лавка</CardTitle>
-                            <CardDescription>
+                <TabsContent value="shop" className="space-y-4 font-body">
+                    <Card className="font-body">
+                        <CardHeader className="font-body">
+                            <CardTitle className="font-headline">Моя Торговая Лавка</CardTitle>
+                            <CardDescription className="font-body">
                                 Откройте свою лавку и продавайте предметы другим героям
                             </CardDescription>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="font-body">
                             {!hasShop ? (
-                                <div className="space-y-4">
-                                    <div className="flex flex-col items-center justify-center py-12">
+                                <div className="space-y-4 font-body">
+                                    <div className="flex flex-col items-center justify-center py-12 font-body">
                                         <Store className="h-16 w-16 text-muted-foreground mb-4" />
-                                        <h3 className="text-lg font-semibold mb-2">У вас нет лавки</h3>
-                                        <p className="text-sm text-muted-foreground text-center max-w-md mb-4">
+                                        <h3 className="text-lg font-semibold mb-2 font-headline">У вас нет лавки</h3>
+                                        <p className="text-sm text-muted-foreground text-center max-w-md mb-4 font-body">
                                             Откройте свою торговую лавку, чтобы продавать предметы другим героям и зарабатывать золото, пока вы путешествуете
                                         </p>
                                         <Button 
                                             size="lg"
+                                            className="font-body"
                                             onClick={async () => {
                                                 const csrf = typeof document !== 'undefined' ? (document.cookie.split('; ').find(x => x.startsWith('csrf_token='))?.split('=')[1] || '') : '';
                                                 const resp = await fetch('/api/shop/purchase', { 
@@ -960,7 +932,7 @@ export default function SocialPage() {
                     </Card>
                 </TabsContent>
             </Tabs>
-        </div>
+        </PageContainer>
     );
 }
 
@@ -1004,53 +976,53 @@ function NPCDialogContent({ npc, character, relationshipLevel, onInteract, onTra
     const playerGold = character.inventory.find(i => i.id === 'gold')?.quantity || 0;
 
     return (
-        <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="info">
+        <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full font-body">
+            <TabsList className="grid w-full grid-cols-3 font-body">
+                <TabsTrigger value="info" className="font-body">
                     <Info className="mr-2 h-4 w-4" />
                     Информация
                 </TabsTrigger>
                 {isMerchant && (
-                    <TabsTrigger value="trade">
+                    <TabsTrigger value="trade" className="font-body">
                         <ShoppingCart className="mr-2 h-4 w-4" />
                         Торговля
                     </TabsTrigger>
                 )}
-                <TabsTrigger value="gift">
+                <TabsTrigger value="gift" className="font-body">
                     <Gift className="mr-2 h-4 w-4" />
                     Подарок
                 </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="info" className="space-y-4 mt-4">
-                <div className="space-y-3">
-                    <div>
-                        <h4 className="font-semibold mb-2">Отношения</h4>
-                        <Badge className={`${relationshipColors[relationshipLevel]} text-white`}>
+            <TabsContent value="info" className="space-y-4 mt-4 font-body">
+                <div className="space-y-3 font-body">
+                    <div className="font-body">
+                        <h4 className="font-semibold mb-2 font-headline">Отношения</h4>
+                        <Badge className={`${relationshipColors[relationshipLevel]} text-white font-body`}>
                             {relName} (Уровень {relationshipLevel})
                         </Badge>
                     </div>
                     
                     <Separator />
                     
-                    <div>
-                        <h4 className="font-semibold mb-2">Локация</h4>
-                        <Badge variant="secondary">{npcLocation?.name || npc.location}</Badge>
+                    <div className="font-body">
+                        <h4 className="font-semibold mb-2 font-headline">Локация</h4>
+                        <Badge variant="secondary" className="font-body">{npcLocation?.name || npc.location}</Badge>
                     </div>
 
                     <Separator />
 
-                    <div>
-                        <h4 className="font-semibold mb-2">Диалог</h4>
-                        <p className="text-sm text-muted-foreground italic">
-                            "{randomDialogue}"
+                    <div className="font-body">
+                        <h4 className="font-semibold mb-2 font-headline">Диалог</h4>
+                        <p className="text-sm text-muted-foreground italic font-body">
+                            &quot;{randomDialogue}&quot;
                         </p>
                     </div>
 
                     <Button 
                         onClick={() => onInteract(npc)} 
                         disabled={isInteracting}
-                        className="w-full mt-4"
+                        className="w-full mt-4 font-body"
                     >
                         {isInteracting ? (
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1063,48 +1035,48 @@ function NPCDialogContent({ npc, character, relationshipLevel, onInteract, onTra
             </TabsContent>
 
             {isMerchant && (
-                <TabsContent value="trade" className="space-y-4 mt-4">
-                    <div className="flex gap-2 mb-4">
+                <TabsContent value="trade" className="space-y-4 mt-4 font-body">
+                    <div className="flex gap-2 mb-4 font-body">
                         <Button
                             variant={tradeAction === 'buy' ? 'default' : 'outline'}
                             onClick={() => setTradeAction('buy')}
-                            className="flex-1"
+                            className="flex-1 font-body"
                         >
                             Купить
                         </Button>
                         <Button
                             variant={tradeAction === 'sell' ? 'default' : 'outline'}
                             onClick={() => setTradeAction('sell')}
-                            className="flex-1"
+                            className="flex-1 font-body"
                         >
                             Продать
                         </Button>
                     </div>
 
-                    <div className="mb-2">
-                        <Badge variant="outline">
+                    <div className="mb-2 font-body">
+                        <Badge variant="outline" className="font-body">
                             <Coins className="mr-1 h-3 w-3" />
                             {playerGold} золота
                         </Badge>
                     </div>
 
                     {tradeAction === 'buy' ? (
-                        <ScrollArea className="h-[300px]">
-                            <div className="space-y-2">
+                        <ScrollArea className="h-[300px] font-body">
+                            <div className="space-y-2 font-body">
                                 {merchantItems.length === 0 ? (
                                     <p className="text-sm text-muted-foreground text-center py-8">
                                         У торговца нет товаров
                                     </p>
                                 ) : (
-                                    merchantItems.map((item: any) => {
-                                        const unitPrice = computeBuyPrice(character as any, npc as any, item as any, 1);
-                                        const base = computeBaseValue(item as any);
+                                    merchantItems.map((item: Record<string, string | number>) => {
+                                        const unitPrice = computeBuyPrice(character as Character, npc, item as unknown as CharacterInventoryItem, 1);
+                                        const base = computeBaseValue(item as unknown as CharacterInventoryItem);
                                         const modNote = item.priceModifier && item.priceModifier !== 1 ? ` • модификатор x${item.priceModifier}` : '';
                                         return (
-                                            <Card key={item.id} className="p-3">
+                                            <Card key={item.id as string} className="p-3">
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex-1">
-                                                        <p className="font-medium">{item.name}</p>
+                                                        <p className="font-medium">{item.name as string}</p>
                                                         <p className="text-xs text-muted-foreground">
                                                             <TooltipProvider>
                                                                 <Tooltip>
@@ -1114,7 +1086,7 @@ function NPCDialogContent({ npc, character, relationshipLevel, onInteract, onTra
                                                                     <TooltipContent>
                                                                         <div className="text-xs space-y-1">
                                                                             <div>База: {base}</div>
-                                                                            <div>Редкость: {item.rarity || 'common'}</div>
+                                                                            <div>Редкость: {(item.rarity as string) || 'common'}</div>
                                                                             <div>Отношения влияют на цену</div>
                                                                             {modNote && <div>{modNote}</div>}
                                                                         </div>
@@ -1125,7 +1097,7 @@ function NPCDialogContent({ npc, character, relationshipLevel, onInteract, onTra
                                                     </div>
                                                     <Button
                                                         size="sm"
-                                                        onClick={() => onTrade(npc, 'buy', item.id, 1)}
+                                                        onClick={() => onTrade(npc, 'buy', item.id as string, 1)}
                                                         disabled={isInteracting || playerGold < unitPrice}
                                                     >
                                                         Купить
@@ -1145,9 +1117,9 @@ function NPCDialogContent({ npc, character, relationshipLevel, onInteract, onTra
                                         У вас нет предметов для продажи
                                     </p>
                                 ) : (
-                                    playerItems.map(item => {
-                                        const sellPrice = computeSellPrice(character as any, npc as any, item as any, 1);
-                                        const base = computeBaseValue(item as any);
+                                    playerItems.map((item) => {
+                                        const sellPrice = computeSellPrice(character as Character, npc, item as CharacterInventoryItem, 1);
+                                        const base = computeBaseValue(item as unknown as CharacterInventoryItem);
                                         return (
                                             <Card key={item.id} className="p-3">
                                                 <div className="flex items-center justify-between">
@@ -1188,12 +1160,12 @@ function NPCDialogContent({ npc, character, relationshipLevel, onInteract, onTra
                 </TabsContent>
             )}
 
-            <TabsContent value="gift" className="space-y-4 mt-4">
-                <p className="text-sm text-muted-foreground mb-4">
+            <TabsContent value="gift" className="space-y-4 mt-4 font-body">
+                <p className="text-sm text-muted-foreground mb-4 font-body">
                     Подарите предмет чтобы улучшить отношения с {npc.name}
                 </p>
-                <ScrollArea className="h-[300px]">
-                    <div className="space-y-2">
+                <ScrollArea className="h-[300px] font-body">
+                    <div className="space-y-2 font-body">
                         {playerItems.length === 0 ? (
                             <p className="text-sm text-muted-foreground text-center py-8">
                                 У вас нет предметов для подарка

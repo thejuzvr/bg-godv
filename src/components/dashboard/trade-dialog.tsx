@@ -19,15 +19,15 @@ export function TradeDialog({ itemName, onConfirm }: { itemName: string; onConfi
       <DialogTrigger asChild>
         <Button size="sm" variant="secondary">Купить/Продать</Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="font-body">
         <DialogHeader>
-          <DialogTitle>Количество для {itemName}</DialogTitle>
+          <DialogTitle className="font-headline">Количество для {itemName}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <Input type="number" value={qty} onChange={(e) => setQty(Number(e.target.value))} min={1} />
+          <Input type="number" value={qty} onChange={(e) => setQty(Number(e.target.value))} min={1} className="font-body" />
           <div className="flex gap-2 justify-end">
-            <Button variant="ghost" onClick={() => setOpen(false)}>Отмена</Button>
-            <Button onClick={confirm}>Подтвердить</Button>
+            <Button variant="ghost" onClick={() => setOpen(false)} className="font-body">Отмена</Button>
+            <Button onClick={confirm} className="font-body">Подтвердить</Button>
           </div>
         </div>
       </DialogContent>

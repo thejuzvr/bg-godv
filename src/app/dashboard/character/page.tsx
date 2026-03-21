@@ -47,7 +47,7 @@ const Icon = ({ name, ...props }: { name: keyof typeof LucideIcons } & LucideIco
 export default function CharacterPage() {
     const router = useRouter();
     const { toast } = useToast();
-    const { user, loading: authLoading } = useAuth(true);
+    const { user} = useAuth(true);
     const [character, setCharacter] = useState<Character | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -75,7 +75,7 @@ export default function CharacterPage() {
                 } else {
                     router.push('/create-character');
                 }
-            } catch (error) {
+            } catch {
                 toast({ title: "Ошибка", description: "Не удалось загрузить данные героя.", variant: "destructive" });
             } finally {
                 setIsLoading(false);
@@ -165,35 +165,35 @@ export default function CharacterPage() {
 
 
     if (isLoading || !character || !tempAttributes || !tempSkills) {
-        return <div className="flex items-center justify-center min-h-screen font-headline text-xl">Загрузка данных персонажа...</div>;
+        return <div className="flex items-center justify-center min-h-screen font-headline text-xl font-body">Загрузка данных персонажа...</div>;
     }
 
     return (
         <div className="w-full font-body space-y-8 p-4 md:p-8">
-            <header className="flex items-center justify-between">
+            <header className="flex items-center justify-between font-body">
                 <h1 className="text-3xl font-headline text-primary flex items-center gap-3"><Icon name="User" /> Персонаж</h1>
             </header>
             
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 items-start">
-                <div className="lg:col-span-1 space-y-8">
-                    <Card>
-                        <CardHeader>
+                <div className="lg:col-span-1 space-y-8 font-body">
+                    <Card className="font-body">
+                        <CardHeader className="font-body">
                             <CardTitle className="font-headline">Очки для распределения</CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="flex justify-between items-center text-lg">
-                                <span className="font-semibold">Характеристики:</span>
-                                <Badge variant="default" className="text-lg">{attrPoints}</Badge>
+                        <CardContent className="space-y-4 font-body">
+                            <div className="flex justify-between items-center text-lg font-body">
+                                <span className="font-semibold font-body">Характеристики:</span>
+                                <Badge variant="default" className="text-lg font-body">{attrPoints}</Badge>
                             </div>
-                            <div className="flex justify-between items-center text-lg">
-                                <span className="font-semibold">Навыки:</span>
-                                <Badge variant="secondary" className="text-lg">{skillPoints}</Badge>
+                            <div className="flex justify-between items-center text-lg font-body">
+                                <span className="font-semibold font-body">Навыки:</span>
+                                <Badge variant="secondary" className="text-lg font-body">{skillPoints}</Badge>
                             </div>
                             <Separator />
-                            <div className="flex items-center justify-between pt-2">
-                                <Label htmlFor="auto-assign" className="flex flex-col space-y-1">
-                                    <span>Автоматически распределять очки</span>
-                                    <span className="font-normal leading-snug text-muted-foreground">
+                            <div className="flex items-center justify-between pt-2 font-body">
+                                <Label htmlFor="auto-assign" className="flex flex-col space-y-1 font-body">
+                                    <span className="font-body">Автоматически распределять очки</span>
+                                    <span className="font-normal leading-snug text-muted-foreground font-body">
                                         Позволить герою самому решать, как стать сильнее.
                                     </span>
                                 </Label>
@@ -203,63 +203,63 @@ export default function CharacterPage() {
                                     onCheckedChange={handleAutoAssignToggle}
                                 />
                             </div>
-                            <Button className="w-full" onClick={handleConfirmChanges} disabled={!hasChanges || isAutoAssignEnabled || isSaving}>
+                            <Button className="w-full font-body" onClick={handleConfirmChanges} disabled={!hasChanges || isAutoAssignEnabled || isSaving}>
                                 {isSaving ? <LucideIcons.Loader2 className="animate-spin" /> : "Подтвердить"}
                             </Button>
-                            {isAutoAssignEnabled && <p className="text-xs text-center text-muted-foreground">Ручное распределение отключено.</p>}
+                            {isAutoAssignEnabled && <p className="text-xs text-center text-muted-foreground font-body">Ручное распределение отключено.</p>}
                         </CardContent>
                     </Card>
                 </div>
 
-                <div className="lg:col-span-2 space-y-8">
-                     <Card>
-                        <CardHeader>
+                <div className="lg:col-span-2 space-y-8 font-body">
+                     <Card className="font-body">
+                        <CardHeader className="font-body">
                             <CardTitle className="font-headline">Характеристики</CardTitle>
-                            <CardDescription>Основные атрибуты, определяющие боевые и жизненные показатели вашего героя.</CardDescription>
+                            <CardDescription className="font-body">Основные атрибуты, определяющие боевые и жизненные показатели вашего героя.</CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-4">
+                        <CardContent className="space-y-4 font-body">
                             {Object.entries(tempAttributes).map(([key, value]) => {
                                 const info = attributeInfo[key as keyof CharacterAttributes];
                                 return (
-                                    <div key={key} className="flex items-center justify-between">
-                                        <div className="flex items-center gap-4">
+                                    <div key={key} className="flex items-center justify-between font-body">
+                                        <div className="flex items-center gap-4 font-body">
                                             <Icon name={info.icon} className="w-6 h-6 text-primary" />
-                                            <div>
-                                                <p className="font-semibold">{info.name}</p>
-                                                <p className="text-xs text-muted-foreground">{info.description}</p>
+                                            <div className="font-body">
+                                                <p className="font-semibold font-body">{info.name}</p>
+                                                <p className="text-xs text-muted-foreground font-body">{info.description}</p>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleAttributeChange(key as keyof CharacterAttributes, -1)} disabled={value <= character.attributes[key as keyof CharacterAttributes] || isAutoAssignEnabled}>-</Button>
-                                            <span className="text-lg font-bold w-8 text-center">{value}</span>
-                                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleAttributeChange(key as keyof CharacterAttributes, 1)} disabled={attrPoints === 0 || isAutoAssignEnabled}>+</Button>
+                                        <div className="flex items-center gap-2 font-body">
+                                            <Button variant="outline" size="icon" className="h-8 w-8 font-body" onClick={() => handleAttributeChange(key as keyof CharacterAttributes, -1)} disabled={value <= character.attributes[key as keyof CharacterAttributes] || isAutoAssignEnabled}>-</Button>
+                                            <span className="text-lg font-bold w-8 text-center font-body">{value}</span>
+                                            <Button variant="outline" size="icon" className="h-8 w-8 font-body" onClick={() => handleAttributeChange(key as keyof CharacterAttributes, 1)} disabled={attrPoints === 0 || isAutoAssignEnabled}>+</Button>
                                         </div>
                                     </div>
                                 )
                             })}
                         </CardContent>
                     </Card>
-                     <Card>
-                        <CardHeader>
+                     <Card className="font-body">
+                        <CardHeader className="font-body">
                             <CardTitle className="font-headline">Навыки</CardTitle>
-                             <CardDescription>Специализированные умения, которые улучшаются с практикой.</CardDescription>
+                             <CardDescription className="font-body">Специализированные умения, которые улучшаются с практикой.</CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-4">
+                        <CardContent className="space-y-4 font-body">
                              {Object.entries(tempSkills).map(([key, value]) => {
                                 const info = skillInfo[key as keyof CharacterSkills];
                                 return (
-                                    <div key={key} className="flex items-center justify-between">
-                                        <div className="flex items-center gap-4">
+                                    <div key={key} className="flex items-center justify-between font-body">
+                                        <div className="flex items-center gap-4 font-body">
                                             <Icon name={info.icon} className="w-6 h-6 text-secondary-foreground" />
-                                            <div>
-                                                <p className="font-semibold">{info.name}</p>
-                                                <p className="text-xs text-muted-foreground">{info.description}</p>
+                                            <div className="font-body">
+                                                <p className="font-semibold font-body">{info.name}</p>
+                                                <p className="text-xs text-muted-foreground font-body">{info.description}</p>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleSkillChange(key as keyof CharacterSkills, -1)} disabled={value <= character.skills[key as keyof CharacterSkills] || isAutoAssignEnabled}>-</Button>
-                                            <span className="text-lg font-bold w-10 text-center">{value}</span>
-                                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleSkillChange(key as keyof CharacterSkills, 1)} disabled={skillPoints === 0 || isAutoAssignEnabled}>+</Button>
+                                        <div className="flex items-center gap-2 font-body">
+                                            <Button variant="outline" size="icon" className="h-8 w-8 font-body" onClick={() => handleSkillChange(key as keyof CharacterSkills, -1)} disabled={value <= character.skills[key as keyof CharacterSkills] || isAutoAssignEnabled}>-</Button>
+                                            <span className="text-lg font-bold w-10 text-center font-body">{value}</span>
+                                            <Button variant="outline" size="icon" className="h-8 w-8 font-body" onClick={() => handleSkillChange(key as keyof CharacterSkills, 1)} disabled={skillPoints === 0 || isAutoAssignEnabled}>+</Button>
                                         </div>
                                     </div>
                                 )
@@ -269,48 +269,48 @@ export default function CharacterPage() {
                 </div>
 
             </div>
-             <Card>
-                <CardHeader>
+             <Card className="font-body">
+                <CardHeader className="font-body">
                     <CardTitle className="font-headline">Перки</CardTitle>
-                    <CardDescription>Особые таланты, которые открываются по мере совершенствования навыков.</CardDescription>
+                    <CardDescription className="font-body">Особые таланты, которые открываются по мере совершенствования навыков.</CardDescription>
                 </CardHeader>
-                <CardContent>
-                    <Tabs defaultValue="combat" className="w-full">
-                        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
+                <CardContent className="font-body">
+                    <Tabs defaultValue="combat" className="w-full font-body">
+                        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 font-body">
                             {Object.keys(perksByCategory).map((categoryKey) => {
                                 const info = categoryInfo[categoryKey];
                                 return (
-                                    <TabsTrigger key={categoryKey} value={categoryKey} className="flex items-center gap-2">
+                                    <TabsTrigger key={categoryKey} value={categoryKey} className="flex items-center gap-2 font-body">
                                         <Icon name={info.icon as keyof typeof LucideIcons} className="h-4 w-4" />
-                                        <span className="hidden md:inline">{info.name}</span>
+                                        <span className="hidden md:inline font-body">{info.name}</span>
                                     </TabsTrigger>
                                 );
                             })}
                         </TabsList>
                         {Object.entries(perksByCategory).map(([categoryKey, perks]) => (
-                            <TabsContent key={categoryKey} value={categoryKey}>
-                                <div className="mb-4">
-                                    <h4 className="font-semibold text-lg">{categoryInfo[categoryKey].name}</h4>
-                                    <p className="text-sm text-muted-foreground">{categoryInfo[categoryKey].description}</p>
+                            <TabsContent key={categoryKey} value={categoryKey} className="font-body">
+                                <div className="mb-4 font-body">
+                                    <h4 className="font-semibold text-lg font-headline">{categoryInfo[categoryKey].name}</h4>
+                                    <p className="text-sm text-muted-foreground font-body">{categoryInfo[categoryKey].description}</p>
                                 </div>
-                                <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3 font-body">
                                     {perks.map((perk) => {
-                                        const isUnlocked = (character.unlockedPerks?.includes(perk.id) ?? false) || ((character.skills as any)[perk.skill] >= perk.requiredSkillLevel);
+                                        const isUnlocked = (character.unlockedPerks?.includes(perk.id) ?? false) || ((character.skills as Record<string, number>)[perk.skill as keyof CharacterSkills] >= (perk.requiredSkillLevel as number));
                                         return (
                                             <TooltipProvider key={perk.id}>
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
-                                                        <div className={`flex flex-col gap-3 p-4 rounded-lg border-2 transition-all hover:shadow-md ${isUnlocked ? 'border-primary/80 bg-primary/10' : 'border-dashed border-muted-foreground/30'}`}>
-                                                            <div className="flex items-start gap-3">
-                                                                <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-md ${isUnlocked ? 'bg-primary/20 text-primary' : 'bg-muted/50'}`}>
+                                                        <div className={cn("flex flex-col gap-3 p-4 rounded-lg border-2 transition-all hover:shadow-md font-body", isUnlocked ? 'border-primary/80 bg-primary/10' : 'border-dashed border-muted-foreground/30')}>
+                                                            <div className="flex items-start gap-3 font-body">
+                                                                <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-md", isUnlocked ? 'bg-primary/20 text-primary' : 'bg-muted/50')}>
                                                                     <Icon name={perk.icon as keyof typeof LucideIcons} className="h-7 w-7" />
                                                                 </div>
-                                                                <div className="flex-1 min-w-0">
-                                                                    <p className="font-semibold text-sm leading-tight">{perk.name}</p>
+                                                                <div className="flex-1 min-w-0 font-body">
+                                                                    <p className="font-semibold text-sm leading-tight font-body">{perk.name}</p>
                                                                     {isUnlocked ? (
-                                                                        <p className="text-xs text-emerald-500 mt-1">✓ Открыт</p>
+                                                                        <p className="text-xs text-emerald-500 mt-1 font-body">✓ Открыт</p>
                                                                     ) : (
-                                                                        <p className="text-xs text-muted-foreground mt-1">
+                                                                        <p className="text-xs text-muted-foreground mt-1 font-body">
                                                                             {skillInfo[perk.skill as keyof CharacterSkills].name} {perk.requiredSkillLevel}
                                                                         </p>
                                                                     )}
@@ -319,29 +319,29 @@ export default function CharacterPage() {
                                                                             {Array.from({ length: perk.maxRank }).map((_, idx) => (
                                                                                 <div 
                                                                                     key={idx} 
-                                                                                    className={`h-1.5 w-full rounded-full ${idx < (perk.currentRank || 0) ? 'bg-primary' : 'bg-muted'}`}
+                                                                                    className={cn("h-1.5 w-full rounded-full", idx < (perk.currentRank || 0) ? 'bg-primary' : 'bg-muted')}
                                                                                 />
                                                                             ))}
                                                                         </div>
                                                                     )}
                                                                 </div>
                                                             </div>
-                                                            <p className="text-xs text-muted-foreground">{perk.description}</p>
+                                                            <p className="text-xs text-muted-foreground font-body">{perk.description}</p>
                                                             {perk.nextRankRequirement && !isUnlocked && (
-                                                                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                                                                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 font-body">
                                                                     💡 {perk.nextRankRequirement}
                                                                 </p>
                                                             )}
                                                         </div>
                                                     </TooltipTrigger>
-                                                    <TooltipContent className="max-w-xs">
-                                                        <p className="font-bold">{perk.name}</p>
-                                                        <p className="text-sm mt-1">{perk.description}</p>
+                                                    <TooltipContent className="max-w-xs font-body">
+                                                        <p className="font-bold font-headline">{perk.name}</p>
+                                                        <p className="text-sm mt-1 font-body">{perk.description}</p>
                                                         {perk.nextRankRequirement && (
-                                                            <p className="text-xs text-amber-400 mt-2">{perk.nextRankRequirement}</p>
+                                                            <p className="text-xs text-amber-400 mt-2 font-body">{perk.nextRankRequirement}</p>
                                                         )}
                                                         {!isUnlocked && (
-                                                            <p className="text-destructive text-xs mt-2">
+                                                            <p className="text-destructive text-xs mt-2 font-body">
                                                                 Требуется: {skillInfo[perk.skill as keyof CharacterSkills].name} {perk.requiredSkillLevel}
                                                             </p>
                                                         )}

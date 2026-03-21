@@ -89,7 +89,7 @@ export const ActionProgressPanel = ({ character, gameData }: { character: Charac
     }
 
     return (
-        <Card className="border-primary ring-2 ring-primary/50">
+        <Card className="border-primary ring-2 ring-primary/50 font-body">
             <CardHeader>
                 <div className="flex justify-between items-start">
                     <div>
@@ -105,14 +105,14 @@ export const ActionProgressPanel = ({ character, gameData }: { character: Charac
             <CardContent className="space-y-4">
                 <div>
                     <div className="flex justify-between items-center mb-1">
-                        <Label>Прогресс</Label>
+                        <Label className="font-headline">Прогресс</Label>
                         <span className="text-sm font-mono text-muted-foreground">{progress.toFixed(1)}%</span>
                     </div>
                     <Progress value={progress} />
                 </div>
                 {rewards && (
                     <div>
-                         <Label className="font-semibold mb-2 block">Возможные награды</Label>
+                         <Label className="font-semibold mb-2 block font-headline">Возможные награды</Label>
                          {rewards}
                     </div>
                 )}
@@ -148,7 +148,7 @@ export const CryptExplorationPanel = ({ character }: { character: Character }) =
     }
 
     return (
-        <Card className="border-primary ring-2 ring-primary/50">
+        <Card className="border-primary ring-2 ring-primary/50 font-body">
             <CardHeader>
                 <div className="flex justify-between items-start">
                     <div>
@@ -164,13 +164,13 @@ export const CryptExplorationPanel = ({ character }: { character: Character }) =
             <CardContent className="space-y-4">
                 <div>
                     <div className="flex justify-between items-center mb-1">
-                        <Label>Прогресс этапа</Label>
+                        <Label className="font-headline">Прогресс этапа</Label>
                         <span className="text-sm font-mono text-muted-foreground">{progress.toFixed(1)}%</span>
                     </div>
                     <Progress value={progress} />
                 </div>
                  <div>
-                    <Label className="font-semibold mb-2 block">Ключ</Label>
+                    <Label className="font-semibold mb-2 block font-headline">Ключ</Label>
                     <p className="text-sm text-muted-foreground">Используется: {character.inventory.find(i => i.id === activeCryptQuest.clawId)?.name}</p>
                 </div>
             </CardContent>

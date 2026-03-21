@@ -14,10 +14,10 @@ const DISCIPLINES: { key: Discipline; label: string }[] = [
 
 export function DisciplineTabs(props: { value: Discipline; onChange: (d: Discipline) => void }) {
   return (
-    <Tabs value={props.value} onValueChange={(v) => props.onChange(v as Discipline)}>
+    <Tabs value={props.value} onValueChange={(v) => props.onChange(v as Discipline)} className="font-body">
       <TabsList className="grid grid-cols-3 sm:grid-cols-6 w-full">
         {DISCIPLINES.map((d) => (
-          <TabsTrigger key={d.key} value={d.key} className="text-xs sm:text-sm truncate">
+          <TabsTrigger key={d.key} value={d.key} className="text-xs sm:text-sm truncate font-headline">
             {d.label}
           </TabsTrigger>
         ))}

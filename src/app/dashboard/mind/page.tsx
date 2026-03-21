@@ -9,13 +9,13 @@ import { useGameLoop } from '@/hooks/use-game-loop';
 import { useRealtimeState } from '@/hooks/use-realtime-state';
 import { useAuth } from "@/hooks/use-auth";
 
-import type { Character, Weather } from "@/types/character";
+import type { Character } from "@/types/character";
 import { fetchCharacter } from "@/app/dashboard/shared-actions";
 import { fetchGameData, type GameData } from "@/services/gameDataService";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Activity, BrainCircuit, Eye, Goal, Heart, Target, Cloudy, Sun, Snowflake, Umbrella, MapPin, Smile, Meh, Frown, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { Activity, BrainCircuit, Eye, Goal, Heart, Target, Smile, Meh, Frown, CheckCircle2, XCircle, Clock } from "lucide-react";
 import {
     PieChart,
     Pie,
@@ -80,7 +80,7 @@ const PatternChart = ({ value, label, color }: { value: number, label: string, c
 const getBehavioralPatterns = (character: Character, gameData: GameData) => {
     let risk = 20;
     let resources = 40;
-    let morale = character.mood;
+    const morale = character.mood;
     let social = 30;
     let combat = 20;
     let exploration = 30;
@@ -243,38 +243,38 @@ export default function MindPage() {
     return (
         <div className="w-full font-body p-4 md:p-8 space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between font-body">
                 <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-primary/10">
                         <BrainCircuit className="h-6 w-6 text-primary" />
                     </div>
-                    <div>
+                    <div className="font-body">
                         <h1 className="text-3xl font-headline text-foreground">Сознание Героя</h1>
-                        <p className="text-muted-foreground text-sm mt-1">
+                        <p className="text-muted-foreground text-sm mt-1 font-body">
                             Анализ AI поведения и принятия решений
                         </p>
                     </div>
                 </div>
                 <a 
                     href="/dashboard/mind/editor" 
-                    className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-medium"
+                    className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-body font-medium"
                 >
                     Редактор сознания
                 </a>
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 font-body">
                 {/* Column 1 */}
-                <div className="flex flex-col gap-6">
-                    <Card className="border-2">
-                        <CardHeader className="pb-4">
+                <div className="flex flex-col gap-6 font-body">
+                    <Card className="border-2 font-body">
+                        <CardHeader className="pb-4 font-body">
                             <CardTitle className="flex items-center gap-2 font-headline text-xl">
                                 <Activity className="text-primary h-5 w-5" />
                                 Поведенческие Паттерны
                             </CardTitle>
-                            <CardDescription>Динамические показатели, влияющие на решения героя в реальном времени</CardDescription>
+                            <CardDescription className="font-body">Динамические показатели, влияющие на решения героя в реальном времени</CardDescription>
                         </CardHeader>
-                        <CardContent className="grid grid-cols-3 md:grid-cols-3 gap-y-6 gap-x-2">
+                        <CardContent className="grid grid-cols-3 md:grid-cols-3 gap-y-6 gap-x-2 font-body">
                             <PatternChart value={patterns.risk} label="Риск" color="hsl(var(--destructive))" />
                             <PatternChart value={patterns.resources} label="Ресурсы" color="hsl(var(--chart-1))" />
                             <PatternChart value={patterns.morale} label="Мораль" color="hsl(var(--chart-2))" />
@@ -283,15 +283,15 @@ export default function MindPage() {
                             <PatternChart value={patterns.exploration} label="Исследование" color="hsl(var(--chart-5))" />
                         </CardContent>
                     </Card>
-                    <Card className="border-2">
-                        <CardHeader className="pb-4">
+                    <Card className="border-2 font-body">
+                        <CardHeader className="pb-4 font-body">
                             <CardTitle className="flex items-center gap-2 font-headline text-xl">
                                 <Goal className="text-primary h-5 w-5" />
                                 Факторы принятия решений
                             </CardTitle>
-                            <CardDescription>Радарная диаграмма текущего поведения AI</CardDescription>
+                            <CardDescription className="font-body">Радарная диаграмма текущего поведения AI</CardDescription>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="font-body">
                             <ChartContainer config={decisionChartConfig} className="mx-auto aspect-square max-h-[350px]">
                                 <RadarChart data={decisionFactorsData} outerRadius="70%">
                                     <ChartTooltip content={<ChartTooltipContent />} />
@@ -310,66 +310,66 @@ export default function MindPage() {
                 </div>
 
                 {/* Column 2 */}
-                <div className="flex flex-col gap-6">
-                    <Card className="border-2">
-                        <CardHeader className="pb-4">
+                <div className="flex flex-col gap-6 font-body">
+                    <Card className="border-2 font-body">
+                        <CardHeader className="pb-4 font-body">
                             <CardTitle className="flex items-center gap-2 font-headline text-xl">
                                 <moodDetails.icon className={`${moodDetails.color} h-5 w-5`} />
                                 Эмоциональное состояние
                             </CardTitle>
-                            <CardDescription>Текущее настроение и влияющие на него факторы</CardDescription>
+                            <CardDescription className="font-body">Текущее настроение и влияющие на него факторы</CardDescription>
                         </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div>
-                            <div className="flex justify-between items-center mb-1">
-                                <span className="text-sm font-medium">{moodDetails.description}</span>
-                                <span className="text-sm font-mono text-muted-foreground">{character.mood.toFixed(0)} / 100</span>
+                    <CardContent className="space-y-4 font-body">
+                        <div className="font-body">
+                            <div className="flex justify-between items-center mb-1 font-body">
+                                <span className="text-sm font-medium font-body">{moodDetails.description}</span>
+                                <span className="text-sm font-mono text-muted-foreground font-body">{character.mood.toFixed(0)} / 100</span>
                             </div>
                             <Progress value={character.mood} className={`[&>div]:bg-gradient-to-r [&>div]:from-red-500 [&>div]:via-yellow-500 [&>div]:to-green-500`} />
                         </div>
-                         <div>
-                            <p className="text-sm font-semibold text-muted-foreground mb-2">Факторы</p>
-                            <div className="space-y-2">
+                         <div className="font-body">
+                            <p className="text-sm font-semibold text-muted-foreground mb-2 font-body">Факторы</p>
+                            <div className="space-y-2 font-body">
                                 {moodFactors.length > 0 ? moodFactors.map((factor, i) => (
-                                     <div key={i} className="flex items-center text-sm">
+                                     <div key={i} className="flex items-center text-sm font-body">
                                         {factor.positive ? <CheckCircle2 className="w-4 h-4 mr-2 text-green-500"/> : <XCircle className="w-4 h-4 mr-2 text-destructive"/>}
                                         {factor.name}
                                      </div>
-                                )) : <p className="text-sm text-muted-foreground">Настроение стабильно.</p>}
+                                )) : <p className="text-sm text-muted-foreground font-body">Настроение стабильно.</p>}
                             </div>
                         </div>
                     </CardContent>
                     </Card>
-                    <Card className="border-2">
-                        <CardHeader className="pb-4">
+                    <Card className="border-2 font-body">
+                        <CardHeader className="pb-4 font-body">
                             <CardTitle className="flex items-center gap-2 font-headline text-xl">
                                 <Target className="text-primary h-5 w-5" />
                                 Текущее решение
                             </CardTitle>
-                            <CardDescription>Что сейчас делает герой</CardDescription>
+                            <CardDescription className="font-body">Что сейчас делает герой</CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="p-4 rounded-lg bg-muted/50 border">
-                                <p className="font-bold text-lg mb-2">{currentAction?.name || character.status}</p>
-                                <p className="text-sm text-muted-foreground">{currentAction?.description || "Наблюдает за миром, решая, что делать дальше."}</p>
+                        <CardContent className="space-y-4 font-body">
+                            <div className="p-4 rounded-lg bg-muted/50 border font-body">
+                                <p className="font-bold text-lg mb-2 font-body">{currentAction?.name || character.status}</p>
+                                <p className="text-sm text-muted-foreground font-body">{currentAction?.description || "Наблюдает за миром, решая, что делать дальше."}</p>
                             </div>
                             {currentAction && (
-                                <div className="flex items-center text-sm text-muted-foreground gap-2 p-2 rounded bg-accent/10">
+                                <div className="flex items-center text-sm text-muted-foreground gap-2 p-2 rounded bg-accent/10 font-body">
                                     <Clock className="w-4 h-4"/>
-                                    <span className="font-medium">Осталось: {((currentAction.duration - (Date.now() - currentAction.startedAt)) / 1000).toFixed(0)}s</span>
+                                    <span className="font-medium font-body">Осталось: {((currentAction.duration - (Date.now() - currentAction.startedAt)) / 1000).toFixed(0)}s</span>
                                 </div>
                             )}
                         </CardContent>
                     </Card>
-                    <Card className="border-2">
-                        <CardHeader className="pb-4">
+                    <Card className="border-2 font-body">
+                        <CardHeader className="pb-4 font-body">
                             <CardTitle className="flex items-center gap-2 font-headline text-xl">
                                 <Eye className="text-primary h-5 w-5" />
                                 Влияние на настроение
                             </CardTitle>
-                            <CardDescription>Что сейчас влияет на эмоции героя</CardDescription>
+                            <CardDescription className="font-body">Что сейчас влияет на эмоции героя</CardDescription>
                         </CardHeader>
-                        <CardContent className="flex items-center justify-center pb-6">
+                        <CardContent className="flex items-center justify-center pb-6 font-body">
                             <ChartContainer config={moodChartConfig} className="mx-auto aspect-square max-h-[250px]">
                                 <PieChart>
                                     <ChartTooltip content={<ChartTooltipContent nameKey="name" />} />
@@ -383,20 +383,20 @@ export default function MindPage() {
                             </ChartContainer>
                         </CardContent>
                     </Card>
-                    <Card className="border-2">
-                        <CardHeader className="pb-4">
+                    <Card className="border-2 font-body">
+                        <CardHeader className="pb-4 font-body">
                             <CardTitle className="flex items-center gap-2 font-headline text-xl">
                                 <Heart className="text-primary h-5 w-5" />
                                 Потребности
                             </CardTitle>
-                            <CardDescription>Текущие нужды героя</CardDescription>
+                            <CardDescription className="font-body">Текущие нужды героя</CardDescription>
                         </CardHeader>
-                        <CardContent>
-                            <div className="grid grid-cols-2 gap-4">
-                                {needs.map((need, index) => (
-                                    <div key={need.name} className="p-4 rounded-lg border text-center bg-gradient-to-br from-muted/30 to-muted/10 hover:shadow-md transition-shadow">
-                                        <div className="text-2xl font-bold text-primary">{need.value}</div>
-                                        <div className="text-xs text-muted-foreground mt-1">{need.name}</div>
+                        <CardContent className="font-body">
+                            <div className="grid grid-cols-2 gap-4 font-body">
+                                {needs.map((need) => (
+                                    <div key={need.name} className="p-4 rounded-lg border text-center bg-gradient-to-br from-muted/30 to-muted/10 hover:shadow-md transition-shadow font-body">
+                                        <div className="text-2xl font-bold text-primary font-body">{need.value}</div>
+                                        <div className="text-xs text-muted-foreground mt-1 font-body">{need.name}</div>
                                     </div>
                                 ))}
                             </div>

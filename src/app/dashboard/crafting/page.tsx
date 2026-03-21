@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { DisciplineTabs } from '@/components/crafting/DisciplineTabs';
 import { useCrafting } from '@/hooks/use-crafting';
@@ -26,25 +26,25 @@ export default function CraftingPage() {
 
   if (authLoading) return null;
   return (
-    <div className="p-3 max-w-5xl mx-auto flex flex-col gap-2">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold">Крафт</h1>
-          <p className="text-sm text-muted-foreground">Создавайте зелья, снаряжение и еду из имеющихся материалов.</p>
+    <div className="p-3 max-w-5xl mx-auto flex flex-col gap-2 font-body">
+      <div className="flex items-end justify-between gap-4 font-body">
+        <div className="font-body">
+          <h1 className="text-xl font-semibold font-headline">Крафт</h1>
+          <p className="text-sm text-muted-foreground font-body">Создавайте зелья, снаряжение и еду из имеющихся материалов.</p>
         </div>
-        <div className="text-sm flex items-center gap-3">
-          <span>Ур. крафта: <span className="font-semibold">{(inventory as any).craftingLevel ?? '-'}</span></span>
-          <span>Очки крафта: <span className="font-semibold">{inventory.craftingPoints ?? 0}</span></span>
+        <div className="text-sm flex items-center gap-3 font-body">
+          <span className="font-body">Ур. крафта: <span className="font-semibold font-body">{(inventory as Record<string, string | number>).craftingLevel ?? '-'}</span></span>
+          <span className="font-body">Очки крафта: <span className="font-semibold font-body">{inventory.craftingPoints ?? 0}</span></span>
         </div>
       </div>
       {/* Crafting XP progress */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 font-body">
         <Progress className="h-3" value={Math.min(100, ((inventory.craftingXp || 0) % 100))} />
-        <span className="text-xs text-muted-foreground whitespace-nowrap">{(inventory.craftingXp || 0) % 100} / 100 XP</span>
+        <span className="text-xs text-muted-foreground whitespace-nowrap font-body">{(inventory.craftingXp || 0) % 100} / 100 XP</span>
       </div>
       <DisciplineTabs value={discipline} onChange={setDiscipline} />
       <Separator />
-      <MaterialsPanel items={inventory.list} relevantIds={new Set(recipes.flatMap(r => (r.inputs||[]).map((i:any)=>i.id)))} />
+      <MaterialsPanel items={inventory.list} relevantIds={new Set(recipes.flatMap(r => (r.inputs||[]).map((i: { id: string })=>i.id)))} />
       <RecipeList recipes={recipes} loading={loading} query={query} onQuery={setQuery} onCraft={onCraft} disabledIds={busyIds} inventoryById={inventory.byId} characterId={user?.userId || undefined} />
     </div>
   );

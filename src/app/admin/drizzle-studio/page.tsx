@@ -29,19 +29,19 @@ export default function DrizzleStudioPage() {
   }, []);
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen font-headline text-xl">Загрузка...</div>;
+    return <div className="flex items-center justify-center min-h-screen font-headline text-xl font-body">Загрузка...</div>;
   }
 
   if (!user || !user.isAdmin) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Доступ запрещён</CardTitle>
-            <CardDescription>У вас нет прав для доступа к этой странице.</CardDescription>
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 font-body">
+        <Card className="w-full max-w-md font-body">
+          <CardHeader className="font-body">
+            <CardTitle className="font-headline text-2xl">Доступ запрещён</CardTitle>
+            <CardDescription className="font-body">У вас нет прав для доступа к этой странице.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <Button asChild className="w-full">
+          <CardContent className="font-body">
+            <Button asChild className="w-full font-body">
               <Link href="/dashboard">Вернуться на дашборд</Link>
             </Button>
           </CardContent>
@@ -52,32 +52,32 @@ export default function DrizzleStudioPage() {
 
   return (
     <div className="w-full font-body p-4 md:p-8 space-y-8">
-      <header>
+      <header className="font-body">
         <h1 className="text-4xl font-headline text-primary flex items-center gap-2">
           <Database className="h-10 w-10" />
           Drizzle Studio
         </h1>
-        <p className="text-lg text-muted-foreground mt-2">Продвинутый редактор базы данных</p>
+        <p className="text-lg text-muted-foreground mt-2 font-body">Продвинутый редактор базы данных</p>
       </header>
 
-      <Alert>
+      <Alert className="font-body">
         <Info className="h-4 w-4" />
-        <AlertTitle>О Drizzle Studio</AlertTitle>
-        <AlertDescription>
+        <AlertTitle className="font-headline">О Drizzle Studio</AlertTitle>
+        <AlertDescription className="font-body">
           Drizzle Studio — это веб-интерфейс для управления базой данных. Он предоставляет визуальный редактор для просмотра и редактирования данных, выполнения SQL-запросов и многого другого.
         </AlertDescription>
       </Alert>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+      <div className="grid gap-6 md:grid-cols-2 font-body">
+        <Card className="font-body">
+          <CardHeader className="font-body">
+            <CardTitle className="flex items-center gap-2 font-headline">
               <Terminal className="h-5 w-5" />
               Запуск Drizzle Studio
             </CardTitle>
-            <CardDescription>Выполните команду для запуска</CardDescription>
+            <CardDescription className="font-body">Выполните команду для запуска</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 font-body">
             <div className="bg-muted p-4 rounded-lg font-mono text-sm">
               npm run db:studio
             </div>
@@ -95,44 +95,44 @@ export default function DrizzleStudioPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Статус</CardTitle>
-            <CardDescription>Текущее состояние Drizzle Studio</CardDescription>
+        <Card className="font-body">
+          <CardHeader className="font-body">
+            <CardTitle className="font-headline">Статус</CardTitle>
+            <CardDescription className="font-body">Текущее состояние Drizzle Studio</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-2">
+          <CardContent className="space-y-4 font-body">
+            <div className="flex items-center gap-2 font-body">
               <div className={`w-3 h-3 rounded-full ${isStudioRunning ? 'bg-green-500' : 'bg-red-500'}`} />
-              <span className="font-medium">
+              <span className="font-medium font-body">
                 {isStudioRunning ? 'Запущен' : 'Не запущен'}
               </span>
             </div>
-            <Button asChild className="w-full">
+            <Button asChild className="w-full font-body">
               <a 
                 href="https://local.drizzle.studio" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 font-body"
               >
                 Открыть Drizzle Studio
                 <ExternalLink className="h-4 w-4" />
               </a>
             </Button>
-            <Alert>
-              <AlertDescription className="text-sm">
-                Для использования Drizzle Studio выполните команду <code className="bg-muted px-1 py-0.5 rounded">npm run db:studio</code> в терминале.
+            <Alert className="font-body">
+              <AlertDescription className="text-sm font-body">
+                Для использования Drizzle Studio выполните команду <code className="bg-muted px-1 py-0.5 rounded font-mono">npm run db:studio</code> в терминале.
               </AlertDescription>
             </Alert>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Возможности Drizzle Studio</CardTitle>
+      <Card className="font-body">
+        <CardHeader className="font-body">
+          <CardTitle className="font-headline">Возможности Drizzle Studio</CardTitle>
         </CardHeader>
-        <CardContent>
-          <ul className="space-y-2 text-muted-foreground">
+        <CardContent className="font-body">
+          <ul className="space-y-2 text-muted-foreground font-body">
             <li className="flex items-start gap-2">
               <span className="text-primary mt-0.5">•</span>
               <span>Просмотр и редактирование всех таблиц базы данных</span>
@@ -161,12 +161,12 @@ export default function DrizzleStudioPage() {
         </CardContent>
       </Card>
 
-      <Card className="border-amber-500/50">
-        <CardHeader>
-          <CardTitle className="text-amber-500">⚠️ Предупреждение</CardTitle>
+      <Card className="border-amber-500/50 font-body">
+        <CardHeader className="font-body">
+          <CardTitle className="text-amber-500 font-headline">⚠️ Предупреждение</CardTitle>
         </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">
+        <CardContent className="font-body">
+          <p className="text-muted-foreground font-body">
             Будьте осторожны при редактировании данных через Drizzle Studio. 
             Изменения применяются немедленно и могут повлиять на работу приложения. 
             Рекомендуется создавать резервные копии перед внесением критических изменений.

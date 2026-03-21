@@ -53,8 +53,8 @@ export const SpellsPanel = ({ character }: { character: Character }) => {
         <div>
             <Separator />
             {learnedSpells.length > 0 && (
-            <div className="pt-4">
-                <Label className="text-base font-semibold flex items-center gap-2"><BrainCircuit className="w-5 h-5 text-primary"/> Книга заклинаний</Label>
+            <div className="pt-4 font-body">
+                <Label className="text-base font-semibold font-headline flex items-center gap-2"><BrainCircuit className="w-5 h-5 text-primary"/> Книга заклинаний</Label>
                 <div className="flex flex-wrap gap-2 pt-2">
                     {learnedSpells.map((spell) => (
                         <Dialog key={spell.id}>
@@ -66,16 +66,16 @@ export const SpellsPanel = ({ character }: { character: Character }) => {
                                     <Icon name={spell.icon} className="w-6 h-6" />
                                 </button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-md sm:max-w-lg">
+                            <DialogContent className="max-w-md sm:max-w-lg font-body">
                                 <DialogHeader>
-                                    <DialogTitle>{spell.name}</DialogTitle>
+                                    <DialogTitle className="font-headline">{spell.name}</DialogTitle>
                                     <DialogDescription>
-                                        <span className="text-sm text-muted-foreground">Заклинание</span>
+                                        <span className="text-sm text-muted-foreground font-body">Заклинание</span>
                                     </DialogDescription>
                                 </DialogHeader>
                                 <div className="space-y-2">
-                                    <p className="text-sm whitespace-pre-wrap break-words">{spell.description}</p>
-                                    <p className="text-xs text-muted-foreground">Затраты маны: {spell.manaCost}</p>
+                                    <p className="text-sm whitespace-pre-wrap break-words font-body">{spell.description}</p>
+                                    <p className="text-xs text-muted-foreground font-body">Затраты маны: {spell.manaCost}</p>
                                 </div>
                             </DialogContent>
                         </Dialog>
@@ -85,8 +85,8 @@ export const SpellsPanel = ({ character }: { character: Character }) => {
             )}
 
             {learnedShouts.length > 0 && (
-            <div className="pt-4">
-                <Label className="text-base font-semibold flex items-center gap-2"><BrainCircuit className="w-5 h-5 text-primary"/> Крики</Label>
+            <div className="pt-4 font-body">
+                <Label className="text-base font-semibold font-headline flex items-center gap-2"><BrainCircuit className="w-5 h-5 text-primary"/> Крики</Label>
                 <div className="flex flex-wrap gap-2 pt-2">
                     {learnedShouts.map((shout) => (
                         <Dialog key={shout.id}>
@@ -98,15 +98,15 @@ export const SpellsPanel = ({ character }: { character: Character }) => {
                                     <Icon name={shout.icon} className="w-6 h-6" />
                                 </button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-md sm:max-w-lg">
+                            <DialogContent className="max-w-md sm:max-w-lg font-body">
                                 <DialogHeader>
-                                    <DialogTitle>{shout.name}</DialogTitle>
+                                    <DialogTitle className="font-headline">{shout.name}</DialogTitle>
                                     <DialogDescription>
-                                        <span className="text-sm text-muted-foreground">Крик</span>
+                                        <span className="text-sm text-muted-foreground font-body">Крик</span>
                                     </DialogDescription>
                                 </DialogHeader>
                                 <div className="space-y-2">
-                                    <p className="text-sm whitespace-pre-wrap break-words">{shout.description}</p>
+                                    <p className="text-sm whitespace-pre-wrap break-words font-body">{shout.description}</p>
                                 </div>
                             </DialogContent>
                         </Dialog>

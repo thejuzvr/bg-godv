@@ -103,14 +103,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const { loading } = useAuth(true);
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen">Загрузка...</div>;
+    return <div className="flex items-center justify-center min-h-screen font-body">Загрузка...</div>;
   }
 
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full">
+    <SidebarProvider className="font-body">
+      <div className="flex min-h-screen w-full font-body">
         <AdminSidebar />
-        <SidebarInset className="flex-1 flex flex-col">
+        <SidebarInset className="flex-1 flex flex-col font-body">
           <header className="sticky top-0 z-10 flex h-16 items-center justify-start gap-4 border-b bg-card px-4 md:hidden">
             <SidebarTrigger>
               <PanelLeft />

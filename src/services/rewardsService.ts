@@ -4,7 +4,7 @@ export interface Rewards { gold?: number; xp?: number; items?: Array<{ id: strin
 import { gameDataService } from "../../server/game-data-service";
 
 export async function applyRewards(character: any, rewards: Rewards): Promise<{ character: any; log: string }> {
-  let updated = structuredClone(character);
+  const updated = structuredClone(character);
   const logs: string[] = [];
   if (rewards.gold && rewards.gold > 0) {
     const gold = updated.inventory.find((i: any) => i.id === 'gold');

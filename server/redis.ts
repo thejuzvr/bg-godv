@@ -7,6 +7,18 @@ export function getRedis(): Redis {
 
   const url = process.env.REDIS_URL;
   if (!url) {
+    if (process.env.NEXT_PHASE === 'phase-production-build') {
+      console.warn('[Redis] Warning: REDIS_URL not set during build. Returning mock client.');
+      return {
+        set: async () => 'OK',
+        get: async () => null,
+        duplicate: () => getRedis(),
+        subscribe: async () => {},
+        unsubscribe: async () => {},
+        quit: async () => {},
+        on: () => {},
+      } as any;
+    }
     throw new Error('REDIS_URL is not set');
   }
 

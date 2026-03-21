@@ -26,7 +26,7 @@ export async function updateStats(
             throw new Error("Недостаточно очков для распределения.");
         }
 
-        let updatedCharacter: Character = structuredClone(character);
+        const updatedCharacter: Character = structuredClone(character);
         
         updatedCharacter.attributes = newAttributes;
         updatedCharacter.skills = newSkills;

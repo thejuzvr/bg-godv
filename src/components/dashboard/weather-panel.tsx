@@ -180,7 +180,7 @@ export const WeatherPanel = ({ character }: { character: Character }) => {
     };
 
     return (
-        <Card>
+        <Card className="font-body">
             <CardHeader>
                 <CardTitle className="font-headline text-lg flex items-center gap-2">
                     <Icon name={currentSeason.icon} className="h-5 w-5 text-primary" />
@@ -193,21 +193,21 @@ export const WeatherPanel = ({ character }: { character: Character }) => {
                         <Icon name={currentTimeOfDay.icon} className={`h-5 w-5 ${currentTimeOfDay.color}`} />
                         <p className="text-sm font-medium">Время суток</p>
                     </div>
-                    <p className={`text-sm font-semibold ${currentTimeOfDay.color}`}>{currentTimeOfDay.name}</p>
+                    <p className={`text-sm font-semibold font-headline ${currentTimeOfDay.color}`}>{currentTimeOfDay.name}</p>
                 </div>
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <Icon name={currentSeason.icon} className="h-5 w-5 text-muted-foreground" />
                         <p className="text-sm font-medium">Время года</p>
                     </div>
-                    <p className="text-sm font-semibold">{currentSeason.name}</p>
+                    <p className="text-sm font-semibold font-headline">{currentSeason.name}</p>
                 </div>
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <Icon name={currentWeather.icon} className="h-5 w-5 text-muted-foreground" />
                         <p className="text-sm font-medium">Погода</p>
                     </div>
-                    <p className="text-sm font-semibold">{currentWeather.name}</p>
+                    <p className="text-sm font-semibold font-headline">{currentWeather.name}</p>
                 </div>
                 
                 {/* Active Modifiers */}

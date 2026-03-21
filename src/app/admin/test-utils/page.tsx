@@ -37,19 +37,19 @@ export default function TestUtilsPage() {
   const [goldAmount, setGoldAmount] = useState("1000");
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen font-headline text-xl">Загрузка...</div>;
+    return <div className="flex items-center justify-center min-h-screen font-headline text-xl font-body">Загрузка...</div>;
   }
 
   if (!user || !user.isAdmin) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Доступ запрещён</CardTitle>
-            <CardDescription>У вас нет прав для доступа к этой странице.</CardDescription>
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 font-body">
+        <Card className="w-full max-w-md font-body">
+          <CardHeader className="font-body">
+            <CardTitle className="font-headline text-2xl">Доступ запрещён</CardTitle>
+            <CardDescription className="font-body">У вас нет прав для доступа к этой странице.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <Button asChild className="w-full">
+          <CardContent className="font-body">
+            <Button asChild className="w-full font-body">
               <Link href="/dashboard">Вернуться на дашборд</Link>
             </Button>
           </CardContent>
@@ -87,15 +87,15 @@ export default function TestUtilsPage() {
 
   return (
     <div className="w-full font-body p-4 md:p-8 space-y-8">
-      <header>
+      <header className="font-body">
         <h1 className="text-4xl font-headline text-primary flex items-center gap-2">
           <Zap className="h-10 w-10" />
           Test Utils
         </h1>
-        <p className="text-lg text-muted-foreground mt-2">Полезные инструменты для тестирования и отладки</p>
+        <p className="text-lg text-muted-foreground mt-2 font-body">Полезные инструменты для тестирования и отладки</p>
       </header>
 
-      <Alert>
+      <Alert className="font-body">
         <AlertTriangle className="h-4 w-4" />
         <AlertTitle>Внимание</AlertTitle>
         <AlertDescription>
@@ -104,21 +104,22 @@ export default function TestUtilsPage() {
       </Alert>
 
       {/* Character ID Input */}
-      <Card>
-        <CardHeader>
-          <CardTitle>ID персонажа для тестирования</CardTitle>
-          <CardDescription>Укажите ID персонажа (оставьте пустым для текущего пользователя)</CardDescription>
+      <Card className="font-body">
+        <CardHeader className="font-body">
+          <CardTitle className="font-headline">ID персонажа для тестирования</CardTitle>
+          <CardDescription className="font-body">Укажите ID персонажа (оставьте пустым для текущего пользователя)</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            <Label htmlFor="characterId">Character ID</Label>
+        <CardContent className="font-body">
+          <div className="space-y-2 font-body">
+            <Label htmlFor="characterId" className="font-body">Character ID</Label>
             <Input
               id="characterId"
               placeholder={user.userId}
               value={characterId}
               onChange={(e) => setCharacterId(e.target.value)}
+              className="font-body"
             />
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground font-body">
               Текущий пользователь: {user.email} (ID: {user.userId})
             </p>
           </div>
@@ -126,16 +127,16 @@ export default function TestUtilsPage() {
       </Card>
 
       {/* Character Management */}
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+      <div className="grid gap-6 md:grid-cols-2 font-body">
+        <Card className="font-body">
+          <CardHeader className="font-body">
+            <CardTitle className="flex items-center gap-2 font-headline">
               <MapPin className="h-5 w-5" />
               Телепорт в Вайтран
             </CardTitle>
-            <CardDescription>Переместить героя в Вайтран с полным здоровьем</CardDescription>
+            <CardDescription className="font-body">Переместить героя в Вайтран с полным здоровьем</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="font-body">
             <Button 
               onClick={() => handleTestAction(
                 () => resetCharacterToWhiterun(characterId || user.userId),
@@ -224,20 +225,21 @@ export default function TestUtilsPage() {
       </div>
 
       {/* Add Gold */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Добавить золото</CardTitle>
-          <CardDescription>Добавить указанное количество золота персонажу</CardDescription>
+      <Card className="font-body">
+        <CardHeader className="font-body">
+          <CardTitle className="font-headline">Добавить золото</CardTitle>
+          <CardDescription className="font-body">Добавить указанное количество золота персонажу</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="goldAmount">Количество золота</Label>
+        <CardContent className="space-y-4 font-body">
+          <div className="space-y-2 font-body">
+            <Label htmlFor="goldAmount" className="font-body">Количество золота</Label>
             <Input
               id="goldAmount"
               type="number"
               placeholder="1000"
               value={goldAmount}
               onChange={(e) => setGoldAmount(e.target.value)}
+              className="font-body"
             />
           </div>
           <Button 
@@ -255,15 +257,15 @@ export default function TestUtilsPage() {
       </Card>
 
       {/* AI Testing */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+      <Card className="font-body">
+        <CardHeader className="font-body">
+          <CardTitle className="flex items-center gap-2 font-headline">
             <PlayCircle className="h-5 w-5" />
             Тест AI тика
           </CardTitle>
-          <CardDescription>Запустить один тик AI для персонажа</CardDescription>
+          <CardDescription className="font-body">Запустить один тик AI для персонажа</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="font-body">
           <Button 
             onClick={() => handleTestAction(
               () => testAITick(characterId || user.userId),

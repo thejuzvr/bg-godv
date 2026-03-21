@@ -47,7 +47,7 @@ export async function equipItem(
             throw new Error("Герой не найден.");
         }
 
-        let character: Character = charData as any;
+        const character: Character = charData as any;
         const itemToEquip = character.inventory.find(i => i.id === itemId);
 
         if (!itemToEquip || itemToEquip.equipmentSlot !== slot) {
@@ -78,7 +78,7 @@ export async function clearInventory(
             throw new Error("Герой не найден.");
         }
 
-        let character: Character = charData as any;
+        const character: Character = charData as any;
 
         const goldItem = character.inventory.find(i => i.id === 'gold');
         character.inventory = goldItem ? [goldItem] : [{ id: 'gold', name: 'Золото', type: 'gold', quantity: 0, weight: 0 }];

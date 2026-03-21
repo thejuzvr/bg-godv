@@ -20,7 +20,7 @@ export interface DecisionTrace {
   entries: PriorityBreakdown[];
 }
 
-let lastTracePerCharacter: Record<string, DecisionTrace> = {};
+const lastTracePerCharacter: Record<string, DecisionTrace> = {};
 
 export function recordDecisionTrace(characterId: string, entries: PriorityBreakdown[]): void {
   lastTracePerCharacter[characterId] = {

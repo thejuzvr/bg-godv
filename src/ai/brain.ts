@@ -176,7 +176,7 @@ function getTimeOfDayModifiers(timeOfDay: TimeOfDay): TimeOfDayEffect {
  */
 function addItemToInventory(character: Character, itemToAdd: Omit<CharacterInventoryItem, 'quantity'>, quantity: number): { updatedCharacter: Character; logMessage: string } {
     const updatedChar = structuredClone(character);
-    let itemLog = `Получен предмет: ${itemToAdd.name}${quantity > 1 ? ` (x${quantity})` : ''}.`;
+    const itemLog = `Получен предмет: ${itemToAdd.name}${quantity > 1 ? ` (x${quantity})` : ''}.`;
     
     const existingItem = updatedChar.inventory.find((i: CharacterInventoryItem) => i.id === itemToAdd.id);
     if (existingItem) {
@@ -368,7 +368,7 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
         return updatedChar;
     }
 
-    let enemy = updatedChar.combat.enemy;
+    const enemy = updatedChar.combat.enemy;
     const baseEnemyDef = gameData.enemies.find(e => e.id === updatedChar.combat!.enemyId);
     
     // Safety check: if enemy definition not found, end combat
@@ -547,7 +547,7 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
     // --- Turn blocks ---
     let currentHeroAction: 'attack' | 'defend' | 'cast' | 'flee' = 'attack';
     const doHeroTurn = async (): Promise<Character> => {
-        let c = updatedChar;
+        const c = updatedChar;
         logMessages.push('--- Ход героя ---');
 
     // Shout reflex with cooldown (uses knownShouts if present)
@@ -789,7 +789,7 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
     };
 
     const doEnemyTurn = async (): Promise<Character> => {
-        let c = updatedChar;
+        const c = updatedChar;
         // --- Enemy's Turn ---
         logMessages.push(`--- Ход ${enemy.name} ---`);
         if (updatedChar.combat && (updatedChar.combat.enemyStunnedRounds || 0) > 0) {
@@ -807,7 +807,7 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
         }
         const { roll: enemyRoll, updatedCharacter: charAfterEnemyRoll } = rollD20AdvLocal(updatedChar, enemyTurnAdv);
         updatedChar = charAfterEnemyRoll;
-        let enemyTotalRoll = enemyRoll + enemyAttackBonus;
+        const enemyTotalRoll = enemyRoll + enemyAttackBonus;
         
         // Calculate hero armor class (defense target)
         const equipmentACBase = computeEquipmentArmorClass(updatedChar);
@@ -824,7 +824,7 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
         logMessages.push(`Бросок атаки врага: ${enemyRoll}${enemyTurnAdv !== 'none' ? ` (${enemyTurnAdv === 'adv' ? 'преимущество' : 'помеха'})` : ''} + ${enemyAttackBonus} (бонус) = ${enemyTotalRoll} (цель: ${heroDefenseTarget})`);
 
         if (enemyRoll === 20) {
-            let damageTaken = Math.max(1, Math.floor((baseEnemyDef!.damage + (baseEnemyDef?.damageBonus || 0)) * 1.5));
+            const damageTaken = Math.max(1, Math.floor((baseEnemyDef!.damage + (baseEnemyDef?.damageBonus || 0)) * 1.5));
             updatedChar.stats.health.current -= damageTaken;
             updatedChar.combat!.totalDamageTaken = (updatedChar.combat!.totalDamageTaken || 0) + damageTaken;
             logMessages.push(`🎲 Критический удар! ${enemy.name} наносит ${damageTaken} урона.`);
@@ -1075,7 +1075,7 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
             const max = Math.max(1, updatedChar.stats.health.max);
             const ratio = hp / max;
             const thresholds = [0.75, 0.5, 0.25, 0.10, 0.01];
-            let key = 'hp:last:bucket';
+            const key = 'hp:last:bucket';
             const last = (updatedChar.actionCooldowns as any)?.[key];
             let bucket = '';
             if (ratio <= 0.01) bucket = '1';
@@ -1101,8 +1101,8 @@ const performCombatRound = async (character: Character, gameData: GameData, logM
         const regenMultM = Math.max(0, w.regenModifier.magicka * t.regenModifier.magicka);
         const regenMultS = Math.max(0, w.regenModifier.stamina * t.regenModifier.stamina);
         const baseH = 0, baseM = 1, baseS = 2;
-        let addH = Math.floor(baseH * regenMultH);
-        let addM = Math.max(0, Math.floor(baseM * regenMultM));
+        const addH = Math.floor(baseH * regenMultH);
+        const addM = Math.max(0, Math.floor(baseM * regenMultM));
         let addS = Math.max(0, Math.floor(baseS * regenMultS));
         if (hasPerk('lightArmor_windwalker')) addS += 1;
         updatedChar.stats.magicka.current = Math.min(updatedChar.stats.magicka.max, updatedChar.stats.magicka.current + addM);
@@ -1157,7 +1157,7 @@ const equipBestGearAction: Action = {
     getWeight: (char) => (char.preferences?.autoEquip ?? true) ? 100 : 0,
     canPerform: (char, worldState) => worldState.isIdle && (char.preferences?.autoEquip ?? true),
     async perform(character, gameData) {
-        let updatedChar = structuredClone(character);
+        const updatedChar = structuredClone(character);
         const logMessages: string[] = [];
         let gearChanged = false;
 
@@ -1391,7 +1391,7 @@ const takeQuestAction: Action = {
                 const tasks = (activeQuestData.tasks || []).sort((a: any, b: any) => a.idx - b.idx);
                 const currentTask = tasks.find((t: any) => t.status !== 'completed');
                 
-                let initialLog = `Пора продолжить задание "${activeQuest.title}". Героя ничто не остановит!`;
+                const initialLog = `Пора продолжить задание "${activeQuest.title}". Героя ничто не остановит!`;
                 
                 // If there's a current task, act based on its type
                 if (currentTask) {
@@ -1499,7 +1499,7 @@ const takeQuestAction: Action = {
                     combatChance: 0.5
                 };
                 
-                let initialLog = `Пора вернуться к заданию "${quest.title}". Героя зовёт приключение!`;
+                const initialLog = `Пора вернуться к заданию "${quest.title}". Героя зовёт приключение!`;
                 
                 // Proceed with quest execution
                 if (quest.type === 'bounty' || (quest.type === 'side' && Math.random() < (quest.combatChance || 0))) {
@@ -1548,7 +1548,7 @@ const takeQuestAction: Action = {
             }
             
             const quest: any = { id: created?.quest?.id || template.id, title: template.title, type: template.type, narrative: template.narrative, duration: template.duration, targetEnemyId: (template as any).targetEnemyId, combatChance: (template as any).combatChance };
-            let initialLog = `Задание "${quest.title}"? Звучит как неплохой способ разбогатеть. Герой берется за дело.`;
+            const initialLog = `Задание "${quest.title}"? Звучит как неплохой способ разбогатеть. Герой берется за дело.`;
 
         if (quest.type === 'bounty' || (quest.type === 'side' && Math.random() < (quest.combatChance || 0))) {
             const baseEnemy = enemies.find(e => e.id === quest.targetEnemyId) || enemies[Math.floor(Math.random() * enemies.length)];
@@ -1602,7 +1602,7 @@ const takeQuestAction: Action = {
             return { character: updatedChar, logMessage: 'Подходящих заданий нет. Герой решает отдохнуть.' };
         }
         const quest = suitableQuests[Math.floor(Math.random() * suitableQuests.length)];
-        let initialLog = `Задание "${quest.title}"? Звучит как неплохой способ разбогатеть. Герой берется за дело.`;
+        const initialLog = `Задание "${quest.title}"? Звучит как неплохой способ разбогатеть. Герой берется за дело.`;
         if (quest.type === 'bounty' || (quest.type === 'side' && Math.random() < (quest.combatChance || 0))) {
             const baseEnemy = (gameData as any).enemies.find((e: any) => e.id === quest.targetEnemyId) || (gameData as any).enemies[Math.floor(Math.random() * (gameData as any).enemies.length)];
             const levelMultiplier = 1 + (character.level - 1) * 0.15;
@@ -2388,7 +2388,7 @@ const donateToFactionAction: Action = {
     },
     canPerform: (char, worldState) => worldState.isLocationSafe! && worldState.hasEnoughGoldForDonation!,
     async perform(character, gameData) {
-        let entitiesToDonate = allFactions.filter(f => 
+        const entitiesToDonate = allFactions.filter(f =>
             !f.joinRestrictions || !f.joinRestrictions.includes(character.backstory)
         ).map(f => ({ id: f.id, name: f.name }));
         
@@ -2467,7 +2467,7 @@ const travelToCryptAction: Action = {
     getWeight: () => 95, // Very high weight if available
     canPerform: (char, worldState) => worldState.hasKeyItem && char.location !== 'forgotten_crypt',
     async perform(character, gameData) {
-        let updatedChar = structuredClone(character);
+        const updatedChar = structuredClone(character);
         const { locations } = gameData;
         const currentLocationName = locations.find(l => l.id === character.location)?.name || 'неизвестного места';
         const destination = locations.find(l => l.id === 'forgotten_crypt')!;
@@ -2507,7 +2507,7 @@ const startCryptExplorationAction: Action = {
         !worldState.isBadlyInjured && // Don't enter if badly hurt
         worldState.hasHealingPotion, // Make sure to have at least one potion
     async perform(character, gameData) {
-        let updatedChar = structuredClone(character);
+        const updatedChar = structuredClone(character);
         const claw = updatedChar.inventory.find(i => i.type === 'key_item')!;
         const firstStage = cryptStages[0];
 
@@ -2609,7 +2609,7 @@ const fleeFromCombatReflex: ReflexAction = {
     isTriggered: (char, worldState) => worldState.isInCombat && worldState.isBadlyInjured,
     canPerform: (char, worldState) => worldState.isInCombat && worldState.isBadlyInjured && !char.combat!.fleeAttempted!,
     async perform(character, gameData) {
-        let updatedChar = structuredClone(character);
+        const updatedChar = structuredClone(character);
         updatedChar.combat!.fleeAttempted = true;
         const staminaCost = 15;
         let logMessage: string;
@@ -2677,7 +2677,7 @@ const autoAssignPointsAction: Action = {
     getWeight: (char) => (char.preferences?.autoAssignPoints && (char.points.attribute > 0 || char.points.skill > 0)) ? 100 : 0,
     canPerform: (char) => !!char.preferences?.autoAssignPoints && (char.points.attribute > 0 || char.points.skill > 0),
     async perform(character, gameData) {
-        let updatedChar = structuredClone(character);
+        const updatedChar = structuredClone(character);
         const logMessages: string[] = [];
         let pointsAssigned = false;
 
@@ -2939,7 +2939,7 @@ const exploreDungeonAction: Action = {
     },
     canPerform: (char) => char.status === 'idle' && char.location === 'bleak_falls_barrow',
     async perform(character, gameData) {
-        let updatedChar = structuredClone(character);
+        const updatedChar = structuredClone(character);
         const logs: string[] = [];
         // 60%: use dungeon generators; 40%: legacy simple outcomes
         if (Math.random() < 0.6) {
@@ -3293,7 +3293,7 @@ export const idleActions: Action[] = [
         getWeight: (char, world) => (world.isLocationSafe && world.timeOfDay !== 'morning' ? priorityToWeight(Priority.MEDIUM) : 0),
         canPerform: (char, world) => world.isLocationSafe && (char.inventory.find(i => i.id === 'gold')?.quantity || 0) >= 10,
         async perform(character) {
-            let updated = structuredClone(character);
+            const updated = structuredClone(character);
             const gold = updated.inventory.find(i => i.id === 'gold');
             if (gold) gold.quantity = Math.max(0, gold.quantity - 10);
             updated.mood = Math.min(100, updated.mood + 6);
@@ -3543,7 +3543,7 @@ async function determineNextAction(character: Character, gameData: GameData): Pr
     } catch {}
 
     // 5. Filter for actions that can be performed (exclude fallback wander from primary selection)
-    let possibleActions = actionSet
+    const possibleActions = actionSet
         .filter(action => action.canPerform(character, worldState, gameData))
         .filter(action => action.name !== wanderAction.name);
 

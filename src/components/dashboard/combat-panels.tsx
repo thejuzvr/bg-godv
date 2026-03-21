@@ -24,7 +24,7 @@ export const CombatLogPanel = ({ log }: { log: string[] }) => {
     }, [log]);
 
     return (
-        <Card>
+        <Card className="font-body">
             <CardHeader className="p-4">
                 <CardTitle className="font-headline text-lg">Журнал Боя</CardTitle>
             </CardHeader>
@@ -46,7 +46,7 @@ export const CombatStatusPanel = ({ character, combatState }: { character: Chara
     const lastRoll = combatState.lastRoll;
 
     return (
-        <Card className="border-destructive ring-1 ring-destructive/50">
+        <Card className="border-destructive ring-1 ring-destructive/50 font-body">
             <CardHeader className="p-4">
                 <div className="flex items-center gap-2">
                     <SwordIcon className="h-5 w-5 text-destructive" />
@@ -55,10 +55,10 @@ export const CombatStatusPanel = ({ character, combatState }: { character: Chara
             </CardHeader>
             <CardContent className="p-4 pt-0 space-y-3">
                  <div className="space-y-1">
-                    <h4 className="font-semibold">{character.name}</h4>
+                    <h4 className="font-semibold font-headline">{character.name}</h4>
                     <div>
                         <div className="flex justify-between items-center mb-1 text-xs">
-                            <Label className="flex items-center gap-1 font-semibold"><Heart className="h-3 w-3 text-destructive"/>Здоровье</Label>
+                            <Label className="flex items-center gap-1 font-semibold font-headline"><Heart className="h-3 w-3 text-destructive"/>Здоровье</Label>
                             <span className="font-mono text-muted-foreground">{Math.max(0, character.stats.health.current)} / {character.stats.health.max}</span>
                         </div>
                         <Progress value={(character.stats.health.current / character.stats.health.max) * 100} className="h-2 [&>div]:bg-destructive" />
@@ -82,10 +82,10 @@ export const CombatStatusPanel = ({ character, combatState }: { character: Chara
 
 
                 <div className="space-y-1">
-                    <h4 className="font-semibold">{enemy.name}</h4>
+                    <h4 className="font-semibold font-headline">{enemy.name}</h4>
                     <div>
                         <div className="flex justify-between items-center mb-1 text-xs">
-                            <Label className="flex items-center gap-1 font-semibold"><Heart className="h-3 w-3 text-destructive"/>Здоровье</Label>
+                            <Label className="flex items-center gap-1 font-semibold font-headline"><Heart className="h-3 w-3 text-destructive"/>Здоровье</Label>
                             <span className="font-mono text-muted-foreground">{Math.max(0, enemy.health.current)} / {enemy.health.max}</span>
                         </div>
                         <Progress value={(enemy.health.current / enemy.health.max) * 100} className="h-2 [&>div]:bg-destructive" />

@@ -17,6 +17,8 @@ import {
   Crown
 } from "lucide-react";
 import { fetchAdminStats, type AdminStats } from "./actions";
+import { PageContainer } from "@/components/layout/page-container";
+import { SectionContainer } from "@/components/layout/section-container";
 
 export default function AdminDashboard() {
   const { user, loading } = useAuth(true);
@@ -54,230 +56,232 @@ export default function AdminDashboard() {
 
   if (!user || !user.isAdmin) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4">
-        <Card className="w-full max-w-md">
+      <PageContainer centered maxWidth="4xl">
+        <Card className="w-full max-w-md border-border/40 bg-card/60 backdrop-blur-sm">
           <CardHeader>
-            <CardTitle>Доступ запрещён</CardTitle>
-            <CardDescription>У вас нет прав для доступа к этой странице.</CardDescription>
+            <CardTitle className="font-headline text-2xl">Доступ запрещён</CardTitle>
+            <CardDescription className="font-body">У вас нет прав для доступа к этой странице.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button asChild className="w-full">
+            <Button asChild className="w-full font-body">
               <Link href="/dashboard">Вернуться на дашборд</Link>
             </Button>
           </CardContent>
         </Card>
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="w-full font-body p-4 md:p-8 space-y-8">
-      {/* Header */}
-      <header>
-        <h1 className="text-4xl font-headline text-primary">Панель администратора</h1>
-        <p className="text-lg text-muted-foreground mt-2">Добро пожаловать, {user.email}</p>
-      </header>
+    <PageContainer maxWidth="container">
+      <SectionContainer>
+        {/* Header */}
+        <header>
+          <h1 className="text-4xl font-headline text-primary">Панель администратора</h1>
+          <p className="text-lg text-muted-foreground mt-2 font-body">Добро пожаловать, {user.email}</p>
+        </header>
 
-      {/* Stats Grid */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Activity className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      ) : stats ? (
-        <>
-          {/* Main Stats */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Всего пользователей</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.totalUsers}</div>
-                <p className="text-xs text-muted-foreground">
-                  +{stats.activeUsers} активных
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Всего героев</CardTitle>
-                <Sword className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.totalCharacters}</div>
-                <p className="text-xs text-muted-foreground">
-                  Сред. уровень: {stats.avgLevel}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Telegram подписки</CardTitle>
-                <MessageSquare className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.telegramSubs}</div>
-                <p className="text-xs text-muted-foreground">
-                  {stats.activeTelegramSubs} активных
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Игровые события</CardTitle>
-                <Activity className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.totalEvents}</div>
-                <p className="text-xs text-muted-foreground">
-                  За последние 24ч
-                </p>
-              </CardContent>
-            </Card>
+        {/* Stats Grid */}
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Activity className="h-8 w-8 animate-spin text-primary" />
           </div>
+        ) : stats ? (
+          <>
+            {/* Main Stats */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <Card className="border-border/40 transition-colors hover:border-primary/40">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium font-body uppercase tracking-wider text-muted-foreground">Всего пользователей</CardTitle>
+                  <Users className="h-4 w-4 text-primary" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold font-headline">{stats.totalUsers}</div>
+                  <p className="text-xs text-muted-foreground font-body mt-1">
+                    <span className="text-green-500 font-bold">+{stats.activeUsers}</span> активных
+                  </p>
+                </CardContent>
+              </Card>
 
-          {/* Additional Stats */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Смертей</CardTitle>
-                <Skull className="h-4 w-4 text-red-500" />
+              <Card className="border-border/40 transition-colors hover:border-primary/40">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium font-body uppercase tracking-wider text-muted-foreground">Всего героев</CardTitle>
+                  <Sword className="h-4 w-4 text-primary" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold font-headline">{stats.totalCharacters}</div>
+                  <p className="text-xs text-muted-foreground font-body mt-1">
+                    Сред. уровень: <span className="text-primary font-bold">{stats.avgLevel}</span>
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/40 transition-colors hover:border-primary/40">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium font-body uppercase tracking-wider text-muted-foreground">Telegram подписки</CardTitle>
+                  <MessageSquare className="h-4 w-4 text-primary" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold font-headline">{stats.telegramSubs}</div>
+                  <p className="text-xs text-muted-foreground font-body mt-1">
+                    <span className="text-blue-500 font-bold">{stats.activeTelegramSubs}</span> активных
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/40 transition-colors hover:border-primary/40">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium font-body uppercase tracking-wider text-muted-foreground">Игровые события</CardTitle>
+                  <Activity className="h-4 w-4 text-primary" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold font-headline">{stats.totalEvents}</div>
+                  <p className="text-xs text-muted-foreground font-body mt-1">
+                    За последние 24ч
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Additional Stats */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <Card className="border-border/40">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium font-body uppercase tracking-wider text-muted-foreground">Смертей</CardTitle>
+                  <Skull className="h-4 w-4 text-destructive" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold font-headline">{stats.totalDeaths}</div>
+                  <p className="text-xs text-muted-foreground font-body mt-1">За всё время</p>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/40">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium font-body uppercase tracking-wider text-muted-foreground">Сражений</CardTitle>
+                  <Sword className="h-4 w-4 text-amber-500" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold font-headline">{stats.totalCombats}</div>
+                  <p className="text-xs text-muted-foreground font-body mt-1">За последние 7 дней</p>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/40">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium font-body uppercase tracking-wider text-muted-foreground">Макс. уровень</CardTitle>
+                  <Crown className="h-4 w-4 text-purple-500" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold font-headline">{stats.maxLevel}</div>
+                  <p className="text-xs text-muted-foreground font-body mt-1">
+                    {stats.maxLevelCharacter}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Recent Activity */}
+            <Card className="border-border/40">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 font-headline">
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                  Последняя активность
+                </CardTitle>
+                <CardDescription className="font-body">10 последних созданных героев</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.totalDeaths}</div>
-                <p className="text-xs text-muted-foreground">За всё время</p>
+                <div className="space-y-4">
+                  {stats.recentCharacters.map((char, idx) => (
+                    <div key={idx} className="flex items-center justify-between border-b border-border/20 pb-2 last:border-0 last:pb-0">
+                      <div>
+                        <p className="font-bold font-body">{char.name}</p>
+                        <p className="text-sm text-muted-foreground font-body">
+                          Уровень {char.level} • {char.race}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-muted-foreground font-mono">
+                          {new Date(char.createdAt).toLocaleDateString('ru-RU')}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Сражений</CardTitle>
-                <Sword className="h-4 w-4 text-amber-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.totalCombats}</div>
-                <p className="text-xs text-muted-foreground">За последние 7 дней</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Макс. уровень</CardTitle>
-                <Crown className="h-4 w-4 text-purple-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.maxLevel}</div>
-                <p className="text-xs text-muted-foreground">
-                  {stats.maxLevelCharacter}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Recent Activity */}
-          <Card>
+          </>
+        ) : (
+          <Card className="border-destructive/40 bg-destructive/10">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5" />
-                Последняя активность
-              </CardTitle>
-              <CardDescription>10 последних созданных героев</CardDescription>
+              <CardTitle className="text-destructive font-headline">⚠️ Не удалось загрузить статистику</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {stats.recentCharacters.map((char, idx) => (
-                  <div key={idx} className="flex items-center justify-between border-b pb-2 last:border-0">
-                    <div>
-                      <p className="font-medium">{char.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Уровень {char.level} • {char.race}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-muted-foreground">
-                        {new Date(char.createdAt).toLocaleDateString('ru-RU')}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+            <CardContent className="space-y-4 font-body">
+              <p className="text-muted-foreground">
+                Возможные причины:
+              </p>
+              <ul className="list-disc list-inside text-sm text-muted-foreground space-y-2">
+                <li>Проблемы с подключением к базе данных</li>
+                <li>Redis в режиме read-only (проверьте логи)</li>
+                <li>Недостаточно прав доступа</li>
+              </ul>
+              <div className="pt-4">
+                <Button onClick={() => window.location.reload()} variant="outline" className="font-body">
+                  Перезагрузить страницу
+                </Button>
               </div>
             </CardContent>
           </Card>
-        </>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-amber-500">⚠️ Не удалось загрузить статистику</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-muted-foreground">
-              Возможные причины:
-            </p>
-            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-2">
-              <li>Проблемы с подключением к базе данных</li>
-              <li>Redis в режиме read-only (проверьте логи)</li>
-              <li>Недостаточно прав доступа</li>
-            </ul>
-            <div className="pt-4">
-              <Button onClick={() => window.location.reload()} variant="outline">
-                Перезагрузить страницу
+        )}
+
+        {/* Quick Actions */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <Card className="hover:shadow-lg transition-all cursor-pointer border-border/40 hover:border-primary/40 group">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 font-headline group-hover:text-primary transition-colors">
+                <Database className="h-5 w-5" />
+                Менеджер данных
+              </CardTitle>
+              <CardDescription className="font-body">Управление пользователями, героями и статистикой</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button asChild className="w-full font-body">
+                <Link href="/admin/data-manager">Открыть</Link>
               </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            </CardContent>
+          </Card>
 
-      {/* Quick Actions */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Database className="h-5 w-5" />
-              Менеджер данных
-            </CardTitle>
-            <CardDescription>Управление пользователями, героями и статистикой</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild className="w-full">
-              <Link href="/admin/data-manager">Открыть</Link>
-            </Button>
-          </CardContent>
-        </Card>
+          <Card className="hover:shadow-lg transition-all cursor-pointer border-border/40 hover:border-primary/40 group">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 font-headline group-hover:text-primary transition-colors">
+                <MessageSquare className="h-5 w-5" />
+                Telegram Bot
+              </CardTitle>
+              <CardDescription className="font-body">Настройки и управление telegram-ботом</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button asChild className="w-full font-body">
+                <Link href="/admin/telegram">Открыть</Link>
+              </Button>
+            </CardContent>
+          </Card>
 
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5" />
-              Telegram Bot
-            </CardTitle>
-            <CardDescription>Настройки и управление telegram-ботом</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild className="w-full">
-              <Link href="/admin/telegram">Открыть</Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Database className="h-5 w-5 text-purple-500" />
-              Drizzle Studio
-            </CardTitle>
-            <CardDescription>Продвинутый редактор базы данных</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild className="w-full" variant="outline">
-              <Link href="/admin/drizzle-studio">Открыть</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+          <Card className="hover:shadow-lg transition-all cursor-pointer border-border/40 hover:border-primary/40 group">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 font-headline group-hover:text-primary transition-colors">
+                <Database className="h-5 w-5 text-purple-500" />
+                Drizzle Studio
+              </CardTitle>
+              <CardDescription className="font-body">Продвинутый редактор базы данных</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button asChild className="w-full font-body" variant="outline">
+                <Link href="/admin/drizzle-studio">Открыть</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </SectionContainer>
+    </PageContainer>
   );
 }

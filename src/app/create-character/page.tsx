@@ -39,6 +39,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { allDivinities, type DivinityId } from "@/data/divinities";
 import { fetchCharacter } from "@/app/dashboard/shared-actions";
 import * as LucideIcons from "lucide-react";
+import { PageContainer } from "@/components/layout/page-container";
 
 const Icon = ({ name, ...props }: { name: string } & LucideIcons.LucideProps) => {
   const LucideIcon = (LucideIcons as any)[name];
@@ -172,7 +173,7 @@ export default function CharacterCreationPage() {
     setIsCreating(true);
 
     const now = Date.now();
-    let initialCharacter: Character = {
+    const initialCharacter: Character = {
       id: user.userId,
       name: character.name,
       gender: character.gender,
@@ -281,17 +282,17 @@ export default function CharacterCreationPage() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 sm:p-6 md:p-8">
+    <PageContainer maxWidth="4xl" centered>
        <div className="absolute top-4 left-4">
         <Button variant="ghost" size="sm" asChild>
           <Link href="/"><ArrowLeft className="mr-2 h-4 w-4" /> Назад ко входу</Link>
         </Button>
       </div>
-      <Card className="w-full max-w-4xl bg-card/80 backdrop-blur-sm">
+      <Card className="w-full bg-card/80 backdrop-blur-sm border-border/40">
         <CardHeader className="text-center">
           <div className="flex justify-center items-center gap-2 mb-2">
             <DragonIcon className="h-8 w-8 text-primary" />
-            <CardTitle className="text-4xl font-headline">Создайте своего героя</CardTitle>
+            <CardTitle className="text-3xl md:text-4xl font-headline">Создайте своего героя</CardTitle>
           </div>
           <CardDescription className="font-body">
             Создайте легенду, о которой будут слагать песни по всему Тамриэлю.
@@ -303,7 +304,7 @@ export default function CharacterCreationPage() {
             <div className="grid gap-8 md:grid-cols-2 animate-in fade-in-0 zoom-in-95">
               <div className="space-y-4">
                 <h3 className="text-2xl font-headline text-primary">Личность</h3>
-                <p className="text-muted-foreground">
+                <p className="text-muted-foreground font-body">
                   Кто вы? У каждой легенды есть имя.
                 </p>
               </div>
@@ -315,7 +316,7 @@ export default function CharacterCreationPage() {
                     value={character.name}
                     onChange={(e) => setCharacter({ ...character, name: e.target.value })}
                     placeholder="например, Лидия, Драконорожденная"
-                    className="mt-2 text-base"
+                    className="mt-2 text-base font-body"
                   />
                 </div>
                 <div>
@@ -327,13 +328,13 @@ export default function CharacterCreationPage() {
                   >
                     <div>
                       <RadioGroupItem value="male" id="male" className="peer sr-only" />
-                      <Label htmlFor="male" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                      <Label htmlFor="male" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary font-body">
                         Мужской
                       </Label>
                     </div>
                      <div>
                       <RadioGroupItem value="female" id="female" className="peer sr-only" />
-                      <Label htmlFor="female" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                      <Label htmlFor="female" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary font-body">
                         Женский
                       </Label>
                     </div>
@@ -350,14 +351,14 @@ export default function CharacterCreationPage() {
                    <Card 
                      key={race.id}
                      onClick={() => setCharacter({ ...character, race: race.id })}
-                     className={cn("cursor-pointer transition-all hover:shadow-primary/50 hover:shadow-lg", character.race === race.id && "border-primary ring-2 ring-primary")}
+                     className={cn("cursor-pointer transition-all hover:shadow-primary/50 hover:shadow-lg border-border/40", character.race === race.id && "border-primary ring-2 ring-primary")}
                    >
                      <CardHeader className="p-0">
                        <Image src={race.image} data-ai-hint={race.hint} alt={race.name} width={400} height={300} className="rounded-t-lg object-cover" />
                      </CardHeader>
                      <CardContent className="p-4">
                        <h4 className="font-headline text-lg">{race.name}</h4>
-                       <p className="text-sm text-muted-foreground mt-1">{race.description}</p>
+                       <p className="text-sm text-muted-foreground mt-1 font-body">{race.description}</p>
                      </CardContent>
                    </Card>
                  ))}
@@ -368,7 +369,7 @@ export default function CharacterCreationPage() {
             <div className="grid gap-8 md:grid-cols-2 animate-in fade-in-0 zoom-in-95">
               <div className="space-y-4">
                 <h3 className="text-2xl font-headline text-primary">Происхождение</h3>
-                <p className="text-muted-foreground">
+                <p className="text-muted-foreground font-body">
                   Ваше прошлое определяет ваше настоящее. Где начинается ваша история?
                 </p>
                  <Image src="https://placehold.co/600x800.png" data-ai-hint="old map" alt="A depiction of a character's past" width={600} height={800} className="rounded-lg object-cover" />
@@ -380,13 +381,13 @@ export default function CharacterCreationPage() {
                     value={character.backstory}
                     onValueChange={(value) => setCharacter({ ...character, backstory: value })}
                   >
-                    <SelectTrigger id="backstory" className="mt-2 text-base">
+                    <SelectTrigger id="backstory" className="mt-2 text-base font-body">
                       <SelectValue placeholder="Выберите предысторию" />
                     </SelectTrigger>
                     <SelectContent>
                       {backstories.map((story) => (
                         <SelectItem key={story.value} value={story.value}>
-                          <div className="flex flex-col py-1">
+                          <div className="flex flex-col py-1 font-body">
                             <span className="font-semibold">{story.label}</span>
                             <span className="text-xs text-muted-foreground">{story.description}</span>
                           </div>
@@ -402,17 +403,17 @@ export default function CharacterCreationPage() {
             <div className="space-y-6 animate-in fade-in-0 zoom-in-95">
               <div className="text-center">
                 <h3 className="text-2xl font-headline text-primary">Распределение очков</h3>
-                <p className="text-muted-foreground mt-2">Определите сильные стороны вашего героя</p>
+                <p className="text-muted-foreground mt-2 font-body">Определите сильные стороны вашего героя</p>
               </div>
               
               <div className="grid md:grid-cols-2 gap-6">
-                <Card>
+                <Card className="border-border/40">
                   <CardHeader>
                     <CardTitle className="font-headline flex items-center justify-between">
                       Характеристики
                       <Badge variant="default" className="text-lg">{remainingAttrPoints} очков</Badge>
                     </CardTitle>
-                    <CardDescription>Базовые атрибуты вашего героя</CardDescription>
+                    <CardDescription className="font-body">Базовые атрибуты вашего героя</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {Object.entries(attributes).map(([key, value]) => {
@@ -422,8 +423,8 @@ export default function CharacterCreationPage() {
                           <div className="flex items-center gap-3">
                             <Icon name={info.icon as any} className="w-5 h-5 text-primary" />
                             <div>
-                              <p className="font-semibold text-sm">{info.name}</p>
-                              <p className="text-xs text-muted-foreground">{info.description}</p>
+                              <p className="font-semibold text-sm font-body">{info.name}</p>
+                              <p className="text-xs text-muted-foreground font-body">{info.description}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -434,7 +435,7 @@ export default function CharacterCreationPage() {
                               onClick={() => handleAttributeChange(key as keyof typeof attributes, -1)} 
                               disabled={value <= STARTING_ATTRIBUTES[key as keyof typeof attributes]}
                             >-</Button>
-                            <span className="text-base font-bold w-6 text-center">{value}</span>
+                            <span className="text-base font-bold w-6 text-center font-body">{value}</span>
                             <Button 
                               variant="outline" 
                               size="icon" 
@@ -449,13 +450,13 @@ export default function CharacterCreationPage() {
                   </CardContent>
                 </Card>
                 
-                <Card>
+                <Card className="border-border/40">
                   <CardHeader>
                     <CardTitle className="font-headline flex items-center justify-between">
                       Навыки
                       <Badge variant="secondary" className="text-lg">{remainingSkillPoints} очков</Badge>
                     </CardTitle>
-                    <CardDescription>Начальные умения персонажа</CardDescription>
+                    <CardDescription className="font-body">Начальные умения персонажа</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {Object.entries(skills).map(([key, value]) => {
@@ -465,8 +466,8 @@ export default function CharacterCreationPage() {
                           <div className="flex items-center gap-3">
                             <Icon name={info.icon as any} className="w-5 h-5 text-secondary-foreground" />
                             <div>
-                              <p className="font-semibold text-sm">{info.name}</p>
-                              <p className="text-xs text-muted-foreground">{info.description}</p>
+                              <p className="font-semibold text-sm font-body">{info.name}</p>
+                              <p className="text-xs text-muted-foreground font-body">{info.description}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -477,7 +478,7 @@ export default function CharacterCreationPage() {
                               onClick={() => handleSkillChange(key as keyof typeof skills, -1)} 
                               disabled={value <= STARTING_SKILLS[key as keyof typeof skills]}
                             >-</Button>
-                            <span className="text-base font-bold w-6 text-center">{value}</span>
+                            <span className="text-base font-bold w-6 text-center font-body">{value}</span>
                             <Button 
                               variant="outline" 
                               size="icon" 
@@ -497,24 +498,24 @@ export default function CharacterCreationPage() {
           {step === 5 && (
             <div className="animate-in fade-in-0 zoom-in-95">
                 <h3 className="text-2xl font-headline text-primary text-center">Божественное покровительство</h3>
-                <p className="text-muted-foreground text-center mb-4">Выберите божество, которое будет направлять вас на вашем пути.</p>
+                <p className="text-muted-foreground text-center mb-4 font-body">Выберите божество, которое будет направлять вас на вашем пути.</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {allDivinities.map((divinity) => (
                         <Card 
                             key={divinity.id}
                             onClick={() => setCharacter({ ...character, patronDeity: divinity.id })}
-                            className={cn("cursor-pointer transition-all hover:shadow-primary/50 hover:shadow-lg", character.patronDeity === divinity.id && "border-primary ring-2 ring-primary")}
+                            className={cn("cursor-pointer transition-all hover:shadow-primary/50 hover:shadow-lg border-border/40", character.patronDeity === divinity.id && "border-primary ring-2 ring-primary")}
                         >
                             <CardHeader>
                                 <div className="flex items-center gap-3">
                                     <Icon name={divinity.icon} className="h-8 w-8 text-primary" />
                                     <CardTitle className="font-headline text-xl">{divinity.name}</CardTitle>
                                 </div>
-                                <CardDescription className="text-sm">{divinity.domain}</CardDescription>
+                                <CardDescription className="text-sm font-body">{divinity.domain}</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <p className="text-xs text-muted-foreground">{divinity.description}</p>
-                                <p className="text-xs mt-2 pt-2 border-t font-semibold">Пассивный эффект: <span className="font-normal">{divinity.passiveEffect.description}</span></p>
+                                <p className="text-xs text-muted-foreground font-body">{divinity.description}</p>
+                                <p className="text-xs mt-2 pt-2 border-t font-semibold font-body">Пассивный эффект: <span className="font-normal">{divinity.passiveEffect.description}</span></p>
                             </CardContent>
                         </Card>
                     ))}
@@ -524,7 +525,7 @@ export default function CharacterCreationPage() {
         </CardContent>
         <CardFooter className="flex justify-between">
           {step > 1 ? (
-            <Button variant="outline" onClick={handleBack} disabled={isCreating}>
+            <Button variant="outline" onClick={handleBack} disabled={isCreating} className="font-body">
               <ArrowLeft className="mr-2 h-4 w-4" /> Назад
             </Button>
           ) : <div></div>}
@@ -534,11 +535,11 @@ export default function CharacterCreationPage() {
               (step === 2 && !character.race) || 
               (step === 3 && !character.backstory) ||
               (step === 4 && (remainingAttrPoints > 0 || remainingSkillPoints > 0))
-            }>
+            } className="font-body">
               Далее <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           ) : (
-            <Button onClick={handleCreate} className="bg-accent hover:bg-accent/90 text-accent-foreground font-bold" disabled={!character.patronDeity || isCreating}>
+            <Button onClick={handleCreate} className="bg-accent hover:bg-accent/90 text-accent-foreground font-bold font-headline" disabled={!character.patronDeity || isCreating}>
               {isCreating ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -551,6 +552,6 @@ export default function CharacterCreationPage() {
           )}
         </CardFooter>
       </Card>
-    </div>
+    </PageContainer>
   );
 }

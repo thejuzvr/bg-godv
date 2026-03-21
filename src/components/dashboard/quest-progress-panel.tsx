@@ -26,7 +26,7 @@ export function QuestProgressPanel({ quest }: QuestProgressPanelProps) {
   const priorityStars = getPriorityStars(quest.priority || 50);
   
   return (
-    <Card className="border-2 border-amber-500/30 shadow-lg">
+    <Card className="border-2 border-amber-500/30 shadow-lg font-body">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2">
@@ -47,21 +47,21 @@ export function QuestProgressPanel({ quest }: QuestProgressPanelProps) {
           </div>
         </div>
         <div className="flex items-center gap-2 mt-2">
-          <Badge variant="secondary" className="text-xs">
+          <Badge variant="secondary" className="text-xs font-body">
             🎯 Активное
           </Badge>
           {quest.type && (
-            <Badge variant="outline" className="text-xs">
+            <Badge variant="outline" className="text-xs font-body">
               {getQuestTypeLabel(quest.type)}
             </Badge>
           )}
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-3 font-body">
         {/* Overall Progress */}
         <div className="space-y-1">
           <div className="flex items-center justify-between text-sm">
-            <span className="font-medium">
+            <span className="font-medium font-body">
               {isMultiStep ? 'Общий прогресс' : 'Прогресс'}
             </span>
             <span className="font-mono text-muted-foreground font-semibold">
@@ -74,21 +74,21 @@ export function QuestProgressPanel({ quest }: QuestProgressPanelProps) {
         {/* Tasks (for multi-step quests) */}
         {isMultiStep && (
           <div className="space-y-2 mt-4">
-            <div className="text-sm font-medium text-muted-foreground mb-2">
+            <div className="text-sm font-medium text-muted-foreground mb-2 font-body">
               Подзадачи:
             </div>
             {quest.tasks!.map((t, idx) => (
-              <div key={t.id} className="space-y-1 pl-2 border-l-2 border-gray-200 dark:border-gray-700">
+              <div key={t.id} className="space-y-1 pl-2 border-l-2 border-gray-200 dark:border-gray-700 font-body">
                 <div className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">{idx + 1}.</span>
-                    <span className={t.status === 'completed' ? 'line-through text-muted-foreground' : ''}>
+                    <span className="text-muted-foreground font-body">{idx + 1}.</span>
+                    <span className={cn("font-body", t.status === 'completed' ? 'line-through text-muted-foreground' : '')}>
                       {t.title}
                     </span>
                   </div>
-                  <span className="text-muted-foreground flex items-center gap-1">
+                  <span className="text-muted-foreground flex items-center gap-1 font-body">
                     {symbolFor(t.status)} 
-                    <span className="text-xs">{labelFor(t.status)}</span>
+                    <span className="text-xs font-body">{labelFor(t.status)}</span>
                   </span>
                 </div>
                 {t.status !== 'pending' && (
@@ -101,7 +101,7 @@ export function QuestProgressPanel({ quest }: QuestProgressPanelProps) {
         
         {/* Simple quest description */}
         {!isMultiStep && (
-          <div className="text-sm text-muted-foreground pt-2 border-t">
+          <div className="text-sm text-muted-foreground pt-2 border-t font-body">
             Задание выполняется. Прогресс обновляется автоматически.
           </div>
         )}

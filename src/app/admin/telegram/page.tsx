@@ -39,17 +39,17 @@ export default function AdminTelegramPage() {
     if (!loading && user?.isAdmin) load();
   }, [loading, user]);
 
-  if (loading) return <div className="p-4">Загрузка...</div>;
+  if (loading) return <div className="p-4 font-body">Загрузка...</div>;
   if (!user || !user.isAdmin) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Доступ запрещен</CardTitle>
-            <CardDescription>У вас нет прав для доступа к этой странице.</CardDescription>
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 font-body">
+        <Card className="w-full max-w-md font-body">
+          <CardHeader className="font-body">
+            <CardTitle className="font-headline">Доступ запрещен</CardTitle>
+            <CardDescription className="font-body">У вас нет прав для доступа к этой странице.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <Button asChild className="w-full">
+          <CardContent className="font-body">
+            <Button asChild className="w-full font-body">
               <Link href="/dashboard">Вернуться на дашборд</Link>
             </Button>
           </CardContent>
@@ -60,19 +60,19 @@ export default function AdminTelegramPage() {
 
   return (
     <div className="w-full font-body p-4 md:p-8 space-y-8">
-      <header>
+      <header className="font-body">
         <h1 className="text-3xl font-headline text-primary">Telegram подписки</h1>
-        <p className="text-muted-foreground">Активные подписки и время последней отправки дайджеста.</p>
+        <p className="text-muted-foreground font-body">Активные подписки и время последней отправки дайджеста.</p>
       </header>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Подписчики</CardTitle>
-          <CardDescription>Включайте/выключайте подписки по необходимости.</CardDescription>
+      <Card className="font-body">
+        <CardHeader className="font-body">
+          <CardTitle className="font-headline">Подписчики</CardTitle>
+          <CardDescription className="font-body">Включайте/выключайте подписки по необходимости.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="font-body">
           {isLoading ? (
-            <div className="py-6">Загрузка...</div>
+            <div className="py-6 font-body">Загрузка...</div>
           ) : subs.length === 0 ? (
             <div className="py-6 text-muted-foreground">Подписок не найдено.</div>
           ) : (
