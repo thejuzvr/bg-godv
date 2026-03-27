@@ -1,0 +1,91 @@
+{
+	"common": {
+		"loading": "Загрузка...",
+		"error": "Ошибка",
+		"success": "Успешно",
+		"save": "Сохранить",
+		"cancel": "Отмена",
+		"delete": "Удалить",
+		"edit": "Редактировать",
+		"close": "Закрыть",
+		"confirm": "Подтвердить"
+	},
+	"auth": {
+		"login": "Вход",
+		"register": "Регистрация",
+		"logout": "Выход",
+		"email": "Email",
+		"password": "Пароль",
+		"confirmPassword": "Подтвердите пароль"
+	},
+	"character": {
+		"name": "Имя",
+		"level": "Уровень",
+		"health": "Здоровье",
+		"magicka": "Магия",
+		"stamina": "Выносливость",
+		"strength": "Сила",
+		"agility": "Ловкость",
+		"intelligence": "Интеллект",
+		"endurance": "Выносливость",
+		"race": "Раса",
+		"gender": "Пол",
+		"backstory": "Предыстория",
+		"location": "Локация",
+		"status": "Статус"
+	},
+	"inventory": {
+		"title": "Инвентарь",
+		"weight": "Вес",
+		"equipped": "Экипировано",
+		"equip": "Надеть",
+		"unequip": "Снять",
+		"use": "Использовать",
+		"drop": "Выбросить"
+	},
+	"quests": {
+		"title": "Квесты",
+		"active": "Активный",
+		"completed": "Завершен",
+		"inProgress": "Выполняется",
+		"available": "Доступен",
+		"rewards": "Награды",
+		"progress": "Прогресс"
+	},
+	"map": {
+		"title": "Карта",
+		"travelTo": "Путешествовать в",
+		"fastTravel": "Быстрое перемещение",
+		"discovered": "Открыто",
+		"undiscovered": "Не открыто"
+	},
+	"market": {
+		"title": "Рынок",
+		"buy": "Купить",
+		"sell": "Продать",
+		"price": "Цена",
+		"quantity": "Количество"
+	},
+	"crafting": {
+		"title": "Крафт",
+		"recipes": "Рецепты",
+		"materials": "Материалы",
+		"craft": "Создать",
+		"unlock": "Разблокировать"
+	},
+	"factions": {
+		"title": "Фракции",
+		"reputation": "Репутация",
+		"rank": "Ранг",
+		"donate": "Пожертвовать"
+	},
+	"dashboard": {
+		"title": "Панель управления",
+		"adventureLog": "Журнал приключений",
+		"quickActions": "Быстрые действия",
+		"stats": "Характеристики",
+		"intervention": "Божественное вмешательство",
+		"bless": "Благословить",
+		"punish": "Наказать"
+	}
+}
